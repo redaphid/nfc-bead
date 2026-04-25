@@ -10,9 +10,12 @@ First charm built with this recipe: the [Wooli mammoth](https://github.com/redap
 |---|---|
 | `prompts/nfc-bead/prompt.md` | The technical recipe — dimensions, pipeline order, gotchas. Drop this into any new Claude session as the scaffolding for a new charm. |
 | `.claude/skills/nfc-bead/SKILL.md` | Claude Code skill that auto-triggers on new-charm requests, loads the prompt, and drives the workflow. |
+| `.claude/skills/nfc-bead/blender_mcp_addon.py` | Bundled Blender MCP addon (from [ahujasid/blender-mcp](https://github.com/ahujasid/blender-mcp)) so the live MCP workflow doesn't need an internet round-trip. |
 | `.claude/settings.json` | Project Claude settings — pre-allows Blender / uvx / python invocations. |
 | `.mcp.json` | Project-level MCP server config. Wires up the Blender MCP server (`uvx blender-mcp`). |
 | `build_charm.py.example` | Reference implementation of the full Blender pipeline. Copy to `build_<charm>.py` and edit the CONFIG block at the top per charm. |
+| `CLAUDE.md` | Working norms for Claude Code in this repo (branch model, multi-color defaults, live-MCP preference). |
+| `SETUP.md` | One-time and per-session setup for the live Blender MCP workflow. **Read this if you want to drive Blender live**, otherwise headless works without it. |
 | `GUIDE.md` | Long-form walkthrough with lessons learned from the original Wooli build. |
 
 ## Quick start
@@ -24,16 +27,13 @@ First charm built with this recipe: the [Wooli mammoth](https://github.com/redap
    blender --background --python build_yourcharm.py
    ```
 
-## MCP — Blender
+## MCP — Blender (live workflow)
 
-`.mcp.json` configures the [Blender MCP](https://github.com/ahujasid/blender-mcp) server (`uvx blender-mcp`). To use it live (for iterating geometry interactively rather than via headless script):
+`.mcp.json` configures the [Blender MCP](https://github.com/ahujasid/blender-mcp) server (`uvx blender-mcp`) so Claude Code can drive Blender live — you watch geometry build in the viewport and can steer mid-build.
 
-1. Install the Blender MCP addon in Blender (see upstream docs).
-2. Start the addon server inside Blender.
-3. `uvx` must be on `PATH` (install via [astral.sh/uv](https://astral.sh/uv)).
-4. Approve the server when Claude prompts.
+**See [`SETUP.md`](./SETUP.md)** for the full one-time install + per-session bring-up sequence (the addon is bundled in this repo at `.claude/skills/nfc-bead/blender_mcp_addon.py`, so no GitHub round-trip needed).
 
-Headless `blender --background --python` works without the MCP — the MCP is only for live interactive sessions.
+Headless `blender --background --python` works without any of this — the MCP is only for live interactive sessions.
 
 ## Default charm spec
 

@@ -4,3 +4,5 @@ __pycache__/
 .DS_Store
 build_*.py
 !build_charm.py.example
+out/
+tmp/
