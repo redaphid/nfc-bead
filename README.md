@@ -23,11 +23,16 @@ First charm built with this recipe: the [Wooli mammoth](https://github.com/redap
 
 ## Quick start
 
-1. Open this repo in Claude Code. The `nfc-bead` skill auto-loads.
-2. Say something like: *"new charm — here's the silhouette"* and attach an SVG. The skill reads the prompt, asks the right questions, and walks the build. **Just talk to Claude — it knows about the launcher and will run you through Blender setup if you don't have it going yet.**
-3. Or, manually: read `prompts/nfc-bead/prompt.md` yourself, copy `build_charm.py.example`, edit the CONFIG block, run headless:
+1. **Branch off `main` for the new bead.** Per-charm work always lives on its own branch named after the bead — never on `main`:
+   ```bash
+   git checkout main && git pull --ff-only
+   git checkout -b <bead-name>          # e.g. rezz, mammoth, octopus
    ```
-   blender --background --python build_yourcharm.py
+2. Open this repo in Claude Code. The `nfc-bead` skill auto-loads.
+3. Say something like: *"new charm — here's the silhouette"* and attach an SVG. The skill reads the prompt, asks the right questions, and walks the build. **Just talk to Claude — it knows about the branch convention, the launcher, and will run you through Blender setup if you don't have it going yet.**
+4. Or, manually: read `prompts/nfc-bead/prompt.md` yourself, copy `build_charm.py.example` to `beads/<name>/build_<name>.py`, edit the CONFIG block, run headless:
+   ```
+   blender --background --python beads/<name>/build_<name>.py
    ```
 
 ## MCP — Blender (live workflow)

@@ -15,8 +15,13 @@ This repo is a **template / recipe** for designing two-half snap-fit NFC charms 
 
 ## Working norms in this repo
 
+- **Branches host charms — always start a new bead on its own branch off `main`.** The first thing to do when a new charm session begins is to confirm the user is on a current `main`, then create a branch named after the bead:
+  ```bash
+  git checkout main && git pull --ff-only
+  git checkout -b <bead-name>          # e.g. `rezz`, `wooli`, `octopus`
+  ```
+  All charm-specific work (silhouette SVG, `build_<name>.py`, `beads/<name>/` tree, stage snapshots, exported STLs, debugging notes) lives on that branch and never lands on `main`. Generic improvements discovered during the build (recipe gotchas, launcher fixes, skill updates) get backported to `main` separately. If the user starts asking for charm-specific changes while on `main`, stop and create the branch first.
 - **Live MCP, not headless, when the user is watching.** If the user is in this repo and the Blender MCP is connected (`mcp__blender__*` tools available), prefer driving Blender live so they can see and steer. Fall back to headless `blender --background --python` only if MCP is unavailable.
-- **Branches host charms.** `main` holds the generic recipe. Per-charm work lives on its own branch (e.g. `rezz` for the Rezz bead). Setup / pipeline improvements that aren't charm-specific should land on `main`.
 - **Multi-color outputs are the norm for users with multi-filament printers.** When generating a build script, default to emitting separate STLs per color region (body, accent), all sharing the same coordinate origin so they assemble cleanly in the slicer.
 - **Show the user the layout before booleans.** Peg placement is the most common failure mode; propose positions and let the user confirm (ideally with a viewport screenshot when MCP is live) before running booleans.
 - **Verify with raycasts before declaring success.** The build script template includes raycast checks for the string hole and each peg hole — do not skip them.
