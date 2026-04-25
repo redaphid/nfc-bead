@@ -26,7 +26,29 @@ You are helping the user design and build a new two-half snap-fit NFC charm. The
 
 - **Blender MCP** (configured in `.mcp.json` as `blender`) — direct Blender control if the user has the Blender MCP addon running. Useful for live-iterating geometry before committing to the script.
 - **Headless Blender** via `blender --background --python <script>.py` — repeatable, what the script targets.
+- **`tools/launch.ps1`** — Windows one-shot launcher that opens Blender with the addon installed/enabled and the MCP server running. Wraps `tools/blender_bootstrap.py` (idempotent: copies-if-stale → enables → saves prefs → starts server).
 - Standard file tools (Read/Write/Edit) for the SVG and script.
+
+## Helping the user get into a working live-MCP state
+
+If the user wants the live Blender MCP workflow but doesn't have it running yet, walk them through this — don't just hand them `SETUP.md`. The dance is:
+
+1. **Verify prerequisites.** Blender 4.x+ installed (default `D:\tools\blender\blender.exe` on Windows; override via env `NFC_BEAD_BLENDER`) and `uvx` on `PATH` (winget package `astral-sh.uv`). If either is missing, install it before continuing — `winget install BlenderFoundation.Blender astral-sh.uv` (open a fresh shell after `uv` so PATH refreshes).
+2. **Use `tools/launch.ps1`** for everything. It's idempotent and one-shot:
+   ```powershell
+   .\tools\launch.ps1                       # opens Blender pre-wired for the rezz bead
+   .\tools\launch.ps1 -Bead <other>         # different bead from beads/<other>/
+   .\tools\launch.ps1 -BlendFile foo.blend  # arbitrary file
+   ```
+   The launcher calls `tools/blender_bootstrap.py` inside Blender, which copies the bundled addon into the user-addons directory if missing/stale, enables it persistently (`addon_utils.enable(..., persistent=True)`), saves user prefs (so a Blender crash doesn't wipe the enable state), and starts the MCP server.
+3. **After Blender opens**, run `/mcp` in this Claude Code session to (re)connect. On a fresh Claude Code session, the bridge auto-connects on startup. On an existing session, `/mcp` retries.
+4. **If `/mcp` reports "Failed to reconnect to blender"**: usually means the addon's "Connect to Claude" hasn't fired yet. Wait a beat (the bootstrap defers it 1 s) and `/mcp` again. If it still fails, the bootstrap output is in Blender's terminal — ask the user to check it.
+
+**When NOT to use the launcher:** if Blender is already running with a connected MCP and a useful scene loaded, don't re-launch — you'll lose the scene. Just resume.
+
+**When the user says "Blender crashed":** re-run `tools/launch.ps1` (preserving any `-Bead` or `-BlendFile` they had); the bootstrap is idempotent so this is the right answer every time.
+
+**When working live:** the build pipeline saves `beads/<bead>/print/<bead>_charm.blend` after each successful end-to-end build, so re-launching with `-Bead <bead>` drops you back into the last good state.
 
 ## What to NOT do
 
