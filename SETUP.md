@@ -38,18 +38,34 @@ If Blender lives somewhere non-standard (e.g. a portable install under `D:\tools
 
 ### Per-session: bring up the bridge
 
-Inside Blender (every time you want a live MCP session):
+**Fast path (recommended — uses the bundled bootstrap):**
 
-1. In the 3D viewport press **N** to open the right sidebar
-2. Click the **BlenderMCP** tab (vertical text on the sidebar's edge)
-3. Click **Connect to Claude** — this starts a socket inside Blender on port 9876
+```powershell
+.\tools\launch.ps1                # opens Blender pre-wired for the rezz bead
+.\tools\launch.ps1 -Bead wooli    # different bead's .blend
+.\tools\launch.ps1 -BlendFile foo.blend
+```
 
-Inside Claude Code:
+`tools/launch.ps1` calls Blender with `--python tools/blender_bootstrap.py`, which idempotently:
+1. Copies the bundled `blender_mcp_addon.py` into Blender's user-addons directory if missing/stale
+2. Enables the addon (`addon_utils.enable(..., persistent=True)`)
+3. Saves user preferences so the enable state survives a Blender crash
+4. Starts the MCP socket server
 
-4. Restart Claude Code so it picks up `.mcp.json` and spawns `uvx blender-mcp`. The bridge then connects to the socket Blender just opened.
-5. After restart, run `/mcp` — the `blender` server should show **connected**. If you previously had a session running with `blender` failed, `/mcp` will retry the connection automatically and report **Reconnected to blender.**
+So all you need to do per session is run the launcher and then `/mcp` here.
 
-If `/mcp` keeps reporting **Failed to reconnect to blender**, it means `uvx blender-mcp` is running but can't reach the addon's socket. Double-check the addon is enabled (step 6 above) and that you clicked **Connect to Claude** in the BlenderMCP sidebar tab.
+**Manual path (if you'd rather click):**
+
+1. Open Blender
+2. In the 3D viewport press **N** to open the right sidebar
+3. Click the **BlenderMCP** tab (vertical text on the sidebar's edge)
+4. Click **Connect to Claude** — this starts a socket inside Blender on port 9876
+
+Inside Claude Code (either path):
+
+5. Run `/mcp` — the `blender` server should show **connected**. On a fresh Claude Code session, the `.mcp.json` spawn happens at startup; on an existing session, `/mcp` retries the connection.
+
+If `/mcp` keeps reporting **Failed to reconnect to blender**, it means `uvx blender-mcp` is running but can't reach the addon's socket. Verify the addon is enabled and the server is started.
 
 ## macOS / Linux
 
