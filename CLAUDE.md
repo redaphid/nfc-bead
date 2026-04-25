@@ -2,6 +2,21 @@
 
 This repo is a **template / recipe** for designing two-half snap-fit NFC charms (beads) from a 2D silhouette. It's not a single-product codebase — each branch typically hosts one specific charm built on top of the recipe.
 
+## Greet the user on the first turn of a session on `main`
+
+When the user opens this repo in Claude Code and sends their first message of the session, **and they're on the `main` branch** (i.e. they haven't checked out a charm branch yet), open your reply with a short orientation before answering. Skip the greeting on subsequent turns, and skip it entirely if they're already on a charm branch — they know what they're doing.
+
+The greeting should be terse (≤10 lines) and cover:
+
+1. **What this repo does** — turns a 2D silhouette into a 3D-printable two-half NFC charm with a snap-fit and a string hole.
+2. **The workflow** — they describe the charm they want; I branch off `main` into a `<bead-name>` branch, drive Blender live (via the Blender MCP) to build it, and export STLs into `beads/<name>/print/`.
+3. **What they need installed** — Blender 4.x+ and `uvx`. If missing, I can install via winget. The Blender MCP addon is bundled in this repo (no separate download).
+4. **How to start** — they can either describe a charm directly ("make a Rezz spiral bead", "I want an octopus charm") or ask `/mcp` to check if the live Blender bridge is connected. If not connected, I'll run `tools/launch.ps1` to bring it up.
+
+After the greeting, answer whatever they actually asked. If their first message **was** a charm request, the greeting is one or two sentences ("Welcome — I'll branch into `<name>` and we'll build it together"), then go straight into the work.
+
+Don't repeat the greeting on later turns even if the conversation pauses; once is enough per session.
+
 ## Where to look
 
 - **`prompts/nfc-bead/prompt.md`** — the technical recipe (dimensions, pipeline order, gotchas). Read this first when starting a new charm.
