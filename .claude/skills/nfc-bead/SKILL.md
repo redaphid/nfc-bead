@@ -9,18 +9,24 @@ You are helping the user design and build a new two-half snap-fit NFC charm. The
 
 ## What to do when invoked
 
-1. **Read `prompts/nfc-bead/prompt.md`** to load the full recipe into context.
-2. **Read `build_charm.py.example`** to see the canonical Blender pipeline implementation. This is what you'll copy and adapt per charm.
-3. **Read `GUIDE.md`** for long-form context on lessons learned.
-4. **Ask the user** for what they actually need to make creative decisions on:
+1. **Branch off `main` first.** Per-charm work never lives on `main`. Run `git status` to see the current branch — if the user is on `main` (or any branch that isn't named after this charm), create the charm branch before touching geometry:
+   ```bash
+   git checkout main && git pull --ff-only
+   git checkout -b <bead-name>          # name should match the charm — e.g. `rezz`, `wooli`
+   ```
+   If they're already on a charm branch (e.g. resuming work), confirm and continue. If unsure what to name the branch, ask the user — usually the charm's theme/subject is the right name (`rezz`, `mammoth`, `octopus`).
+2. **Read `prompts/nfc-bead/prompt.md`** to load the full recipe into context.
+3. **Read `build_charm.py.example`** to see the canonical Blender pipeline implementation. This is what you'll copy and adapt per charm.
+4. **Read `GUIDE.md`** for long-form context on lessons learned.
+5. **Ask the user** for what they actually need to make creative decisions on:
    - The silhouette: SVG path on disk, or a description (offer to sketch via SVG if needed).
    - String-hole position: usually through the head/top of the silhouette along the long axis. Specify Y in mm.
    - Any dimension overrides (default is 25mm wide, 5mm thick, 10.5mm × 0.8mm NFC pocket, 3 pegs).
    - Theme/aesthetic notes for naming and any flourishes.
-5. **Propose** peg positions and NFC pocket center based on the silhouette's bounding box and interior — show the user before building. Triangulated, ≥1mm clear of NFC pocket / string hole / silhouette edge.
-6. **Build**: copy `build_charm.py.example` to a per-charm script (e.g. `build_<name>.py`), update the CONFIG block at the top, run via `blender --background --python build_<name>.py` (or via the Blender MCP if connected).
-7. **Verify** with the built-in raycast checks the script prints. If any peg lands outside the silhouette or overlaps the NFC cavity, iterate on positions.
-8. **Export** both STLs and report dimensions back.
+6. **Propose** peg positions and NFC pocket center based on the silhouette's bounding box and interior — show the user before building. Triangulated, ≥1mm clear of NFC pocket / string hole / silhouette edge.
+7. **Build**: copy `build_charm.py.example` to a per-charm script at `beads/<name>/build_<name>.py`, update the CONFIG block at the top, run via the Blender MCP if connected (preferred) or `blender --background --python beads/<name>/build_<name>.py` headless.
+8. **Verify** with the built-in raycast checks the script prints. If any peg lands outside the silhouette or overlaps the NFC cavity, iterate on positions.
+9. **Export** STLs to `beads/<name>/print/` and report dimensions back. Commit + push to the charm branch frequently as work progresses.
 
 ## Tools available
 

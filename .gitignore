@@ -3,13 +3,3 @@ __pycache__/
 .DS_Store
 out/
 tmp/
-
-# Root-level scratch scripts and exports (per-charm work belongs under beads/)
-build_*.py
-*.stl
-!build_charm.py.example
-
-# Per-charm work tree — track Python, SVG, .blend stages, STL exports
-!beads/**
-# But NEVER track Blender's auto-backup files even under beads/
-beads/**/*.blend1
