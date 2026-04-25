@@ -29,5 +29,5 @@ This repo is a **template / recipe** for designing two-half snap-fit NFC charms 
 ## Conventions
 
 - Default charm dimensions live in `prompts/nfc-bead/prompt.md` — override per charm in the CONFIG block, don't edit the recipe.
-- Output STLs go to `out/` (gitignored).
+- Per-charm outputs (STLs, `.blend`, stage snapshots) live under `beads/<name>/` and are tracked. Only the root-level `out/` and `tmp/` directories are gitignored — those are scratch space, not the canonical artifact location.
 - The `.blend` file is exported alongside the STLs so the user can inspect afterward even on headless runs.
