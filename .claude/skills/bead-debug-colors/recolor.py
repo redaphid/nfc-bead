@@ -31,19 +31,25 @@ Coordinate convention (the canonical print-layout produced by build_*.py):
 import bpy, math
 
 # ─── CONFIG — pull from beads/<name>/build_<name>.py CONFIG block ───
-PEGS         = [(-7.5, 3.0), (7.5, 3.0), (0.0, -10.0)]
+# Active bead: deadmau5 (mid-pipeline, pre-flip)
+PEGS         = [(-6.0, 5.0), (6.0, 5.0), (0.0, -9.0)]
 PEG_DIA      = 2.0
 PEG_HEIGHT   = 1.5
 PEG_HOLE_DIA = PEG_DIA + 0.2          # 0.1 mm clearance per side
-NFC_POS      = (0.0, -1.0)
+NFC_POS      = (0.0, -1.5)
 NFC_DIA      = 10.5
 NFC_DEPTH    = 0.8
-HOLE_Y       = 9.0
+HOLE_Y       = 6.0
 HOLE_DIA     = 2.0
 
 DECORATION_NAME = "RezzSpiral"
-BOTTOM_X     = -18.0
-TOP_X        =  18.0
+BOTTOM_X     = -15.0
+TOP_X        =  15.0
+
+# Set False if invoking mid-pipeline before bottom has been flipped 180° around X
+# (i.e. inner face still pointing up at z=0). The y-axis sign on bottom widgets
+# changes accordingly.
+BOTTOM_FLIPPED = False
 
 # ─── CAD / drafting palette ───
 # Bodies — muted blueprint tones
@@ -105,6 +111,39 @@ for obj in list(bpy.data.objects):
     if obj.name.startswith("DBG_") and obj.name not in _protected:
         bpy.data.objects.remove(obj, do_unlink=True)
 
+# Sign for bottom-half widget Y. If bottom has been flipped 180° around X,
+# its mesh-local +Y now reads as world -Y. Pre-flip, +Y stays +Y.
+_BY = -1.0 if BOTTOM_FLIPPED else 1.0
+# Z origin of the inner face for each half. Post-flip canonical layout puts the
+# inner face at z=0 for both halves; pre-flip the inner face is at the *top* of
+# the bottom half (its world z depends on the object's location), so we read it
+# off the existing object.
+def _bottom_inner_z():
+    b = bpy.data.objects.get("Bottom")
+    if b is None:
+        return 0.0
+    if BOTTOM_FLIPPED:
+        return 0.0
+    # pre-flip: inner face is the TOP of the bottom mesh
+    return max((b.matrix_world @ v.co).z for v in b.data.vertices)
+
+def _top_inner_z():
+    t = bpy.data.objects.get("Top")
+    if t is None:
+        return 0.0
+    if BOTTOM_FLIPPED:
+        return 0.0
+    return min((t.matrix_world @ v.co).z for v in t.data.vertices)
+
+_BOTTOM_INNER_Z = _bottom_inner_z()
+_TOP_INNER_Z    = _top_inner_z()
+# Pegs grow upward from bottom inner face when pre-flip; downward when post-flip
+_PEG_DZ      = -PEG_HEIGHT / 2 if BOTTOM_FLIPPED else PEG_HEIGHT / 2
+_NFC_DZ      = -NFC_DEPTH / 2 if BOTTOM_FLIPPED else NFC_DEPTH / 2
+# Peg holes go upward into top half from inner face in both modes (top isn't flipped)
+peg_hole_depth = PEG_HEIGHT + 0.3
+_PH_DZ       = peg_hole_depth / 2
+
 # ─── PEGS — positive features, SOLID yellow widgets ───
 for i, (px, py) in enumerate(PEGS):
     add_widget(
@@ -112,19 +151,18 @@ for i, (px, py) in enumerate(PEGS):
         lambda **kw: bpy.ops.mesh.primitive_cylinder_add(
             vertices=24, radius=PEG_DIA / 2, depth=PEG_HEIGHT, **kw),
         COL_PEG,
-        location=(BOTTOM_X + px, -py, PEG_HEIGHT / 2),
+        location=(BOTTOM_X + px, _BY * py, _BOTTOM_INNER_Z + _PEG_DZ),
         display='TEXTURED',                # SOLID — represents added material
     )
 
 # ─── PEG HOLES — negative features, RED wireframe ───
-peg_hole_depth = PEG_HEIGHT + 0.3
 for i, (px, py) in enumerate(PEGS):
     add_widget(
         f"DBG_PegHole{i}",
         lambda **kw: bpy.ops.mesh.primitive_cylinder_add(
             vertices=24, radius=PEG_HOLE_DIA / 2, depth=peg_hole_depth, **kw),
         COL_PEGHOLE,
-        location=(TOP_X + px, py, peg_hole_depth / 2),
+        location=(TOP_X + px, py, _TOP_INNER_Z + _PH_DZ),
         display='WIRE',
     )
 
@@ -134,7 +172,7 @@ add_widget(
     lambda **kw: bpy.ops.mesh.primitive_cylinder_add(
         vertices=48, radius=NFC_DIA / 2, depth=NFC_DEPTH, **kw),
     COL_NFC,
-    location=(BOTTOM_X + NFC_POS[0], -NFC_POS[1], NFC_DEPTH / 2),
+    location=(BOTTOM_X + NFC_POS[0], _BY * NFC_POS[1], _BOTTOM_INNER_Z + _NFC_DZ),
     display='WIRE',
 )
 
@@ -154,7 +192,7 @@ add_widget("DBG_StringHole_Bottom",
     lambda **kw: bpy.ops.mesh.primitive_cylinder_add(
         vertices=24, radius=HOLE_DIA / 2, depth=30, **kw),
     COL_HOLE,
-    location=(BOTTOM_X, -HOLE_Y, _midz(bottom)),
+    location=(BOTTOM_X, _BY * HOLE_Y, _midz(bottom)),
     rotation=(0, math.radians(90), 0),
     display='WIRE')
 
