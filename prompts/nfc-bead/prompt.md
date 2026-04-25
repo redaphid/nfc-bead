@@ -96,6 +96,26 @@ result = eval_obj.ray_cast(origin, direction)
 ```
 Verify: string hole open through the head, each peg hole open through the top, each peg position lands on solid geometry inside the silhouette.
 
+Note: peg holes are *blind* recesses (cutter depth = `PEG_HEIGHT + 0.3 mm`), not through-going. The raycast through a peg hole will *intentionally* report `BLOCKED at z=PEG_HEIGHT+0.3`. That's the right answer — they're sockets the pegs bottom into.
+
+### 9. Build raised face decorations as flat ribbon meshes, not curve-bevel-then-clip
+For any raised graphic on the show face (rezz spiral, embossed text, ridged pattern), the obvious workflow — build a curve, set `bevel_depth = arm_width / 2` for a tube cross-section, convert to mesh, then INTERSECT with a slab to flatten — **silently produces an empty mesh**. The EXACT solver doesn't reliably handle a tube tangent to a thin slab; it collapses the entire mesh. No error is raised; you'll see `dims: (0.0, 0.0, 0.0)` in the output and a missing object in the viewport.
+
+Build the ribbon directly instead. Sample the centerline path, compute inner/outer offsets perpendicular to the tangent, build quads with `mesh.from_pydata`, extrude vertically. Reliable, manifold, fast.
+
+Do **not** add an explicit "end-cap" face to close the open ends of an open ribbon. A face like `[inner_start, outer_start, outer_end, inner_end]` will draw one gigantic quad spanning from start of the ribbon to end, visible as a straight line cutting across the disc. Extrusion auto-creates side-wall faces along the boundary edges, which closes the ends as small rectangular walls — no explicit cap needed.
+
+### 10. Don't `origin_set BOUNDS` on objects whose mesh-local origin is meaningful
+If an object's mesh was built around a meaningful origin point (the centerline of a spiral, the centroid of a silhouette), running `bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')` before placing it will move the *bbox center* to that origin — but for an asymmetric mesh (e.g. a spiral with a notch trimmed out, an outline with a tail), the bbox center isn't where the meaningful origin was. The object lands subtly off-center.
+
+`origin_set BOUNDS` is for objects whose origin doesn't matter (`Bottom`, `Top` halves — they were extruded from a centered silhouette and bbox center matches geometric center). Skip it for decorations whose mesh-local `(0,0,0)` is geometrically significant; place them via `obj.location` directly.
+
+### 11. Lift overlapping decorations by ε to avoid Z-fighting
+When a separately-printed decoration (raised spiral, embossed text) sits on the host face, both at the same Z, viewport rendering will Z-fight at the boundary. Lift the decoration by 0.01 mm (`spiral.location.z = host_top_z + 0.01`). Slicer tolerances absorb this — they print fused — and the viewport is artifact-free.
+
+### 12. Don't cut decorative "clearance" against features the decoration never touches
+A common reflex is to trim the show-face decoration around features like the string hole "for clearance." If the feature physically interacts with the decoration, yes — trim. But the string hole runs *horizontally through the bead body*; the decoration sits on the *outer face*; they never touch. Cutting a notch in the decoration to "clear" the hole's top opening just leaves a visible bite in the decoration that adds nothing functional. Question whether the cut is necessary before adding it.
+
 ---
 
 ## Print orientation
