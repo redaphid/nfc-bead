@@ -7,16 +7,19 @@ description: Recolor an NFC bead's structural elements with distinct high-contra
 
 When the user is debugging the bead visually and the default red-everywhere coloring makes it hard to talk about what's where, apply distinct colors to each structural element and add wireframe overlays for features that are otherwise hidden inside the geometry.
 
-## Two modes — debug (CAD) and production (true colors)
+## Three modes — debug (CAD), production (true colors), and cinematic (blueprint)
 
-The skill ships two scripts so the user can flip between debug and final views without reloading the .blend or re-running the build:
+The skill ships three scripts so the user can flip between inspection, final, and live-display views without reloading the .blend or re-running the build:
 
 | Goal | Script | Effect |
 |---|---|---|
 | Visually disambiguate parts during inspection | `recolor.py` | applies CAD palette, adds `DBG_*` overlays for hidden features |
 | Return the scene to what the slicer would see | `restore.py` | wipes `DBG_*` overlays, repaints bodies with production colors |
+| Set the canvas up as a slowly-rotating drafting diagram for a live display / projector | `blueprint.py` | blueprint-blue world bg, glass-tinted bodies, slow orbit + sine-wobble + optional dolly breath, MATERIAL preview shading |
 
-Both scripts are idempotent. Switching back and forth is fast (no rebuild). When the user is done debugging or wants to compare against the "true" look, run `restore.py`.
+All three are idempotent. Switching back and forth is fast (no rebuild). When the user is done debugging or wants to compare against the "true" look, run `restore.py`.
+
+**Layering**: `blueprint.py` is meant to wrap a `recolor.py` pass — run `recolor.py` first to lay down the CAD palette and overlays, then run `blueprint.py` to drape the cinematic mode on top. The glass body alpha + bright wireframe widgets is the look that reads as "vintage drafting diagram, futuristic glass overlay" on the projector.
 
 ## CAD palette (recolor.py — debug mode)
 
@@ -55,17 +58,33 @@ Mirrors what the build script applies and what the slicer renders. Defaults matc
 
 ## How to invoke
 
-Both scripts use `execute_blender_code` with `exec(open(...).read())`:
+All three scripts run via `execute_blender_code` with `exec(open(...).read())`:
 
 ```python
 # Enter debug mode (CAD palette + overlays)
 exec(open(r"<repo>/.claude/skills/bead-debug-colors/recolor.py").read())
 
+# Wrap with cinematic blueprint mode (slow orbit, glass bodies, drafting bg)
+exec(open(r"<repo>/.claude/skills/bead-debug-colors/blueprint.py").read())
+
 # Return to production colors (wipes overlays)
 exec(open(r"<repo>/.claude/skills/bead-debug-colors/restore.py").read())
 ```
 
-Both have a CONFIG block at the top — adapt to the active bead. For `recolor.py`, pull peg / NFC / hole positions from `beads/<name>/build_<name>.py`. For `restore.py`, pull material colors from the build script's `make_material(...)` calls.
+`recolor.py` and `restore.py` each have a CONFIG block at the top — adapt to the active bead. For `recolor.py`, pull peg / NFC / hole positions from `beads/<name>/build_<name>.py`. For `restore.py`, pull material colors from the build script's `make_material(...)` calls. `blueprint.py` is bead-agnostic — its tunables (orbit period, wobble amplitude, body alpha, dolly breath range) live at the top of the file.
+
+## Cinematic blueprint mode — when and why
+
+Reach for `blueprint.py` when the user is showing the build on a projector, a TV, or any context where the canvas is being **watched** for stretches of time. The look is deliberately "vintage drafting paper meets futuristic glass overlay":
+
+- World background is a deep blueprint blue — no HDRi noise, no environment reflections.
+- Bodies become semi-transparent glass tinted with the CAD palette (blueprint-blue-gray + sage), so the structural features inside (yellow pegs, red peg-hole wires, magenta NFC ring, orange string-hole tube) read through them.
+- Camera slowly orbits the bead (default ~4 minutes / revolution), wobbles ±55° vertically along a sine wave, and optionally "breathes" closer / further on each cycle. Constant-rate Z spin (linear interpolation), eased X wobble (bezier).
+- MATERIAL preview shading is required — SOLID viewport doesn't composite alpha, and EEVEE/Cycles work but cost more.
+
+**Cinematic camera dollies between operations:** when narrating a build live, move the orbit pivot + camera target onto whichever feature you're about to modify (e.g. `pivot.location = (-15, 0, 0); target.location = (-15, 0, 0); cam.location = (0, -28, 14); cam.data.lens = 60` for a tight shot of the bottom half before cutting the NFC pocket). The orbit keeps spinning during the dolly — the audience sees the camera glide. After the operation, dolly back to the wide shot. Each major pipeline step (NFC pocket cut → peg holes → pegs → flip → final layout) deserves its own framing.
+
+**Take a screenshot at every meaningful moment.** It both gives the user a still record and gives Claude visual confirmation of the state — the same `mcp__blender__get_viewport_screenshot` calls that drive narration.
 
 ## When NOT to use
 
