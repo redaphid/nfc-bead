@@ -1,0 +1,140 @@
+# NFC Bead / Charm — Technical Recipe
+
+Use this as the technical scaffolding for any new two-half NFC charm. Drop it in at the start of a session, then describe the *creative* side — silhouette, theme, vibe, dimensions if non-default — and let the rest follow this recipe.
+
+A working reference implementation lives at `build_charm.py` in this repo (built for the Wooli mammoth). Treat it as the canonical pipeline; copy and adapt the CONFIG block for new charms.
+
+---
+
+## What we're building
+
+A **two-half snap-fit charm** for Kandi-style bracelets:
+
+- A 2D silhouette (from SVG) extruded to a flat-ish 3D shape
+- **Cut horizontally through the middle** into a top half and a bottom half
+- **NFC sticker pocket** recessed into the inside face of the bottom half (so the sticker sits flush)
+- **Friction-fit pegs** on the bottom half + matching holes on the top half (no glue — press fit)
+- **String hole** through the head/top so it can hang off a bracelet or cord
+
+Target NFC tag: NTAG215, 10mm diameter sticker (e.g. `https://www.amazon.com/dp/B0CH3XS569`). Pocket sizing assumes that.
+
+---
+
+## Default dimensions (override per-charm as needed)
+
+| Feature | Value | Notes |
+|---|---|---|
+| Overall width | 25 mm | sized for Kandi bracelets; scale on import |
+| Total thickness | 5 mm | split as 2.5 mm + 2.5 mm |
+| String hole | 2 mm dia | runs along the X axis (lengthwise through the head/top) |
+| NFC pocket | 10.5 mm dia × 0.8 mm deep | on the inside face of the bottom half only |
+| Peg diameter | 2 mm | bumped up from 1.5 — stronger, less prone to snapping |
+| Peg height | 1.5 mm | |
+| Peg hole clearance | 0.1 mm per side | so hole radius = (peg_dia + 0.2) / 2 |
+| Number of pegs | 3 | triangulated for stable alignment |
+
+**Peg placement rules** (pick 3 spots that satisfy all of these):
+- Inside the silhouette (raycast-verify before committing)
+- ≥ ~1 mm clear of the NFC pocket edge
+- ≥ ~1 mm clear of the string hole
+- Triangulated, not collinear (gives torsional stability)
+- ≥ ~1 mm from the silhouette edge (so the wall around the peg hole isn't paper-thin)
+
+---
+
+## Pipeline (in order — order matters)
+
+```
+SVG silhouette
+  → Import into Blender as 2D curve, join, set fill_mode='BOTH', resolution_u=64
+  → Convert to mesh, scale to TARGET_WIDTH (mm)
+  → Fill any interior gaps that would conflict with features (NFC pocket, pegs)
+  → Extrude flat profile to THICKNESS  (use Extrude, NOT Solidify)
+  → Boolean DIFFERENCE for the string hole (full bead, before split)
+  → Box-cut INTERSECT to split into top + bottom halves at z_mid
+  → Boolean DIFFERENCE for NFC pocket on the bottom half
+  → Boolean DIFFERENCE for peg holes on the top half  (POST-SPLIT — see gotcha)
+  → Boolean UNION to add pegs onto the bottom half     (NOT mesh join)
+  → Flip bottom 180° around X for printing; export both STLs
+```
+
+---
+
+## Critical gotchas (these will bite you if ignored)
+
+### 1. Cut peg holes AFTER splitting, never before
+If you cut peg holes into the full bead first and then box-cut to split, the split plane is **coplanar** with the peg-hole bottom. The EXACT solver collapses the holes — they get sealed shut and disappear silently. Always split first, then cut peg holes into the top half with cutters that extend **1 mm below the inner face** so the cutter is unambiguously through-going:
+
+```python
+cutter_bottom = inner_face_z - 1.0          # extend past the inner face
+cutter_top    = inner_face_z + PEG_HEIGHT + 0.3
+```
+
+### 2. Always use the EXACT boolean solver
+`solver = 'EXACT'`. The FAST solver routinely produces non-manifold output on shapes like this. Set this on every modifier.
+
+### 3. Add pegs with boolean UNION, not mesh join
+`bpy.ops.object.join()` leaves overlapping coplanar faces where the peg cylinder meets the inner face → 1000+ non-manifold edges. Use a UNION boolean modifier instead. It welds the peg to the half cleanly.
+
+### 4. Use Extrude, not Solidify, when the silhouette has interior holes
+Solidify produces broken topology around interior boundaries (e.g., the gap between mammoth legs, the inside of an "O"). Plain extrude is clean.
+
+### 5. Tight `remove_doubles` threshold
+Use `0.005` mm. `0.02+` will collapse small features and ruin the geometry. Run `remove_doubles` + `normals_make_consistent(inside=False)` after every boolean.
+
+### 6. Filling interior gaps cleanly
+If the silhouette has an interior hole that overlaps a feature (e.g., an NFC pocket lands on the trunk-gap hole), don't try to patch it in the SVG with an overlapping rectangle — that creates a separate boundary that won't merge. Instead, in mesh edit mode, select the boundary edges of the unwanted hole by coordinate range and call `bpy.ops.mesh.fill()`. Other interior holes you want to keep (like the leg gap) are untouched.
+
+### 7. Don't voxel-remesh
+Voxel remesh seals small holes (string hole, peg holes) at any reasonable resolution. Skip it.
+
+### 8. Verify everything with raycasts before exporting
+After the build, raycast through where each hole should be:
+```python
+result = eval_obj.ray_cast(origin, direction)
+# result[0] is True if it hit something — i.e. the hole is BLOCKED
+```
+Verify: string hole open through the head, each peg hole open through the top, each peg position lands on solid geometry inside the silhouette.
+
+---
+
+## Print orientation
+
+- **Bottom half**: rotate 180° around X so the silhouette face is on the build plate and the **pegs point up**. Prints flat, no supports.
+- **Top half**: inner face (with peg holes) goes on the build plate. Prints flat, no supports.
+- Settings: PLA or PETG, 0.12–0.16 mm layer height, 100% infill (these are tiny), no supports.
+
+---
+
+## What the user supplies per charm
+
+When you (the user) start a new charm session, you only need to talk about:
+
+1. **The silhouette** — an SVG path, or a description detailed enough to commission/sketch one. Must be roughly bead-shaped: compact, with enough internal area to host a 10.5 mm NFC pocket plus 3 pegs without crowding.
+2. **Where the string hole goes** — usually through the head / top of the silhouette, along the longer axis. Specify Y position in mm if the silhouette has a clear "head" region offset from center.
+3. **Any non-default dimensions** — if you want a bigger bead, thicker halves, taller pegs, etc.
+4. **Aesthetic / theme** — for naming, color choices in the .blend, any stylistic flourishes (engraved details, embossed text, color-swap regions, etc.). These are creative additions on top of the recipe.
+
+Everything else (peg placement, NFC pocket position, gap-fill regions) is a derived decision — Claude should propose values based on the silhouette and ask for confirmation before building.
+
+---
+
+## Reference files in this repo
+
+- `build_charm.py` — full working pipeline, parameterized at the top. Copy this and edit the CONFIG block for a new charm.
+- `GUIDE.md` — long-form walkthrough with code snippets and a lessons-learned table.
+- `wooli_silhouette.svg` — example input SVG (the Wooli mammoth).
+- `models/` — example output STLs from a previous build.
+
+---
+
+## Quick-start for Claude in a new session
+
+When the user opens a session referencing this prompt and a new silhouette:
+
+1. Read `build_charm.py` to refresh the exact API calls and CONFIG schema.
+2. Ask the user for: SVG path (or silhouette description), string-hole Y position, any dimension overrides.
+3. Propose peg positions and NFC pocket center based on the silhouette's bounding box and interior — show the user before building.
+4. Copy `build_charm.py` to a new file (e.g. `build_<charm>.py`), update the CONFIG block, run via Blender background mode.
+5. Verify with the built-in raycast checks; iterate on peg positions if any verification fails.
+6. Export both STLs; render a quick preview if useful.

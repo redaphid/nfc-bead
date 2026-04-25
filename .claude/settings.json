@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(blender:*)",
+      "Bash(uvx:*)",
+      "Bash(uv:*)",
+      "Bash(python:*)",
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)"
+    ]
+  },
+  "enabledMcpjsonServers": ["blender"]
+}
