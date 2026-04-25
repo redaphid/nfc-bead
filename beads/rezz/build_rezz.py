@@ -354,6 +354,98 @@ for o in (bottom, top, spiral):
     bpy.context.view_layer.objects.active = o
     bpy.ops.object.shade_flat()
 
+# 10b. Orbit camera setup (idempotent — survives rebuilds, saved into the .blend)
+def _setup_orbit_camera():
+    pivot = bpy.data.objects.get("CameraPivot")
+    if pivot is None:
+        bpy.ops.object.empty_add(type='PLAIN_AXES', location=(0,0,0))
+        pivot = bpy.context.active_object
+        pivot.name = "CameraPivot"
+        pivot.rotation_mode = 'XYZ'
+
+    target = bpy.data.objects.get("CameraTarget")
+    if target is None:
+        bpy.ops.object.empty_add(type='SPHERE', location=(0,0,1.5), radius=0.5)
+        target = bpy.context.active_object
+        target.name = "CameraTarget"
+        target.hide_viewport = True
+        target.hide_render = True
+
+    cam = bpy.data.objects.get("Camera")
+    if cam is None:
+        cam_data = bpy.data.cameras.new("Camera")
+        cam = bpy.data.objects.new("Camera", cam_data)
+        bpy.context.scene.collection.objects.link(cam)
+
+    cam.parent = pivot
+    cam.location = (0, -42, 18)
+    cam.rotation_euler = (0, 0, 0)
+    cam.data.type = 'PERSP'
+    cam.data.lens = 50
+    cam.data.clip_start = 0.5
+    cam.data.clip_end = 500.0
+    for c in list(cam.constraints):
+        cam.constraints.remove(c)
+    con = cam.constraints.new(type='TRACK_TO')
+    con.target = target
+    con.track_axis = 'TRACK_NEGATIVE_Z'
+    con.up_axis = 'UP_Y'
+    bpy.context.scene.camera = cam
+
+    # Sun light
+    sun = bpy.data.objects.get("Sun")
+    if sun is None:
+        sun_data = bpy.data.lights.new("Sun", type='SUN')
+        sun_data.energy = 3.0
+        sun = bpy.data.objects.new("Sun", sun_data)
+        sun.location = (0, 0, 30)
+        bpy.context.scene.collection.objects.link(sun)
+
+    # 90s orbit, ±55° vertical swing, 1 cycle per orbit
+    PERIOD = 2160
+    bpy.context.scene.frame_start = 1
+    bpy.context.scene.frame_end = PERIOD
+    bpy.context.scene.render.fps = 24
+    bpy.context.scene.use_preview_range = False
+
+    if pivot.animation_data:
+        pivot.animation_data_clear()
+    pivot.rotation_euler = (0, 0, 0)
+    pivot.keyframe_insert(data_path="rotation_euler", index=2, frame=1)
+    pivot.rotation_euler = (0, 0, math.radians(360))
+    pivot.keyframe_insert(data_path="rotation_euler", index=2, frame=PERIOD + 1)
+    SAMPLES, AMP = 24, 55.0
+    for i in range(SAMPLES + 1):
+        f = 1 + int(i * PERIOD / SAMPLES)
+        pivot.rotation_euler = (math.radians(AMP * math.sin(2 * math.pi * (i / SAMPLES))), 0, 0)
+        pivot.keyframe_insert(data_path="rotation_euler", index=0, frame=f)
+
+    def _iter_fcurves(action):
+        if hasattr(action, 'fcurves') and action.fcurves:
+            yield from action.fcurves
+        if hasattr(action, 'layers'):
+            for layer in action.layers:
+                for strip in layer.strips:
+                    if hasattr(strip, 'channelbags'):
+                        for cb in strip.channelbags:
+                            for fc in cb.fcurves:
+                                yield fc
+
+    for fc in _iter_fcurves(pivot.animation_data.action):
+        kind = 'LINEAR' if fc.array_index == 2 else 'BEZIER'
+        for kp in fc.keyframe_points:
+            kp.interpolation = kind
+
+    for area in bpy.context.screen.areas:
+        if area.type == 'VIEW_3D':
+            for space in area.spaces:
+                if space.type == 'VIEW_3D':
+                    space.region_3d.view_perspective = 'CAMERA'
+                    space.shading.type = 'MATERIAL'
+    bpy.context.scene.frame_current = 1
+
+_setup_orbit_camera()
+
 # 11. Export STLs and .blend
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 for obj, path in [(bottom, OUT_BOTTOM), (top, OUT_TOP), (spiral, OUT_SPIRAL)]:
