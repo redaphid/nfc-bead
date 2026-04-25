@@ -1,9 +1,13 @@
 *.blend1
-*.stl
 __pycache__/
 .DS_Store
-build_*.py
-!build_charm.py.example
-!build_rezz.py
 out/
 tmp/
+
+# Root-level scratch scripts and exports (per-charm work belongs under beads/)
+build_*.py
+*.stl
+!build_charm.py.example
+
+# Per-charm work tree — track everything (Python, SVG, .blend stages, STL exports)
+!beads/**

@@ -1,0 +1,372 @@
+"""
+Rezz NFC Bead Builder — round bead, raised black spiral on recessed red background.
+
+Run headless:
+    "D:\\tools\\blender\\blender.exe" --background --python build_rezz.py
+
+Or via Blender MCP — exec the chunks one at a time so you can watch/steer.
+
+Outputs (out/):
+  rezz_bottom.stl     — RED — bottom half flipped 180° around X for printing
+  rezz_top_body.stl   — RED — top half body, peg holes on inner face
+  rezz_top_spiral.stl — BLACK — raised Archimedean spiral on outer face
+  rezz_charm.blend    — workspace .blend for inspection
+
+Multi-color assembly in Elegoo Slicer:
+  1. Import all three STLs
+  2. Right-click rezz_top_spiral.stl → "Add as part" of rezz_top_body.stl
+  3. Assign the spiral part the second filament (BLACK)
+"""
+import bpy, bmesh, math, os
+from mathutils import Vector
+
+# Ensure os exists at config evaluation time (top of file)
+
+# ═══════════════════════════════════════════════════════════
+# CONFIG
+# ═══════════════════════════════════════════════════════════
+
+# All paths resolve relative to this script so it works from any cwd
+_HERE        = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else r"D:\Projects\nfc-bead\beads\rezz"
+SVG_PATH     = os.path.join(_HERE, "silhouette.svg")
+OUTPUT_DIR   = os.path.join(_HERE, "print")
+STAGES_DIR   = os.path.join(_HERE, "stages")
+
+TARGET_WIDTH  = 25.0    # mm — bead diameter
+THICKNESS     = 5.0     # mm — total split into 2 × 2.5 mm halves
+
+# String hole — horizontal through top of bead so it lays face-forward on a wrist
+HOLE_DIAMETER = 2.0
+HOLE_Y        = 9.0     # mm — through the top edge
+
+# NFC pocket on bottom half inner face
+NFC_DIAMETER  = 10.5
+NFC_DEPTH     = 0.8
+NFC_POS       = (0.0, -1.0)   # slightly south of center to clear string hole
+
+# Pegs — friction fit
+PEG_DIAMETER  = 2.0
+PEG_HEIGHT    = 1.5
+PEG_CLEARANCE = 0.1
+
+# Peg positions — triangulated, ≥1mm clear of NFC + edge + string hole
+PEGS = [(-7.5, 3.0), (7.5, 3.0), (0.0, -10.0)]
+
+# Spiral — raised on outer face of top half
+SPIRAL_HEIGHT      = 0.5    # mm above outer face
+SPIRAL_OUTER_R     = 10.0   # mm
+SPIRAL_TURNS       = 3.5
+SPIRAL_ARM_WIDTH   = 1.4    # mm
+SPIRAL_SAMPLES     = 720    # polyline samples around the spiral
+SPIRAL_HOLE_GUARD  = 7.0    # trim spiral above this Y so it clears the string hole
+
+# ═══════════════════════════════════════════════════════════
+# BUILD HELPERS
+# ═══════════════════════════════════════════════════════════
+
+OUT_BOTTOM = os.path.join(OUTPUT_DIR, "rezz_bottom.stl")
+OUT_TOP    = os.path.join(OUTPUT_DIR, "rezz_top_body.stl")
+OUT_SPIRAL = os.path.join(OUTPUT_DIR, "rezz_top_spiral.stl")
+OUT_BLEND  = os.path.join(OUTPUT_DIR, "rezz_charm.blend")
+
+def clean_mesh(obj, threshold=0.005):
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=threshold)
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+def boolean_op(target, cutter, operation='DIFFERENCE', name="Bool"):
+    bpy.context.view_layer.objects.active = target
+    target.select_set(True)
+    b = target.modifiers.new(name=name, type='BOOLEAN')
+    b.operation = operation
+    b.object = cutter
+    b.solver = 'EXACT'
+    bpy.ops.object.modifier_apply(modifier=name)
+    bpy.ops.object.select_all(action='DESELECT')
+    cutter.select_set(True)
+    bpy.ops.object.delete()
+
+def check_nonmanifold(obj):
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='DESELECT')
+    bpy.ops.mesh.select_non_manifold()
+    bm = bmesh.from_edit_mesh(obj.data)
+    nm = sum(1 for e in bm.edges if e.select)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    return nm
+
+def verify_open(obj, origin, direction, label):
+    dg = bpy.context.evaluated_depsgraph_get()
+    eo = obj.evaluated_get(dg)
+    hit = eo.ray_cast(origin, direction)
+    status = "OPEN" if not hit[0] else f"BLOCKED at z={hit[1].z:.3f}"
+    print(f"  {label}: {status}")
+    return not hit[0]
+
+def make_material(obj, rgba, name):
+    m = bpy.data.materials.new(name=name)
+    m.use_nodes = True
+    bsdf = m.node_tree.nodes["Principled BSDF"]
+    bsdf.inputs["Base Color"].default_value = rgba
+    bsdf.inputs["Roughness"].default_value = 0.45
+    obj.data.materials.clear()
+    obj.data.materials.append(m)
+
+# ═══════════════════════════════════════════════════════════
+# PIPELINE
+# ═══════════════════════════════════════════════════════════
+
+print("=" * 60)
+print("Rezz Bead Build")
+print("=" * 60)
+
+# Wipe previous build mesh/curve objects, keep camera infrastructure
+for obj in list(bpy.data.objects):
+    if obj.type in ('MESH','CURVE') and obj.name not in ("CameraPivot","CameraTarget"):
+        bpy.data.objects.remove(obj, do_unlink=True)
+
+# 1. Import SVG silhouette
+bpy.ops.import_curve.svg(filepath=SVG_PATH)
+curves = [o for o in bpy.context.scene.objects if o.type == 'CURVE']
+bpy.ops.object.select_all(action='DESELECT')
+for c in curves:
+    c.select_set(True)
+bpy.context.view_layer.objects.active = curves[0]
+if len(curves) > 1:
+    bpy.ops.object.join()
+curve_obj = bpy.context.active_object
+curve_obj.data.dimensions = '2D'
+curve_obj.data.fill_mode = 'BOTH'
+curve_obj.data.resolution_u = 64
+
+# 2. Convert to mesh and scale to TARGET_WIDTH
+bpy.ops.object.convert(target='MESH')
+mesh_obj = bpy.context.active_object
+w = mesh_obj.dimensions.x
+if w > 0:
+    sf = (TARGET_WIDTH / 1000.0) / w
+    mesh_obj.scale = (sf, sf, sf)
+    bpy.ops.object.transform_apply(scale=True)
+mesh_obj.scale = (1000, 1000, 1000)
+bpy.ops.object.transform_apply(scale=True)
+bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+mesh_obj.location = (0, 0, 0)
+
+bpy.ops.object.mode_set(mode='EDIT')
+bpy.ops.mesh.select_all(action='SELECT')
+bpy.ops.mesh.remove_doubles(threshold=0.005)
+bpy.ops.mesh.normals_make_consistent(inside=False)
+
+# 3. Extrude to thickness
+bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value": (0, 0, THICKNESS)})
+bpy.ops.mesh.select_all(action='SELECT')
+bpy.ops.mesh.remove_doubles(threshold=0.005)
+bpy.ops.mesh.normals_make_consistent(inside=False)
+bpy.ops.object.mode_set(mode='OBJECT')
+
+bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+mesh_obj.location = (0, 0, 0)
+print(f"Extruded: {mesh_obj.dimensions.x:.2f} × {mesh_obj.dimensions.y:.2f} × {mesh_obj.dimensions.z:.2f} mm")
+
+# 4. String hole — boolean DIFFERENCE before splitting
+bpy.ops.mesh.primitive_cylinder_add(
+    vertices=48, radius=HOLE_DIAMETER/2.0,
+    depth=mesh_obj.dimensions.x * 4,
+    location=(0, HOLE_Y, 0),
+    rotation=(0, math.radians(90), 0),
+)
+boolean_op(mesh_obj, bpy.context.active_object, 'DIFFERENCE', "StringHole")
+clean_mesh(mesh_obj)
+bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+mesh_obj.location = (0, 0, 0)
+mesh_obj.name = "FullBead"
+
+z_min = min(v.co.z for v in mesh_obj.data.vertices)
+z_max = max(v.co.z for v in mesh_obj.data.vertices)
+z_mid = (z_min + z_max) / 2.0
+print(f"Z range: {z_min:.2f} .. {z_max:.2f}  (mid={z_mid:.2f})")
+
+# 5. Split — duplicate full bead, INTERSECT with bottom-half cube and top-half cube
+def cut_half(name, z_lo, z_hi):
+    bpy.ops.object.select_all(action='DESELECT')
+    mesh_obj.select_set(True)
+    bpy.context.view_layer.objects.active = mesh_obj
+    bpy.ops.object.duplicate()
+    half = bpy.context.active_object
+    half.name = name
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, (z_lo + z_hi)/2.0))
+    box = bpy.context.active_object
+    box.scale = (200, 200, z_hi - z_lo)
+    bpy.ops.object.transform_apply(scale=True)
+    boolean_op(half, box, 'INTERSECT', "Cut")
+    clean_mesh(half, 0.01)
+    return half
+
+bottom = cut_half("Bottom", z_min, z_mid)
+top    = cut_half("Top",    z_mid, z_max)
+print(f"Bottom non-manifold: {check_nonmanifold(bottom)}")
+print(f"Top    non-manifold: {check_nonmanifold(top)}")
+
+# 6. NFC pocket on bottom half inner face (top of the bottom half before flip)
+b_z_max = max(v.co.z for v in bottom.data.vertices)
+nfc_depth_cutter = NFC_DEPTH * 2 + 0.1
+bpy.ops.mesh.primitive_cylinder_add(
+    vertices=64, radius=NFC_DIAMETER/2.0, depth=nfc_depth_cutter,
+    location=(NFC_POS[0], NFC_POS[1], b_z_max - NFC_DEPTH + nfc_depth_cutter/2.0),
+)
+boolean_op(bottom, bpy.context.active_object, 'DIFFERENCE', "NFC")
+clean_mesh(bottom)
+
+# 7. Peg HOLES on top half inner face — POST split, cutters extend 1mm below inner face
+t_z_min = min(v.co.z for v in top.data.vertices)
+hole_r = (PEG_DIAMETER + PEG_CLEARANCE * 2) / 2.0
+for i,(px,py) in enumerate(PEGS):
+    cut_bot = t_z_min - 1.0
+    cut_top = t_z_min + PEG_HEIGHT + 0.3
+    cut_d   = cut_top - cut_bot
+    bpy.ops.mesh.primitive_cylinder_add(
+        vertices=32, radius=hole_r, depth=cut_d,
+        location=(px, py, (cut_bot + cut_top) / 2.0),
+    )
+    boolean_op(top, bpy.context.active_object, 'DIFFERENCE', f"PH{i}")
+clean_mesh(top)
+print(f"Top post-peg-holes non-manifold: {check_nonmanifold(top)}")
+for i,(px,py) in enumerate(PEGS):
+    verify_open(top, Vector((px,py,t_z_min - 2)), Vector((0,0,1)), f"Peg hole {i}")
+
+# 8. PEGS on bottom half inner face — boolean UNION, NOT mesh join
+b_z_max = max(v.co.z for v in bottom.data.vertices)
+for i,(px,py) in enumerate(PEGS):
+    bpy.ops.mesh.primitive_cylinder_add(
+        vertices=32, radius=PEG_DIAMETER/2.0, depth=PEG_HEIGHT,
+        location=(px, py, b_z_max + PEG_HEIGHT/2.0),
+    )
+    boolean_op(bottom, bpy.context.active_object, 'UNION', f"Peg{i}")
+clean_mesh(bottom)
+print(f"Bottom post-pegs non-manifold: {check_nonmanifold(bottom)}")
+
+# 9. Spiral on outer face of TOP half — separate object, exports as separate STL
+# Built directly as a flat ribbon mesh (avoids the curve-bevel-then-clip approach
+# which silently produces an empty mesh on tangent geometry).
+top_outer_z = max(v.co.z for v in top.data.vertices)
+b_coeff = SPIRAL_OUTER_R / (SPIRAL_TURNS * 2 * math.pi)
+W = SPIRAL_ARM_WIDTH / 2.0
+
+# Start at theta where centre radius >= W so inner offset stays positive
+theta_start = (W * 1.05) / b_coeff
+theta_end   = SPIRAL_TURNS * 2 * math.pi
+
+# Sample centerline
+center = []
+for i in range(SPIRAL_SAMPLES):
+    t     = i / (SPIRAL_SAMPLES - 1)
+    theta = theta_start + t * (theta_end - theta_start)
+    r     = b_coeff * theta
+    center.append((r * math.cos(theta), r * math.sin(theta)))
+
+# For each centerline point, compute inner/outer offsets perpendicular to tangent
+inner_pts, outer_pts = [], []
+for i, (cx, cy) in enumerate(center):
+    if i == 0:
+        tx, ty = center[1][0] - cx, center[1][1] - cy
+    elif i == len(center) - 1:
+        tx, ty = cx - center[-2][0], cy - center[-2][1]
+    else:
+        tx = center[i+1][0] - center[i-1][0]
+        ty = center[i+1][1] - center[i-1][1]
+    tlen = math.hypot(tx, ty) or 1.0
+    tx, ty = tx / tlen, ty / tlen
+    nx, ny = -ty, tx       # perpendicular, rotated 90° CCW
+    inner_pts.append((cx - nx * W, cy - ny * W, top_outer_z))
+    outer_pts.append((cx + nx * W, cy + ny * W, top_outer_z))
+
+# Build flat ribbon mesh: inner row + outer row, quads between consecutive samples
+N = len(center)
+verts = inner_pts + outer_pts                       # [0..N-1] inner, [N..2N-1] outer
+faces = [[i, N + i, N + i + 1, i + 1] for i in range(N - 1)]
+# End caps so the ribbon is a closed strip (start and end of the spiral)
+faces.append([0, N, 2 * N - 1, N - 1])               # outer end-cap
+mesh = bpy.data.meshes.new("RezzSpiralMesh")
+mesh.from_pydata(verts, [], faces)
+mesh.update()
+spiral = bpy.data.objects.new("RezzSpiral", mesh)
+bpy.context.scene.collection.objects.link(spiral)
+
+# Extrude flat ribbon up to SPIRAL_HEIGHT thickness
+bpy.ops.object.select_all(action='DESELECT')
+spiral.select_set(True)
+bpy.context.view_layer.objects.active = spiral
+bpy.ops.object.mode_set(mode='EDIT')
+bpy.ops.mesh.select_all(action='SELECT')
+bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value": (0, 0, SPIRAL_HEIGHT)})
+bpy.ops.mesh.select_all(action='SELECT')
+bpy.ops.mesh.normals_make_consistent(inside=False)
+bpy.ops.object.mode_set(mode='OBJECT')
+
+# Trim portion above the string hole guard line
+bpy.ops.mesh.primitive_cube_add(size=1, location=(0, SPIRAL_HOLE_GUARD + 30, top_outer_z + SPIRAL_HEIGHT/2.0))
+trim = bpy.context.active_object
+trim.scale = (60, 60, SPIRAL_HEIGHT * 4)
+bpy.ops.object.transform_apply(scale=True)
+boolean_op(spiral, trim, 'DIFFERENCE', "TrimAboveHole")
+clean_mesh(spiral)
+print(f"Spiral non-manifold: {check_nonmanifold(spiral)}, dims: {spiral.dimensions[:]}")
+
+# 10. Position halves for printing (bottom flipped 180° around X), pegs face up
+mesh_obj.hide_set(True)
+mesh_obj.hide_render = True
+
+bpy.ops.object.select_all(action='DESELECT')
+bottom.select_set(True)
+bpy.context.view_layer.objects.active = bottom
+bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+bottom.rotation_euler = (math.radians(180), 0, 0)
+bpy.ops.object.transform_apply(rotation=True)
+bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+bottom.location = (-18, 0, bottom.dimensions.z / 2.0)
+
+bpy.ops.object.select_all(action='DESELECT')
+top.select_set(True)
+bpy.context.view_layer.objects.active = top
+bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+top.location = (18, 0, top.dimensions.z / 2.0)
+
+# Spiral follows the top half (same coordinate translation we just applied)
+bpy.ops.object.select_all(action='DESELECT')
+spiral.select_set(True)
+bpy.context.view_layer.objects.active = spiral
+bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+spiral.location = (18, 0, top.dimensions.z + SPIRAL_HEIGHT/2.0)
+
+# Materials: red body, black spiral
+make_material(bottom, (0.85, 0.10, 0.10, 1), "RedMat_Bottom")
+make_material(top,    (0.85, 0.10, 0.10, 1), "RedMat_Top")
+make_material(spiral, (0.05, 0.05, 0.05, 1), "BlackMat_Spiral")
+for o in (bottom, top, spiral):
+    bpy.ops.object.select_all(action='DESELECT')
+    o.select_set(True)
+    bpy.context.view_layer.objects.active = o
+    bpy.ops.object.shade_flat()
+
+# 11. Export STLs and .blend
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+for obj, path in [(bottom, OUT_BOTTOM), (top, OUT_TOP), (spiral, OUT_SPIRAL)]:
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.wm.stl_export(filepath=path, export_selected_objects=True, ascii_format=False)
+bpy.ops.wm.save_as_mainfile(filepath=OUT_BLEND)
+
+print("\n" + "=" * 60)
+for obj, label in [(bottom,"bottom"),(top,"top body"),(spiral,"spiral")]:
+    d = obj.dimensions
+    print(f"  {label:10s}: {d.x:.2f} × {d.y:.2f} × {d.z:.2f} mm")
+print(f"\nSTLs: {OUT_BOTTOM}\n      {OUT_TOP}\n      {OUT_SPIRAL}")
+print(f"Blend: {OUT_BLEND}")
+print("Done.")
