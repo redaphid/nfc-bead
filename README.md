@@ -16,12 +16,15 @@ First charm built with this recipe: the [Wooli mammoth](https://github.com/redap
 | `build_charm.py.example` | Reference implementation of the full Blender pipeline. Copy to `build_<charm>.py` and edit the CONFIG block at the top per charm. |
 | `CLAUDE.md` | Working norms for Claude Code in this repo (branch model, multi-color defaults, live-MCP preference). |
 | `SETUP.md` | One-time and per-session setup for the live Blender MCP workflow. **Read this if you want to drive Blender live**, otherwise headless works without it. |
+| `tools/launch.ps1` | One-shot Windows launcher: opens Blender with the addon installed, enabled, and the MCP server running. See *MCP — Blender* below. |
+| `tools/blender_bootstrap.py` | What `launch.ps1` actually feeds to Blender via `--python`. Idempotent. |
+| `beads/<name>/` | Per-charm work tree: silhouette SVG, `build_<name>.py`, `print/` STLs + `.blend`, `stages/NN_*.blend` snapshots + `.md` notes, `DEBUGGING_LOG.md`. The rezz branch ships `beads/rezz/`. |
 | `GUIDE.md` | Long-form walkthrough with lessons learned from the original Wooli build. |
 
 ## Quick start
 
 1. Open this repo in Claude Code. The `nfc-bead` skill auto-loads.
-2. Say something like: *"new charm — here's the silhouette"* and attach an SVG. The skill reads the prompt, asks the right questions, and walks the build.
+2. Say something like: *"new charm — here's the silhouette"* and attach an SVG. The skill reads the prompt, asks the right questions, and walks the build. **Just talk to Claude — it knows about the launcher and will run you through Blender setup if you don't have it going yet.**
 3. Or, manually: read `prompts/nfc-bead/prompt.md` yourself, copy `build_charm.py.example`, edit the CONFIG block, run headless:
    ```
    blender --background --python build_yourcharm.py
@@ -31,7 +34,17 @@ First charm built with this recipe: the [Wooli mammoth](https://github.com/redap
 
 `.mcp.json` configures the [Blender MCP](https://github.com/ahujasid/blender-mcp) server (`uvx blender-mcp`) so Claude Code can drive Blender live — you watch geometry build in the viewport and can steer mid-build.
 
-**See [`SETUP.md`](./SETUP.md)** for the full one-time install + per-session bring-up sequence (the addon is bundled in this repo at `.claude/skills/nfc-bead/blender_mcp_addon.py`, so no GitHub round-trip needed).
+**One-shot launcher** — `tools/launch.ps1` opens Blender with the addon installed, enabled, and the MCP server running, all in one command:
+
+```powershell
+.\tools\launch.ps1                       # rezz bead (default)
+.\tools\launch.ps1 -Bead wooli           # different bead's last-saved .blend
+.\tools\launch.ps1 -BlendFile foo.blend  # arbitrary file
+```
+
+The launcher runs `tools/blender_bootstrap.py` inside Blender; it's idempotent (copies-if-stale + enables + saves prefs + starts server), so re-running it after a crash always brings you back to a working state. After Blender opens, run `/mcp` in Claude Code to (re)connect.
+
+If you'd rather click through it manually, **[`SETUP.md`](./SETUP.md)** has the full step-by-step plus troubleshooting. Either way the bundled addon at `.claude/skills/nfc-bead/blender_mcp_addon.py` is what gets installed — no GitHub round-trip.
 
 Headless `blender --background --python` works without any of this — the MCP is only for live interactive sessions.
 

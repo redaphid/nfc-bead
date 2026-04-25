@@ -5,9 +5,11 @@ This repo is a **template / recipe** for designing two-half snap-fit NFC charms 
 ## Where to look
 
 - **`prompts/nfc-bead/prompt.md`** — the technical recipe (dimensions, pipeline order, gotchas). Read this first when starting a new charm.
-- **`build_charm.py.example`** — canonical Blender pipeline. Copy to `build_<name>.py` and edit the CONFIG block at the top.
+- **`build_charm.py.example`** — canonical Blender pipeline. Copy to `beads/<name>/build_<name>.py` and edit the CONFIG block at the top.
+- **`beads/<name>/`** — per-charm work tree (silhouette, build script, stage `.blend` snapshots with notes, final STLs). The active branch usually owns one bead here.
 - **`GUIDE.md`** — long-form lessons-learned walkthrough.
 - **`SETUP.md`** — one-time and per-session setup for the live Blender MCP workflow (Windows-focused; macOS / Linux outlined).
+- **`tools/launch.ps1`** + **`tools/blender_bootstrap.py`** — one-shot launcher that opens Blender with the addon installed/enabled and the MCP server running. Use this when the user wants to start (or restart after a crash) the live workflow. Don't walk them through the manual click-through unless they specifically ask.
 - **`.claude/skills/nfc-bead/`** — the `nfc-bead` skill that auto-loads on charm requests. Bundles the Blender MCP addon source.
 - **`.mcp.json`** — wires up `uvx blender-mcp` as a project-scoped MCP server. Loaded at Claude Code startup.
 
