@@ -348,14 +348,10 @@ bpy.ops.mesh.select_all(action='SELECT')
 bpy.ops.mesh.normals_make_consistent(inside=False)
 bpy.ops.object.mode_set(mode='OBJECT')
 
-# Clear a small CIRCULAR notch around the string hole so the spiral wraps it
-# cleanly instead of being chopped off by a flat half-plane.
-HOLE_NOTCH_R = HOLE_DIAMETER / 2.0 + 1.5   # 2.5 mm = 1 mm hole + 1.5 mm visual margin
-bpy.ops.mesh.primitive_cylinder_add(
-    vertices=48, radius=HOLE_NOTCH_R, depth=SPIRAL_HEIGHT * 4,
-    location=(0, HOLE_Y, top_outer_z + SPIRAL_HEIGHT / 2.0),
-)
-boolean_op(spiral, bpy.context.active_object, 'DIFFERENCE', "ClearForString")
+# No string-hole trim. The horizontal string hole runs through the bead body, not
+# through the top face — the spiral above can canopy the hole opening without
+# blocking threading. Earlier versions cut a notch here, but it looked like an
+# obvious bite-out of the spiral and added no functional benefit.
 clean_mesh(spiral)
 print(f"Spiral non-manifold: {check_nonmanifold(spiral)}, dims: {spiral.dimensions[:]}")
 save_stage(8, "spiral")
