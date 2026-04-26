@@ -321,7 +321,7 @@ for area in bpy.context.screen.areas:
 # Force a frame re-eval so GP line-art draws strokes on first render
 scn.frame_set(scn.frame_current)
 
-print(f"[architect_on] applied. World={PARCHMENT[:3]}  ink_radius={INK_RADIUS}  "
-      f"samples={RENDER_SAMPLES}")
+print(f"[architect_on] applied. engine={scn.render.engine}  world={PARCHMENT[:3]}  "
+      f"ink_radius={INK_RADIUS}  eevee_taa={EEVEE_SAMPLES}")
 print("[architect_on] Pair with anim_orbit.py / anim_locked_profile.py / anim_top_down.py / "
       "anim_macro_pull.py / anim_raking_light.py for camera movement.")

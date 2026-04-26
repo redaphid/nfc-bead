@@ -50,10 +50,20 @@ Without this, a Claude turn that takes 60 seconds to think looks like a frozen B
 
 This isn't decoration. **It's the actual user experience during long-running work.** Treat it accordingly.
 
+## The sample bead scene
+
+`samples/rezz_sample.blend` is the canonical sample scene used to demo the architect mode and animations. It's the rezz bead in the canonical print-layout (Bottom at X=-18, Top at X=+18, Decoration on Top), with the architect rig + lights + materials + DBG_* feature overlays already applied. EEVEE engine, high-contrast palette, wireframe overlay enabled, camera frame fills the editor.
+
+Use it as the **default scene for any aesthetic work** in this worktree:
+
+- `tools\launch.ps1` (no args) opens it automatically when no per-charm `.blend` is found.
+- When testing changes to `architect_on.py` / `anim_*.py` / `recolor.py`, run them against this scene to verify before declaring done.
+- When updating it (new geometry, fixed widget, palette tweak), re-save in place (`bpy.ops.wm.save_as_mainfile`) and commit so future sessions inherit the fix.
+
 ## Practical setup for a fresh session
 
 1. **Verify the Blender MCP is connected** — `/mcp`. If it's down but Blender is running, use `python tools/blender_send.py -f <script>` to talk to it via the addon socket directly.
-2. **Check the scene** (`mcp__blender__get_scene_info`). The user is probably already showing some bead halves on screen — your work continues from that scene state, not from a fresh empty scene.
+2. **Check the scene** (`mcp__blender__get_scene_info`). If it's empty or wrong, launch fresh against the sample: `tools\launch.ps1` (defaults to `samples/rezz_sample.blend`).
 3. **Apply the architect look** — `exec(open(r"<repo>/.claude/skills/bead-architect-mode/architect_on.py").read())`.
 4. **Pick an animation** — `anim_orbit.py` for default, `anim_locked_profile.py` for a held silhouette, `anim_macro_pull.py` for a feature reveal, `anim_tour.py` for a 5-stop tour through the technical features, `anim_raking_light.py` for a moving-light still-camera shot, or `auto_cycle.py` to rotate through them every 30s.
 5. **Exec → screenshot → critique → edit → exec → screenshot.** Don't skip the screenshot step. Ever.

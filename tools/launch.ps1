@@ -53,6 +53,13 @@ if (-not $BlendFile -and $Bead) {
     $candidate = Join-Path $Repo "beads\$Bead\print\${Bead}_charm.blend"
     if (Test-Path $candidate) { $BlendFile = $candidate }
 }
+# Final fallback: the canonical sample bead scene (rezz with architect rig + DBG overlays).
+# Lives in this worktree at samples/rezz_sample.blend; useful when working on aesthetics
+# without a per-charm beads/<name>/print/ tree present.
+if (-not $BlendFile) {
+    $sample = Join-Path $Repo 'samples\rezz_sample.blend'
+    if (Test-Path $sample) { $BlendFile = $sample }
+}
 
 # Build argument list. Blender CLI: [blendfile] --python <script>
 $blenderArgs = @()
