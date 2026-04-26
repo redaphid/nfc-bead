@@ -242,9 +242,39 @@ for obj in targets:
     manifest.append({"obj": obj.name, "stl": out_path, "bytes": size, "flipped": flip_deg != 0.0})
     print(f"[stl_export] {obj.name} -> {out_path} ({size} bytes" + (" [print-flipped]" if flip_deg != 0.0 else "") + ")")
 
-# ─── Step 7: report ───────────────────────────────────────────────────
+# ─── Step 7: also mirror to tmp/latest/ so the user always has a known-path copy ──
+import shutil
+tmp_root = os.path.dirname(out_dir)            # e.g. <repo>/tmp
+latest_dir = os.path.join(tmp_root, "latest")
+# Wipe any prior contents so 'latest' truly reflects the most recent export
+if os.path.isdir(latest_dir):
+    for old in os.listdir(latest_dir):
+        old_path = os.path.join(latest_dir, old)
+        if os.path.isfile(old_path):
+            try: os.remove(old_path)
+            except OSError: pass
+os.makedirs(latest_dir, exist_ok=True)
+for m in manifest:
+    if os.path.isfile(m["stl"]):
+        latest_path = os.path.join(latest_dir, os.path.basename(m["stl"]))
+        shutil.copy2(m["stl"], latest_path)
+        m["latest"] = latest_path
+
+# Also drop a manifest.txt in latest/ so the user (or future Claude) knows
+# what was exported and from where.
+manifest_path = os.path.join(latest_dir, "manifest.txt")
+with open(manifest_path, "w", encoding="utf-8") as fh:
+    fh.write(f"timestamp:    {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+    fh.write(f"timestamped:  {out_dir}\n")
+    fh.write(f"latest:       {latest_dir}\n\n")
+    for m in manifest:
+        flag = " [print-flipped]" if m.get("flipped") else ""
+        fh.write(f"  {m['obj']:<24} {m['bytes']:>8} bytes{flag}\n")
+
+# ─── Step 8: report ───────────────────────────────────────────────────
 print("\n=== STL EXPORT MANIFEST ===")
 for m in manifest:
     print(f"  {m['obj']:<24} {m['bytes']:>8} bytes   {m['stl']}")
 print("============================")
 print(f"[stl_export] done. {len(manifest)} STL(s) in {out_dir}")
+print(f"[stl_export] mirrored to {latest_dir}/ (always-current copy + manifest.txt)")

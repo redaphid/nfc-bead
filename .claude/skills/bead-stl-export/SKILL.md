@@ -51,7 +51,9 @@ To override per bead — for instance if you build the bottom already-flipped �
 
 ## Output location
 
-Default: `<repo>/tmp/stl_export_<timestamp>/`. Override via the `OUT_DIR` tunable at the top of `export.py`.
+Default: `<repo>/tmp/stl_export_<timestamp>/` for the timestamped archive of the run. Override via the `OUT_DIR` tunable at the top of `export.py`.
+
+**Always-current copy at `<repo>/tmp/latest/`**: every run also wipes and re-writes the same files into `tmp/latest/` so there's a known-path location for "the latest STLs" — no need to find the most-recent timestamped folder. A `manifest.txt` in that dir records what was exported and from where. `tmp/` is gitignored so these files stay local; they're derived artifacts that any export run will recreate.
 
 ## How to invoke
 
