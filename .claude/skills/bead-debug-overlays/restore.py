@@ -17,7 +17,7 @@ COL_BOTTOM_PROD  = (0.85, 0.10, 0.10, 1)   # red
 COL_TOP_PROD     = (0.85, 0.10, 0.10, 1)   # red
 COL_DECOR_PROD   = (0.05, 0.05, 0.05, 1)   # black
 
-DECORATION_NAME = "RezzSpiral"
+DECORATION_NAME = "Decoration"   # canonical project name
 
 
 def repaint(obj, rgba, name):

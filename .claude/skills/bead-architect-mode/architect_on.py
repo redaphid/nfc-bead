@@ -107,12 +107,22 @@ mat_blue   = _matte("MA_Body_BlueGray",  BOTTOM_FILL)
 mat_sage   = _matte("MA_Body_Sage",      TOP_FILL)
 mat_bronze = _matte("MA_Decor_Bronze",   ACCENT_FILL)
 
-def _find_half(suffix):
-    o = bpy.data.objects.get(suffix)
-    if o is not None:
+# Bead-component naming convention (project-wide):
+#   "Bottom"     — bottom half (NFC pocket recess + pegs)
+#   "Top"        — top half (peg holes; outer face may host the decoration)
+#   "Decoration" — raised relief on top's outer face (spiral, emboss, etc.)
+# Build scripts (build_<charm>.py) MUST produce these canonical names. STL
+# filenames may still be bead-prefixed (rezz_bottom.stl) but in-Blender object
+# names are bead-agnostic. Legacy fallbacks below cover historical names.
+def _find_canonical(canonical, *legacy_suffixes):
+    o = bpy.data.objects.get(canonical)
+    if o is not None and o.type == 'MESH':
         return o
     for o in bpy.data.objects:
-        if o.type == 'MESH' and o.name.lower().endswith(f"_{suffix.lower()}"):
+        if o.type != 'MESH':
+            continue
+        low = o.name.lower()
+        if any(low.endswith(s) for s in legacy_suffixes):
             return o
     return None
 
@@ -121,20 +131,9 @@ def _assign(obj, mat):
     obj.data.materials.clear()
     obj.data.materials.append(mat)
 
-_assign(_find_half("Bottom"), mat_blue)
-_assign(_find_half("Top"),    mat_sage)
-
-# Decoration: explicit names + any *_spiral / *_decor / *_accent fallback
-_decor_seen = set()
-for n in ("RezzSpiral", "Spiral", "Decoration", "Decor"):
-    o = bpy.data.objects.get(n)
-    if o:
-        _assign(o, mat_bronze); _decor_seen.add(o.name)
-for o in bpy.data.objects:
-    if o.type != 'MESH' or o.name in _decor_seen:
-        continue
-    if o.name.lower().endswith(("_spiral", "_decor", "_accent")):
-        _assign(o, mat_bronze)
+_assign(_find_canonical("Bottom",     "_bottom"),                       mat_blue)
+_assign(_find_canonical("Top",        "_top_body", "_top"),             mat_sage)
+_assign(_find_canonical("Decoration", "_spiral",   "_decor", "_accent"), mat_bronze)
 
 # ─── DBG_* overlay re-tint to architect palette (optional) ─────────────
 if RETINT_DBG_OVERLAYS:

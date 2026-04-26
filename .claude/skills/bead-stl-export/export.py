@@ -14,18 +14,23 @@ import time
 from mathutils import Vector
 
 # ─── Tunables ─────────────────────────────────────────────────────────
+# Canonical bead-component names (project-wide convention):
+#   Bottom, Top, Decoration. Build scripts must produce these names.
+# Legacy bead-specific names (rezz_bottom etc.) are accepted as a fallback.
 EXPECTED_OBJECTS = [
-    "rezz_bottom",
-    "rezz_top_body",
-    "rezz_top_spiral",
+    "Bottom",
+    "Top",
+    "Decoration",
 ]
-# Fallback object names to find if EXPECTED_OBJECTS aren't present
+# Fallback by suffix if canonical names aren't present
 FALLBACK_SUFFIXES = [
-    ("_bottom", "Bottom"),
-    ("_top_body", "Top"),
-    ("_top_spiral", "Spiral"),
-    ("_spiral",     "Spiral"),
+    ("_bottom",     "Bottom"),
+    ("_top_body",   "Top"),
+    ("_top",        "Top"),
+    ("_top_spiral", "Decoration"),
+    ("_spiral",     "Decoration"),
     ("_decor",      "Decoration"),
+    ("_accent",     "Decoration"),
 ]
 
 OUT_DIR = None     # default: tmp/stl_export_<timestamp>/ in repo root

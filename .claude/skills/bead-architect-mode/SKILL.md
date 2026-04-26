@@ -1,3 +1,12 @@
+<!--
+PROJECT-WIDE NAMING CONVENTION (do not deviate):
+  Bottom     — bottom half  (NFC pocket recess + pegs)
+  Top        — top half     (peg holes; outer face hosts the decoration)
+  Decoration — raised relief on Top's outer face
+Architect_on.py paints these canonical names directly. Legacy bead-specific
+names (rezz_bottom, rezz_top_body, rezz_top_spiral) are accepted as a
+suffix fallback only.
+-->
 ---
 name: bead-architect-mode
 description: Drape a hand-drafted parchment+ink+watercolor 'architect' aesthetic over an NFC bead in Blender, with seamless-loopable cinematic camera animations. Use when the user wants the canvas to look beautiful while Claude is thinking, when narrating a build live, or when showing the bead on a projector — triggers on "make it pretty", "Westworld mode", "architect aesthetic", "set up the orbit", "give me a slow camera move", "loop the macro pull", "rake the light", "tour the bead", or similar. Pairs with bead-debug-overlays — run that first to get DBG_* overlays, then this skill auto-tints them to a parchment-friendly palette. Requires the Blender MCP to be connected.

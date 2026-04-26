@@ -1,3 +1,14 @@
+<!--
+PROJECT-WIDE NAMING CONVENTION (do not deviate):
+  Bottom     — bottom half
+  Top        — top half (the body part — NOT '_top'; build scripts produce '_top_body')
+  Decoration — raised relief
+export.py defaults to these canonical names, with bead-specific suffix
+fallbacks (_bottom, _top_body, _top_spiral, _spiral, _decor, _accent).
+STL filenames preserve the live-Blender object name, so canonical-named
+scenes produce Bottom.stl / Top.stl / Decoration.stl. To get bead-prefixed
+STL filenames, rename the in-scene objects before invoking export.py.
+-->
 ---
 name: bead-stl-export
 description: Export the printable bead halves to STL files in a known-good state — strips any architect aesthetic, debug overlays, or visualization-only objects first so the export contains ONLY the geometry the slicer should see. Use when the user wants to "export the STL", "send it to the slicer", "make it printable", "check it's printable", or similar. Verifies dimensions and basic mesh sanity. Requires the Blender MCP to be connected.

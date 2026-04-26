@@ -1,3 +1,15 @@
+<!--
+PROJECT-WIDE NAMING CONVENTION (do not deviate):
+  Bottom     — bottom half (NFC pocket recess + pegs)
+  Top        — top half  (peg holes; outer face hosts the decoration)
+  Decoration — raised relief on Top's outer face (spiral / emboss / etc.)
+Build scripts (build_<charm>.py) MUST produce these canonical Blender
+object names. STL filenames may still be bead-prefixed (rezz_bottom.stl)
+because they distinguish across charm projects, but in-scene object
+names are bead-agnostic. recolor.py / restore.py / architect_on.py /
+bead-stl-export accept legacy bead-specific names (rezz_bottom,
+rezz_top_body, rezz_top_spiral) as a fallback only.
+-->
 ---
 name: bead-debug-overlays
 description: Apply or strip CAD-style debug coloring + wireframe overlays for an NFC bead's hidden features in Blender. Use when the user wants to visually disambiguate parts ("color the parts differently", "I can't tell which is which", "show me where the pegs are", "highlight the structure", "what's the NFC pocket", "where does the string hole go"). Adds throwaway DBG_* overlay objects (yellow pegs, red peg-hole wireframes, magenta NFC pocket, orange string hole) so internal features are visible from outside the bead. Requires the Blender MCP to be connected.
@@ -65,6 +77,30 @@ See `bead-architect-mode/SKILL.md` for the architect-aesthetic counterpart palet
 - `restore.py` removes them cleanly via the `DBG_*` prefix filter.
 - `bead-stl-export/SKILL.md` (the printable-export skill) defensively strips them before exporting.
 - Build scripts like `build_<name>.py` should select export targets by name (`Bottom`, `Top`, decoration), so `DBG_*` is invisible to a name-targeted export anyway.
+
+## Gotchas (verified the hard way)
+
+### Inner-face Z must be computed from the actual mesh bbox
+
+The bottom-half "inner face" (where pegs and the NFC pocket attach) is at different world Z depending on context:
+
+- **Build-pipeline scene**: bottom is recentered after the 180° X-flip so the inner face sits at world `z = 0` and pegs stick down to `z = -PEG_HEIGHT`.
+- **STL-imported scene** (the common one — what `tools/launch.ps1` produces): the bottom STL keeps its print-layout `z = 0..4`. Show face is at `z = 0` (touching the build plate), inner face is at `z = zmax - PEG_HEIGHT`, pegs occupy `z = zmax - PEG_HEIGHT..zmax`.
+
+`recolor.py` reads `Bottom`'s actual world Z bbox and computes `_BOTTOM_INNER_Z` from it. **Do not assume `inner_z = 0`** — that bug placed all DBG widgets below the puck.
+
+### Top has `_top_body` suffix, not `_top`
+
+Build scripts produce three printable objects per charm: `<charm>_bottom`, `<charm>_top_body`, `<charm>_top_spiral`. The `_top_body` half is what hosts the peg holes. Suffix-fallback resolvers must check `_top_body` BEFORE `_top` (otherwise `rezz_top_body` won't match `_top` because it ends in `_body`).
+
+### `bpy.ops.object.*` requires OBJECT mode
+
+If the user (or a previous script) left an object in EDIT/sculpt/paint mode, every `bpy.ops.object.*` poll fails. `recolor.py` doesn't have this guard yet — `architect_on.py` does. If the recolor errors out partway, drop into OBJECT mode first:
+
+```python
+if bpy.context.mode != 'OBJECT':
+    bpy.ops.object.mode_set(mode='OBJECT')
+```
 
 ## When NOT to use
 

@@ -42,7 +42,7 @@ NFC_DEPTH    = 0.8
 HOLE_Y       = 9.0
 HOLE_DIA     = 2.0
 
-DECORATION_NAME = "rezz_top_spiral"
+DECORATION_NAME = "Decoration"   # canonical project name; legacy *_spiral / *_decor still found by fallback
 BOTTOM_X     = -18.0
 TOP_X        =  18.0
 
@@ -124,35 +124,51 @@ for obj in list(bpy.data.objects):
 # Sign for bottom-half widget Y. If bottom has been flipped 180° around X,
 # its mesh-local +Y now reads as world -Y. Pre-flip, +Y stays +Y.
 _BY = -1.0 if BOTTOM_FLIPPED else 1.0
-# Z origin of the inner face for each half. Post-flip canonical layout puts the
-# inner face at z=0 for both halves; pre-flip the inner face is at the *top* of
-# the bottom half (its world z depends on the object's location), so we read it
-# off the existing object.
-def _bottom_inner_z():
-    b = bpy.data.objects.get("Bottom")
-    if b is None:
-        return 0.0
-    if BOTTOM_FLIPPED:
-        return 0.0
-    # pre-flip: inner face is the TOP of the bottom mesh
-    return max((b.matrix_world @ v.co).z for v in b.data.vertices)
 
-def _top_inner_z():
-    t = bpy.data.objects.get("Top")
-    if t is None:
-        return 0.0
-    if BOTTOM_FLIPPED:
-        return 0.0
-    return min((t.matrix_world @ v.co).z for v in t.data.vertices)
+# ── Inner-face Z is computed from the ACTUAL mesh bbox in world coords. ──
+# This works for both build-pipeline scenes (where halves are recentered to
+# inner-face=z=0) AND for STL imports (where halves keep their print-layout
+# z-range). The canonical PEG_HEIGHT lets us infer where the inner face sits
+# without scanning vertex normals.
+def _world_z_range(name_canonical, name_suffix):
+    """Return (zmin, zmax) of the mesh bbox in world coords, or None if missing."""
+    o = bpy.data.objects.get(name_canonical) or _find_mesh(name_canonical, (name_suffix,))
+    if o is None:
+        return None
+    zs = [(o.matrix_world @ v.co).z for v in o.data.vertices]
+    return (min(zs), max(zs)) if zs else None
 
-_BOTTOM_INNER_Z = _bottom_inner_z()
-_TOP_INNER_Z    = _top_inner_z()
-# Pegs grow upward from bottom inner face when pre-flip; downward when post-flip
-_PEG_DZ      = -PEG_HEIGHT / 2 if BOTTOM_FLIPPED else PEG_HEIGHT / 2
-_NFC_DZ      = -NFC_DEPTH / 2 if BOTTOM_FLIPPED else NFC_DEPTH / 2
-# Peg holes go upward into top half from inner face in both modes (top isn't flipped)
+_bottom_z = _world_z_range("Bottom", "_bottom")
+_top_z    = _world_z_range("Top",    "_top_body")
+
+if _bottom_z is None:
+    _BOTTOM_INNER_Z = 0.0
+elif BOTTOM_FLIPPED:
+    # Print-layout: pegs stick UP from inner face; inner face is at zmax-PEG_HEIGHT.
+    # If the puck has no protruding pegs in this mesh (rare), zmax IS the inner face.
+    span = _bottom_z[1] - _bottom_z[0]
+    _BOTTOM_INNER_Z = (_bottom_z[1] - PEG_HEIGHT) if span >= PEG_HEIGHT * 1.5 else _bottom_z[1]
+else:
+    # Pre-flip: inner face is the top of the mesh
+    _BOTTOM_INNER_Z = _bottom_z[1]
+
+if _top_z is None:
+    _TOP_INNER_Z = 0.0
+else:
+    # Top is never flipped. Inner face = mating face = bottom of mesh = zmin.
+    _TOP_INNER_Z = _top_z[0]
+
+# Pegs grow upward from the inner face in both build-time AND print-layout
+# (post-flip the bottom is upside-down so its "up" still points toward the top).
+_PEG_DZ      = PEG_HEIGHT / 2
+# NFC pocket is recessed INTO the puck from the inner face
+_NFC_DZ      = -NFC_DEPTH / 2
+# Peg holes are recesses UP into the top half from inner face = z=0 in print-layout
 peg_hole_depth = PEG_HEIGHT + 0.3
 _PH_DZ       = peg_hole_depth / 2
+
+print(f"[recolor] inner_z bottom={_BOTTOM_INNER_Z:.2f} top={_TOP_INNER_Z:.2f}  "
+      f"(bottom z range={_bottom_z}, top z range={_top_z})")
 
 # ─── PEGS — positive features, SOLID yellow widgets ───
 for i, (px, py) in enumerate(PEGS):
