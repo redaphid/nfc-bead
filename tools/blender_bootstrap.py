@@ -10,7 +10,10 @@ Run via:
 
 Use the `tools/launch.ps1` wrapper to pick this up with sane defaults.
 """
-import bpy, os, shutil
+import os
+import shutil
+
+import bpy
 
 HERE       = os.path.dirname(os.path.abspath(__file__))
 REPO       = os.path.dirname(HERE)
@@ -29,7 +32,11 @@ else:
     print(f"[bootstrap] addon up to date: {addon_dst}")
 
 # 2. Refresh module cache then enable (persistent so it survives crashes)
-import addon_utils
+# `addon_utils` is a Blender-internal module — only importable from inside
+# Blender's own Python interpreter. This file is invoked via Blender's
+# `--python` flag and never run in the project's uv venv.
+import addon_utils  # noqa: E402, PLC0415
+
 addon_utils.modules_refresh()
 addon_utils.enable(ADDON_NAME, default_set=True, persistent=True)
 print(f"[bootstrap] addon enabled: {ADDON_NAME}")

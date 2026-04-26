@@ -29,7 +29,6 @@ from dataclasses import dataclass
 import numpy as np
 import trimesh
 
-
 # ─── Expected dimensions ───────────────────────────────────────────────
 # Sized for a Kandi bracelet bead: as small as we can comfortably fit the
 # NTAG215 sticker (10.5 mm dia), 3 friction-fit pegs, and a 2 mm string
@@ -90,7 +89,7 @@ def _check_watertight(mesh: trimesh.Trimesh) -> Check:
     return Check(
         "watertight",
         bool(mesh.is_watertight),
-        "manifold" if mesh.is_watertight else f"non-manifold (edges with !=2 faces)",
+        "manifold" if mesh.is_watertight else "non-manifold (edges with !=2 faces)",
     )
 
 

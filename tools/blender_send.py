@@ -27,7 +27,7 @@ def send(code, host="localhost", port=9876, timeout=180):
     s.settimeout(timeout)
     try:
         s.connect((host, port))
-    except (ConnectionRefusedError, socket.timeout) as e:
+    except (TimeoutError, ConnectionRefusedError) as e:
         return {"status": "error", "message": f"Cannot reach Blender on {host}:{port} — is it running with the BlenderMCP addon enabled? ({e})"}
 
     s.sendall(msg)
@@ -35,7 +35,7 @@ def send(code, host="localhost", port=9876, timeout=180):
     while True:
         try:
             chunk = s.recv(65536)
-        except socket.timeout:
+        except TimeoutError:
             break
         if not chunk:
             break
@@ -68,7 +68,7 @@ def main():
     if args.code:
         code = args.code
     elif args.file:
-        with open(args.file, "r", encoding="utf-8") as fh:
+        with open(args.file, encoding="utf-8") as fh:
             code = fh.read()
     else:
         code = sys.stdin.read()
