@@ -19,39 +19,61 @@ from mathutils import Vector
 
 # ── CONFIG ─────────────────────────────────────────────────────────
 SVG_PATH      = r"D:\Projects\nfc-bead\beads\redaphid-portrait\silhouette.svg"
+FACE_SVG_PATH = r"D:\Projects\nfc-bead\beads\redaphid-portrait\face.svg"
 REPO_DIR      = r"D:\Projects\nfc-bead"
 BEAD_DIR      = os.path.join(REPO_DIR, "beads", "redaphid-portrait")
 
 TARGET_WIDTH  = 25.0           # mm (kandi-bracelet bead size)
-THICKNESS     = 5.0            # mm total (split 2.5 + 2.5)
+THICKNESS     = 4.0            # mm total (split 2.0 + 2.0) — thinner profile
 
-# String hole: along X axis, through the forehead — y=8 was too high (the
-# ~2mm of hair above the hole was a thin wall). y=5 sits in the wider
-# forehead band: ~5mm of solid material above the hole, room for a peg below.
+# String hole: along X axis, through the HAIR BAND between the face top
+# and the silhouette top. With distance-transform face extraction and a
+# 4mm hair ring, the face top lands around y=+6.2 and the silhouette top
+# at y=+10.6 in centered Blender coords. y=8.5 sits centered in the hair
+# band: ≈ 1 mm wall above the hole, ≈ 1.3 mm of hair below to the face.
 HOLE_DIA      = 2.0
-HOLE_Y        = 5.0            # mm — forehead, sturdy
+HOLE_Y        = 8.5            # mm — through hair, OUTSIDE face contour
 
 # NFC pocket — face/snout area, below the eyes, well within head ellipse
 NFC_DIAMETER  = 10.0
 NFC_DEPTH     = 0.8
-NFC_POS       = (0.0, -3.0)    # mm
+NFC_POS       = (0.0, -2.0)    # mm — shifted up so chin peg at y=-9 clears
 
 # Peg friction-fit
 PEG_DIAMETER  = 2.0
-PEG_HEIGHT    = 1.5
+PEG_HEIGHT    = 1.0            # mm — reduced from 1.5 so the thinner 2 mm
+                               # half still has ≥ 0.5 mm wall above sockets
 PEG_CLEARANCE = 0.1
-# Triangulated. Forehead peg moved ABOVE the new (lower) string hole into
-# the hair ridge so it stays clear of both the hole and the NFC pocket.
+# Triangulated. With the string hole at y=+8.5 and the NFC pocket at
+# y=-3 (radius 5 mm), the only solid corridor for a 3rd peg is BELOW
+# the NFC pocket — at the chin/neck. Two side pegs in the ear-flap
+# region triangulate with the chin peg.
 PEG_CANDIDATES = [
-    ( 0.0,  8.5),    # hair ridge, above string hole
+    ( 0.0, -9.0),    # chin / neck — below NFC, above silhouette bottom
     ( 8.5, -3.5),    # right ear/cheek
     (-8.5, -3.5),    # left ear/cheek
 ]
+
+# Peg ↔ socket assignment. Recipe default puts pegs on Bottom + sockets on
+# Top; setting this False inverts (pegs on Top stick DOWN, sockets recessed
+# UP into Bottom body). User-requested layout for the redaphid charm.
+PEGS_ON_BOTTOM = False
 
 # Eye decoration — raised cylinders. Positions below are FALLBACKs,
 # overridden if SVG carries <circle> elements.
 EYE_HEIGHT       = 0.5
 EYE_FALLBACK     = [(-2.5, 2.0, 1.3), (2.5, 2.0, 1.3)]  # (x, y, r) mm
+
+# Hair region — silhouette MINUS the real face contour from face.svg.
+# Hair becomes its own raised decoration (Hair object) so it can be
+# printed in a different filament than the face.
+HAIR_HEIGHT     = 0.4
+
+# Pegs need to land in HAIR or BODY area, not crossing the face contour
+# silhouette. The default candidates are validated against the silhouette
+# only; future iteration could also reject any candidate that lands inside
+# the imported face mesh.
+PEG_CANDIDATES_OVERRIDE = None
 
 # ── HELPERS ─────────────────────────────────────────────────────────
 
@@ -369,27 +391,54 @@ def add_nfc_pocket(bottom):
     clean_mesh(bottom)
 
 
-def add_peg_holes(top, pegs):
-    t_z_min = min((top.matrix_world @ v.co).z for v in top.data.vertices)
+def add_peg_sockets(half, pegs, mode):
+    """Drill peg sockets into a half.
+
+    mode='into_top'    : drill UP into the top half from its bottom face
+                         (ceiling sockets — pegs come from below).
+    mode='into_bottom' : drill DOWN into the bottom half from its top face
+                         (floor sockets — pegs come from above, hanging
+                         off the top half's inner face).
+    """
     hole_r = (PEG_DIAMETER + PEG_CLEARANCE * 2) / 2.0
+    if mode == 'into_top':
+        z_face = min((half.matrix_world @ v.co).z for v in half.data.vertices)
+        cb = z_face - 1.0                            # 1 mm below face — through-going cutter
+        ct = z_face + PEG_HEIGHT + 0.3
+    elif mode == 'into_bottom':
+        z_face = max((half.matrix_world @ v.co).z for v in half.data.vertices)
+        cb = z_face - PEG_HEIGHT - 0.3
+        ct = z_face + 1.0                            # 1 mm above face
+    else:
+        raise ValueError(f"unknown socket mode: {mode}")
     for i, (px, py) in enumerate(pegs):
-        cb = t_z_min - 1.0
-        ct = t_z_min + PEG_HEIGHT + 0.3
         bpy.ops.mesh.primitive_cylinder_add(
             vertices=32, radius=hole_r, depth=ct - cb,
             location=(px, py, (cb + ct) / 2.0))
-        boolean_op(top, bpy.context.active_object, 'DIFFERENCE', f"PH{i}")
-    clean_mesh(top)
+        boolean_op(half, bpy.context.active_object, 'DIFFERENCE', f"PH{i}")
+    clean_mesh(half)
 
 
-def add_pegs(bottom, pegs):
-    b_z_max = max((bottom.matrix_world @ v.co).z for v in bottom.data.vertices)
+def add_pegs(half, pegs, mode):
+    """UNION peg cylinders onto a half.
+
+    mode='from_bottom_up'  : pegs on bottom half, sticking UP from inner face
+    mode='from_top_down'   : pegs on top half,    hanging DOWN from inner face
+    """
+    if mode == 'from_bottom_up':
+        z_face = max((half.matrix_world @ v.co).z for v in half.data.vertices)
+        cz = z_face + PEG_HEIGHT / 2.0
+    elif mode == 'from_top_down':
+        z_face = min((half.matrix_world @ v.co).z for v in half.data.vertices)
+        cz = z_face - PEG_HEIGHT / 2.0
+    else:
+        raise ValueError(f"unknown peg mode: {mode}")
     for i, (px, py) in enumerate(pegs):
         bpy.ops.mesh.primitive_cylinder_add(
             vertices=32, radius=PEG_DIAMETER / 2.0, depth=PEG_HEIGHT,
-            location=(px, py, b_z_max + PEG_HEIGHT / 2.0))
-        boolean_op(bottom, bpy.context.active_object, 'UNION', f"Peg{i}")
-    clean_mesh(bottom)
+            location=(px, py, cz))
+        boolean_op(half, bpy.context.active_object, 'UNION', f"Peg{i}")
+    clean_mesh(half)
 
 
 def build_eye_decoration(eyes_xyr, top):
@@ -403,6 +452,10 @@ def build_eye_decoration(eyes_xyr, top):
     for i, (ex, ey, er) in enumerate(eyes_xyr):
         bpy.ops.mesh.primitive_cylinder_add(
             vertices=48, radius=er, depth=EYE_HEIGHT,
+            # Eyes sit DIRECTLY on Top's show face. The face contour cuts
+            # the Hair slab away from the eye region, so there's nothing
+            # else for the eyes to rest on. Same Z baseline as Hair so
+            # printability + color-region cleanliness are both preserved.
             location=(ex, ey, show_z + 0.01 + EYE_HEIGHT / 2.0))
         o = bpy.context.active_object
         o.name = f"Eye_tmp_{i}"
@@ -419,7 +472,122 @@ def build_eye_decoration(eyes_xyr, top):
     return deco
 
 
-def apply_materials(bottom, top, deco):
+def import_face_curve_as_cutter(z_center, depth):
+    """Import face.svg, normalize to mm at TARGET_WIDTH scale, extrude into
+    a thick cylinder cutter centered at the bead origin.
+
+    Returns the resulting mesh object, ready for boolean DIFFERENCE."""
+    pre = set(bpy.data.objects.keys())
+    bpy.ops.import_curve.svg(filepath=FACE_SVG_PATH)
+    new_curves = [bpy.data.objects[n] for n in bpy.data.objects.keys() if n not in pre]
+    if not new_curves:
+        raise RuntimeError("face.svg import produced no objects")
+    bpy.ops.object.select_all(action='DESELECT')
+    for c in new_curves:
+        c.select_set(True)
+    bpy.context.view_layer.objects.active = new_curves[0]
+    if len(new_curves) > 1:
+        bpy.ops.object.join()
+    obj = bpy.context.active_object
+    obj.data.dimensions = '2D'
+    obj.data.fill_mode = 'BOTH'
+    obj.data.resolution_u = 64
+    bpy.ops.object.convert(target='MESH')
+    face_mesh = bpy.context.active_object
+    face_mesh.name = "FaceCutter"
+
+    # The SVG has the same width tag as silhouette.svg (25 mm), and Blender
+    # imports SVG dims as meters. Apply the same 1000× scale used for the
+    # silhouette so it lands in the same coordinate frame.
+    cur_w = face_mesh.dimensions.x
+    if cur_w > 0:
+        sf = (TARGET_WIDTH / 1000.0) / cur_w
+        face_mesh.scale = (sf, sf, sf)
+        bpy.ops.object.transform_apply(scale=True)
+    face_mesh.scale = (1000.0, 1000.0, 1000.0)
+    bpy.ops.object.transform_apply(scale=True)
+    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+
+    # Center X at origin, but Y must MATCH the silhouette's centering.
+    # Both SVGs share the same viewBox so their bbox centers align — set
+    # location to the same origin we used for the silhouette: (0, 0, 0).
+    face_mesh.location = (0, 0, 0)
+    bpy.ops.object.transform_apply(location=True)
+
+    # Currently flat at z=0 (silhouette imports come in flat). Extrude up
+    # to make a thick-enough cutter that survives the boolean.
+    bpy.ops.object.select_all(action='DESELECT')
+    face_mesh.select_set(True)
+    bpy.context.view_layer.objects.active = face_mesh
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.extrude_region_move(
+        TRANSFORM_OT_translate={"value": (0, 0, depth)})
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=0.005)
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Re-center origin and shift to z_center
+    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+    face_mesh.location = (0, 0, z_center)
+    bpy.ops.object.transform_apply(location=True)
+
+    return face_mesh
+
+
+def build_hair_decoration(top, full_silhouette):
+    """Hair = silhouette outline MINUS imported face contour, raised
+    HAIR_HEIGHT above the show face. Both shapes come from the SVGs that
+    extract_silhouette.py emits, so the geometry tracks the source image
+    instead of a hand-tuned ellipse."""
+    show_z = max((top.matrix_world @ v.co).z for v in top.data.vertices)
+
+    # Duplicate full silhouette, isolate top face → flat polygon
+    bpy.ops.object.select_all(action='DESELECT')
+    full_silhouette.hide_set(False)
+    full_silhouette.select_set(True)
+    bpy.context.view_layer.objects.active = full_silhouette
+    bpy.ops.object.duplicate()
+    hair = bpy.context.active_object
+    hair.name = "Hair"
+
+    bpy.ops.object.mode_set(mode='EDIT')
+    bm = bmesh.from_edit_mesh(hair.data)
+    bm.faces.ensure_lookup_table()
+    silhouette_top_z = max(v.co.z for v in bm.verts)
+    bpy.ops.mesh.select_all(action='DESELECT')
+    for f in bm.faces:
+        cz = sum(v.co.z for v in f.verts) / len(f.verts)
+        f.select = (cz < silhouette_top_z - 0.05)
+    bmesh.update_edit_mesh(hair.data)
+    bpy.ops.mesh.delete(type='FACE')
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+    delta_z = (show_z + 0.01) - silhouette_top_z
+    hair.location.z += delta_z
+    bpy.ops.object.transform_apply(location=True)
+
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.extrude_region_move(
+        TRANSFORM_OT_translate={"value": (0, 0, HAIR_HEIGHT)})
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=0.005)
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Subtract the real face contour
+    cutter_z = (show_z + 0.01) + HAIR_HEIGHT / 2.0
+    face_cutter = import_face_curve_as_cutter(z_center=cutter_z, depth=HAIR_HEIGHT * 4)
+    boolean_op(hair, face_cutter, 'DIFFERENCE', "FaceCut")
+    clean_mesh(hair)
+
+    full_silhouette.hide_set(True)
+    return hair
+
+
+def apply_materials(bottom, top, hair, deco):
     def mat(name, base, rough, emit_color=None, emit_strength=0.0):
         m = bpy.data.materials.new(name=name)
         m.use_nodes = True
@@ -431,10 +599,12 @@ def apply_materials(bottom, top, deco):
             bsdf.inputs["Emission Strength"].default_value = emit_strength
         return m
 
-    body = mat("MAT_Body", (0.10, 0.04, 0.10, 1.0), 0.35)
+    body = mat("MAT_Body", (0.85, 0.78, 0.70, 1.0), 0.55)              # warm cream face
+    hairmat = mat("MAT_Hair", (0.55, 0.20, 0.55, 1.0), 0.30,
+                  emit_color=(0.9, 0.4, 0.95, 1.0), emit_strength=1.8) # neon magenta hair
     glow = mat("MAT_EyeGlow", (1.00, 0.45, 0.20, 1.0), 0.20,
-               emit_color=(1.0, 0.55, 0.25, 1.0), emit_strength=4.0)
-    for obj, m in ((bottom, body), (top, body), (deco, glow)):
+               emit_color=(1.0, 0.55, 0.25, 1.0), emit_strength=4.0)   # warm orange eyes
+    for obj, m in ((bottom, body), (top, body), (hair, hairmat), (deco, glow)):
         obj.data.materials.clear()
         obj.data.materials.append(m)
         bpy.ops.object.select_all(action='DESELECT')
@@ -466,13 +636,20 @@ def main():
     add_nfc_pocket(bottom)
     seal_nm(bottom)
 
-    # 5. Peg holes (post-split) on top
-    add_peg_holes(top, pegs)
-    seal_nm(top)
+    # 5. Pegs ↔ sockets (POST-split). Layout is configurable via PEGS_ON_BOTTOM.
+    if PEGS_ON_BOTTOM:
+        add_peg_sockets(top, pegs, mode='into_top')
+        add_pegs(bottom, pegs, mode='from_bottom_up')
+        seal_nm(top)
+        seal_nm(bottom)
+    else:
+        add_peg_sockets(bottom, pegs, mode='into_bottom')
+        add_pegs(top, pegs, mode='from_top_down')
+        seal_nm(bottom)
+        seal_nm(top)
 
-    # 6. Pegs UNION on bottom
-    add_pegs(bottom, pegs)
-    seal_nm(bottom)
+    # 6. Hair (silhouette - face ellipse)
+    hair = build_hair_decoration(top, mesh)
 
     # 7. Eyes from SVG → Decoration
     eyes_xyr = parse_eyes_from_svg(SVG_PATH)
@@ -480,9 +657,19 @@ def main():
     deco = build_eye_decoration(eyes_xyr, top)
 
     # 8. Materials
-    apply_materials(bottom, top, deco)
+    apply_materials(bottom, top, hair, deco)
 
-    # 9. Save stage snapshot
+    # 9. Inspection layout: halves apart on X. Top stays show-face-up
+    # (its hair + eyes are visible) and Bottom stays inner-face-up (its
+    # NFC pocket + sockets are visible). Top's pegs hang underneath and
+    # are best viewed from below — get a side view in the viewport for
+    # that. The Top half is NOT flipped, so the export captures correct
+    # print orientation directly.
+    bottom.location = (-16.0, 0.0, bottom.location.z)
+    for o in (top, hair, deco):
+        o.location.x += 16.0
+
+    # 10. Save stage snapshot
     stages_dir = os.path.join(BEAD_DIR, "stages")
     os.makedirs(stages_dir, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(stages_dir, "01_built.blend"))
@@ -491,6 +678,7 @@ def main():
     print("[redaphid] === BUILD DONE ===")
     print(f"[redaphid] Bottom: {bottom.dimensions.x:.2f} x {bottom.dimensions.y:.2f} x {bottom.dimensions.z:.2f}")
     print(f"[redaphid] Top:    {top.dimensions.x:.2f} x {top.dimensions.y:.2f} x {top.dimensions.z:.2f}")
+    print(f"[redaphid] Hair:   {hair.dimensions.x:.2f} x {hair.dimensions.y:.2f} x {hair.dimensions.z:.2f}")
     print(f"[redaphid] Decor:  {deco.dimensions.x:.2f} x {deco.dimensions.y:.2f} x {deco.dimensions.z:.2f}")
 
 

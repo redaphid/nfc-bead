@@ -95,33 +95,39 @@ def make_3mf(stl_dir: str, out_path: str) -> int:
     bottom_path = os.path.join(stl_dir, "Bottom.stl")
     top_path    = os.path.join(stl_dir, "Top.stl")
     deco_path   = os.path.join(stl_dir, "Decoration.stl")
+    hair_path   = os.path.join(stl_dir, "Hair.stl")     # optional
     for p in (bottom_path, top_path, deco_path):
         if not os.path.isfile(p):
             print(f"missing: {p}", file=sys.stderr)
             return 1
+    has_hair = os.path.isfile(hair_path)
 
     bottom = _load_stl(bottom_path)
     top    = _load_stl(top_path)
     deco   = _load_stl(deco_path)
+    hair   = _load_stl(hair_path) if has_hair else None
 
     wrapper = lib3mf.Wrapper()
     model = wrapper.CreateModel()
     model.SetUnit(lib3mf.ModelUnit.MilliMeter)
 
-    # Add the three meshes as separate MeshObjects.
-    # NOTE: Decoration's STL coords are already in Top's frame (X/Y center
-    # aligned with Top, Z offset 2.51mm above Top's max-Z). When we add
-    # both as components in the same ComponentsObject below, those relative
-    # positions are preserved.
+    # Add meshes as separate MeshObjects.
+    # NOTE: Hair + Decoration coords are already in Top's frame (Z offset
+    # above Top's outer face). Adding them as components of the same
+    # ComponentsObject preserves those relative positions when the slicer
+    # imports the bundle.
     bottom_obj = _add_mesh(model, lib3mf, "Bottom", bottom)
     top_obj    = _add_mesh(model, lib3mf, "Top", top)
     deco_obj   = _add_mesh(model, lib3mf, "Decoration", deco)
+    hair_obj   = _add_mesh(model, lib3mf, "Hair", hair) if has_hair else None
 
-    # Bundle Top + Decoration as a single ComponentsObject so the slicer
-    # treats them as ONE OBJECT WITH PARTS.
+    # Bundle Top + Hair + Decoration as a single ComponentsObject so the
+    # slicer treats them as ONE OBJECT WITH PARTS.
     asm = model.AddComponentsObject()
-    asm.SetName("Top_with_Decoration")
+    asm.SetName("Top_with_Decoration" + ("_and_Hair" if has_hair else ""))
     asm.AddComponent(top_obj,  _identity_transform(lib3mf))
+    if hair_obj is not None:
+        asm.AddComponent(hair_obj, _identity_transform(lib3mf))
     asm.AddComponent(deco_obj, _identity_transform(lib3mf))
 
     # Place build items on the plate.
@@ -148,8 +154,11 @@ def make_3mf(stl_dir: str, out_path: str) -> int:
     size = os.path.getsize(out_path) if os.path.isfile(out_path) else 0
     print(f"wrote {out_path} ({size} bytes)")
     print(f"  Bottom: {len(bottom.vertices)} verts / {len(bottom.faces)} faces  -> placed at {PLATE_BOTTOM_OFFSET}")
-    print("  Top + Decoration (merged components):")
+    label = "Top + Hair + Decoration" if has_hair else "Top + Decoration"
+    print(f"  {label} (merged components):")
     print(f"    Top:        {len(top.vertices)} verts / {len(top.faces)} faces")
+    if has_hair:
+        print(f"    Hair:       {len(hair.vertices)} verts / {len(hair.faces)} faces")
     print(f"    Decoration: {len(deco.vertices)} verts / {len(deco.faces)} faces")
     print(f"    -> placed at {PLATE_TOPASM_OFFSET}")
     return 0

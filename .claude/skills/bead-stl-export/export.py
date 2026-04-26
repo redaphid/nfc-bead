@@ -23,9 +23,15 @@ from mathutils import Matrix, Vector
 # ─── Tunables ─────────────────────────────────────────────────────────
 # Canonical bead-component names (project-wide convention).
 # Build scripts MUST produce in-Blender objects with exactly these names.
+# - Bottom / Top: structural halves
+# - Hair:        large filament-color region covering most of the show face
+# - Decoration:  small accent (eye dots, embossed mark, raised glyph)
+# Charms that don't need a hair color region simply omit the `Hair` object;
+# the export silently skips any name with no matching mesh.
 EXPECTED_OBJECTS = [
     "Bottom",
     "Top",
+    "Hair",
     "Decoration",
 ]
 
@@ -36,6 +42,7 @@ EXPECTED_OBJECTS = [
 # bbox centers at origin, and the merge would overlap the decoration inside
 # the body instead of stacking it on the outer face.
 EXPORT_SHARE_SHIFT_WITH = {
+    "Hair":       "Top",
     "Decoration": "Top",
 }
 
@@ -50,6 +57,7 @@ OUT_DIR = None     # default: tmp/stl_export_<timestamp>/ in repo root
 EXPORT_FLIP_X_DEG = {
     "Bottom":     180.0,
     "Top":          0.0,
+    "Hair":         0.0,
     "Decoration":   0.0,
 }
 
