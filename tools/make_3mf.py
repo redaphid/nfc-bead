@@ -30,8 +30,8 @@ import argparse
 import os
 import sys
 
-import numpy as np
 import trimesh
+
 
 # lib3mf module is a generated ctypes binding.
 # We import lazily so `--help` works even if lib3mf isn't installed.
@@ -148,7 +148,7 @@ def make_3mf(stl_dir: str, out_path: str) -> int:
     size = os.path.getsize(out_path) if os.path.isfile(out_path) else 0
     print(f"wrote {out_path} ({size} bytes)")
     print(f"  Bottom: {len(bottom.vertices)} verts / {len(bottom.faces)} faces  -> placed at {PLATE_BOTTOM_OFFSET}")
-    print(f"  Top + Decoration (merged components):")
+    print("  Top + Decoration (merged components):")
     print(f"    Top:        {len(top.vertices)} verts / {len(top.faces)} faces")
     print(f"    Decoration: {len(deco.vertices)} verts / {len(deco.faces)} faces")
     print(f"    -> placed at {PLATE_TOPASM_OFFSET}")

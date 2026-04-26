@@ -26,21 +26,18 @@ Usage:
 
 import argparse
 import io
-import os
 import re
 import struct
-import sys
 import time
 import uuid
 import zipfile
 from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape
 
-
 # ─── Paths ────────────────────────────────────────────────────────────
 REPO_ROOT      = Path(__file__).resolve().parent.parent
 TMP_LATEST     = REPO_ROOT / "tmp" / "latest"
-TEMPLATE_DIR   = TMP_LATEST / "slicer_template"  # extracted reference 3MF (printer/process settings)
+TEMPLATE_DIR   = TMP_LATEST / "slicer_template"     # extracted reference 3MF
 DEFAULT_OUT    = TMP_LATEST / "bead_multicolor.3mf"
 
 # ─── Per-bead config ──────────────────────────────────────────────────
@@ -70,7 +67,7 @@ def read_binary_stl(path):
     De-duplicates vertices so the 3MF has compact indices.
     """
     with open(path, "rb") as f:
-        header = f.read(80)
+        f.read(80)
         (num_tris,) = struct.unpack("<I", f.read(4))
         verts_index = {}
         verts = []
@@ -78,7 +75,7 @@ def read_binary_stl(path):
         for _ in range(num_tris):
             data = f.read(50)
             if len(data) != 50:
-                raise IOError(f"truncated STL at {path}")
+                raise OSError(f"truncated STL at {path}")
             # bytes 0..11 = normal (skip), 12..47 = 3 vertices (3 floats each), 48..49 = attribute
             v_floats = struct.unpack("<9f", data[12:48])
             tri = []
@@ -203,34 +200,34 @@ def build_model_settings(top_assembly, bottom):
     # Top object (multi-part: body + decoration)
     obj_id, parts = top_assembly
     out.write(f'  <object id="{obj_id}">\n')
-    out.write(f'    <metadata key="name" value="top_assembly"/>\n')
-    out.write(f'    <metadata key="extruder" value="2"/>\n')   # default; overridden per part
+    out.write('    <metadata key="name" value="top_assembly"/>\n')
+    out.write('    <metadata key="extruder" value="2"/>\n')   # default; overridden per part
     for part_id, name, source_file, matrix_12f, extruder in parts:
         out.write(f'    <part id="{part_id}" subtype="normal_part">\n')
         out.write(f'      <metadata key="name" value="{xml_escape(name)}"/>\n')
         out.write(f'      <metadata key="matrix" value="{matrix_to_3mf_str(matrix_12f)}"/>\n')
         out.write(f'      <metadata key="source_file" value="{xml_escape(source_file)}"/>\n')
         out.write(f'      <metadata key="extruder" value="{extruder}"/>\n')
-        out.write(f'      <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" '
-                  f'facets_reversed="0" backwards_edges="0"/>\n')
-        out.write(f'    </part>\n')
-    out.write(f'  </object>\n')
+        out.write('      <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" '
+                  'facets_reversed="0" backwards_edges="0"/>\n')
+        out.write('    </part>\n')
+    out.write('  </object>\n')
 
     # Bottom object (single part)
     obj_id_b, parts_b = bottom
     out.write(f'  <object id="{obj_id_b}">\n')
-    out.write(f'    <metadata key="name" value="Bottom"/>\n')
-    out.write(f'    <metadata key="extruder" value="2"/>\n')
+    out.write('    <metadata key="name" value="Bottom"/>\n')
+    out.write('    <metadata key="extruder" value="2"/>\n')
     for part_id, name, source_file, matrix_12f, extruder in parts_b:
         out.write(f'    <part id="{part_id}" subtype="normal_part">\n')
         out.write(f'      <metadata key="name" value="{xml_escape(name)}"/>\n')
         out.write(f'      <metadata key="matrix" value="{matrix_to_3mf_str(matrix_12f)}"/>\n')
         out.write(f'      <metadata key="source_file" value="{xml_escape(source_file)}"/>\n')
         out.write(f'      <metadata key="extruder" value="{extruder}"/>\n')
-        out.write(f'      <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" '
-                  f'facets_reversed="0" backwards_edges="0"/>\n')
-        out.write(f'    </part>\n')
-    out.write(f'  </object>\n')
+        out.write('      <mesh_stat edges_fixed="0" degenerate_facets="0" facets_removed="0" '
+                  'facets_reversed="0" backwards_edges="0"/>\n')
+        out.write('    </part>\n')
+    out.write('  </object>\n')
 
     # Plate
     out.write('  <plate>\n')
@@ -503,7 +500,7 @@ def verify(path, parts):
                 raise SystemExit(f"VERIFY FAIL: {required} missing from {path.name}")
 
         # Check vertex / triangle counts inside the .model files
-        for member, name in (("3D/Objects/Bottom.model", "Bottom"),):
+        for member, _name in (("3D/Objects/Bottom.model", "Bottom"),):
             content = z.read(member).decode("utf-8")
             v = len(re.findall(r"<vertex\s", content))
             t = len(re.findall(r"<triangle\s", content))
