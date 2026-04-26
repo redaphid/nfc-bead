@@ -47,6 +47,22 @@ The flip is applied as a temporary 180° rotation **around the part's bbox cente
 
 To override per bead — for instance if you build the bottom already-flipped — change the dict value to `0.0` for that part and re-export.
 
+## Bed-flatten + share-shift (slicer-ready coordinates)
+
+After the print-orientation flip, each part is shifted so its bbox `min Z = 0` and X/Y center = `0`. The slicer imports each STL flush on the build plate and centered, regardless of where the live Blender scene had the part positioned.
+
+For multi-color stacking (e.g. `Decoration` riding on `Top`'s outer face), `EXPORT_SHARE_SHIFT_WITH` lets a child part inherit its parent's shift instead of computing its own:
+
+```python
+EXPORT_SHARE_SHIFT_WITH = {
+    "Decoration": "Top",
+}
+```
+
+With this in place, importing `Top.stl` + `Decoration.stl` and merging them as "one object with parts" in the slicer keeps the decoration sitting *on top of* the top body — not embedded inside it. The default covers the canonical bead; add entries for any other parent/child stacking relationships your build introduces.
+
+`Decoration.stl` loaded solo will float at its assembly Z (the slicer's auto-arrange handles that when needed).
+
 ## Output location
 
 Default: `<repo>/tmp/stl_export_<timestamp>/` for the timestamped archive of the run. Override via the `OUT_DIR` tunable at the top of `export.py`.

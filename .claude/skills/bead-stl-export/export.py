@@ -29,6 +29,16 @@ EXPECTED_OBJECTS = [
     "Decoration",
 ]
 
+# Parts that should share another part's bed-flatten shift instead of computing
+# their own bbox center. Preserves the assembly position when the user merges
+# them in the slicer ("one object with parts" / "Combine"). Without this both
+# Top.stl and Decoration.stl would import to the build plate with their own
+# bbox centers at origin, and the merge would overlap the decoration inside
+# the body instead of stacking it on the outer face.
+EXPORT_SHARE_SHIFT_WITH = {
+    "Decoration": "Top",
+}
+
 OUT_DIR = None     # default: tmp/stl_export_<timestamp>/ in repo root
 
 # Per-part print-orientation transform applied at export-time only (the live
@@ -170,6 +180,7 @@ def _resolve_flip(obj_name):
     return EXPORT_FLIP_X_DEG.get(obj_name, 0.0)
 
 manifest = []
+_shifts = {}     # remember each parent's bed-flatten shift so children can re-use
 for obj in targets:
     flip_deg = _resolve_flip(obj.name)
 
@@ -193,6 +204,27 @@ for obj in targets:
         obj.matrix_world = T_pos @ rot @ T_neg @ obj.matrix_world
         bpy.context.view_layer.update()
         print(f"[stl_export]   {obj.name}: applied {flip_deg:.0f}° X-flip about bbox center for export")
+
+    # ── Shift each part to (X=0, Y=0, Z>=0) so the slicer sees it bed-flat ──
+    # Bottom and Top use their own bbox center → they import flush on the
+    # build plate. Children listed in EXPORT_SHARE_SHIFT_WITH inherit their
+    # parent's shift instead, preserving stacking when the user merges parts
+    # in the slicer.
+    bb = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
+    cx_own = sum(v.x for v in bb) / 8
+    cy_own = sum(v.y for v in bb) / 8
+    zmin_own = min(v.z for v in bb)
+
+    share_with = EXPORT_SHARE_SHIFT_WITH.get(obj.name)
+    if share_with and share_with in _shifts:
+        cx, cy, zoff = _shifts[share_with]
+        obj.matrix_world = Matrix.Translation((cx, cy, zoff)) @ obj.matrix_world
+        print(f"[stl_export]   {obj.name}: shared shift from {share_with} (X={cx:+.2f} Y={cy:+.2f} Z={zoff:+.2f}); preserves stacking")
+    else:
+        obj.matrix_world = Matrix.Translation((-cx_own, -cy_own, -zmin_own)) @ obj.matrix_world
+        _shifts[obj.name] = (-cx_own, -cy_own, -zmin_own)
+        print(f"[stl_export]   {obj.name}: bed-flattened (shift X={-cx_own:+.2f} Y={-cy_own:+.2f} Z={-zmin_own:+.2f})")
+    bpy.context.view_layer.update()
 
     bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)
