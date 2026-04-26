@@ -1,21 +1,19 @@
-<!--
-PROJECT-WIDE NAMING CONVENTION (do not deviate):
-  Bottom     — bottom half (NFC pocket recess + pegs)
-  Top        — top half  (peg holes; outer face hosts the decoration)
-  Decoration — raised relief on Top's outer face (spiral / emboss / etc.)
-Build scripts (build_<charm>.py) MUST produce these canonical Blender
-object names. STL filenames may still be bead-prefixed (rezz_bottom.stl)
-because they distinguish across charm projects, but in-scene object
-names are bead-agnostic. recolor.py / restore.py / architect_on.py /
-bead-stl-export accept legacy bead-specific names (rezz_bottom,
-rezz_top_body, rezz_top_spiral) as a fallback only.
--->
 ---
 name: bead-debug-overlays
 description: Apply or strip CAD-style debug coloring + wireframe overlays for an NFC bead's hidden features in Blender. Use when the user wants to visually disambiguate parts ("color the parts differently", "I can't tell which is which", "show me where the pegs are", "highlight the structure", "what's the NFC pocket", "where does the string hole go"). Adds throwaway DBG_* overlay objects (yellow pegs, red peg-hole wireframes, magenta NFC pocket, orange string hole) so internal features are visible from outside the bead. Requires the Blender MCP to be connected.
 ---
 
 # Bead Debug Overlays
+
+## Project-wide naming convention (do not deviate)
+
+| Canonical name | Role |
+|---|---|
+| `Bottom` | bottom half — NFC pocket recess + pegs |
+| `Top` | top half — peg holes; outer face hosts the decoration |
+| `Decoration` | raised relief on `Top`'s outer face (spiral / emboss / etc.) |
+
+Build scripts (`build_<charm>.py`) MUST produce these canonical Blender object names. STL filenames may still be bead-prefixed (e.g. `rezz_bottom.stl`) since they distinguish across charm projects, but in-scene object names are bead-agnostic. Skills accept legacy names (`rezz_bottom`, `rezz_top_body`, `rezz_top_spiral`) as suffix fallback only.
 
 Two scripts that toggle the engineering-drawing visualization for an NFC bead:
 
