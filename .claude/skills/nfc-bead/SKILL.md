@@ -33,7 +33,7 @@ You are helping the user design and build a new two-half snap-fit NFC charm. The
 - **Blender MCP** (configured in `.mcp.json` as `blender`) — direct Blender control if the user has the Blender MCP addon running. Useful for live-iterating geometry before committing to the script.
 - **Headless Blender** via `blender --background --python <script>.py` — repeatable, what the script targets.
 - **`tools/launch.ps1`** — Windows one-shot launcher that opens Blender with the addon installed/enabled and the MCP server running. Wraps `tools/blender_bootstrap.py` (idempotent: copies-if-stale → enables → saves prefs → starts server).
-- **`bead-debug-colors` skill** — auto-loads on debug-color requests. Three modes: `recolor.py` (CAD palette + overlays), `restore.py` (production filament colors), `blueprint.py` (cinematic drafting-diagram mode for live displays — slow orbit, glass-tinted bodies, blueprint-blue background). Reach for `blueprint.py` when the user is showing the build on a projector or large screen — see that skill's SKILL.md for the camera dolly conventions per pipeline step.
+- **`bead-debug-colors` skill** — auto-loads on debug-color requests. Three scripts: `recolor.py` (CAD palette + structural-feature overlays), `restore.py` (production filament colors), `master_architect.py` (cinematic drafting-plate mode for live displays — slow orbit, parchment background, GP ink edges, matte cream bodies, Cycles+OptiX). Reach for `master_architect.py` when the user is showing the build on a projector or large screen — see that skill's SKILL.md for the camera dolly conventions per pipeline step.
 - Standard file tools (Read/Write/Edit) for the SVG and script.
 
 ## Helping the user get into a working live-MCP state
