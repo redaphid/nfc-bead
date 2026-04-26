@@ -18,9 +18,36 @@ Single script: `export.py`. When invoked it:
 1. **Strips the architect aesthetic** — runs the equivalent of `bead-architect-mode/architect_off.py` to remove `MA_*` objects (line-art GP, lights, optional plate) and `MA_*` materials.
 2. **Strips debug overlays** — removes any `DBG_*` overlay objects (peg cylinders, peg-hole wireframes, NFC pocket viz, string hole viz) so they can never sneak into an export.
 3. **Validates the printable cohort** — confirms `Bottom`, `Top`, and the active decoration object exist as MESH objects with non-degenerate geometry.
-4. **Exports each as its own STL** — uses `bpy.ops.wm.stl_export` with `selected_objects=True` so each STL contains ONLY that one object.
-5. **Verifies dimensions** — checks each STL's bounding box against the expected ranges (per `prompts/nfc-bead/prompt.md`: ~25mm diameter, ~5–6mm thick total, etc.) and reports any deviation.
-6. **Reports** — prints a manifest listing each output STL, its byte size, and its bounding box.
+4. **Applies a deterministic per-part print-orientation flip** — see "Print-orientation flip" below. The flip is a temporary rotation around each part's bbox center; the live scene is restored after the export.
+5. **Exports each as its own STL** — uses `bpy.ops.wm.stl_export` with `export_selected_objects=True` so each STL contains ONLY that one object, in print orientation.
+6. **Verifies dimensions** — checks each STL's bounding box against the expected ranges (per `prompts/nfc-bead/prompt.md`: ~25mm diameter, ~5–6mm thick total, etc.) and reports any deviation.
+7. **Reports** — prints a manifest listing each output STL, its byte size, and whether it was print-flipped.
+
+## Print-orientation flip (the contract)
+
+`prompts/nfc-bead/prompt.md` specifies the print-orientation contract:
+
+- **`Bottom`** — silhouette face on the build plate, **pegs point up**. Prints flat, no supports. (Achieved by rotating 180° around X relative to build orientation.)
+- **`Top`** — peg-hole face on the build plate, outer face (with the decoration) pointing up.
+- **`Decoration`** — flat side on the build plate (it's a thin ribbon, ~0.5 mm tall).
+
+Build pipelines (`build_<charm>.py`) typically produce the geometry in *build orientation* — convenient for boolean ops, not necessarily ready for the slicer. `export.py` enforces print orientation deterministically via the `EXPORT_FLIP_X_DEG` config dict at the top of the script:
+
+```python
+EXPORT_FLIP_X_DEG = {
+    "Bottom":     180.0,   # silhouette down → pegs up
+    "Top":          0.0,
+    "Decoration":   0.0,
+}
+```
+
+The flip is applied as a temporary 180° rotation **around the part's bbox center** (not its origin — origin may not be the geometric center) just before `bpy.ops.wm.stl_export`. The original transform is restored after the write, so re-running the live scene's animations / camera shots is unaffected.
+
+Routes through `FALLBACK_SUFFIXES` so legacy bead-specific names get the same flip as their canonical counterpart (e.g. `rezz_bottom` is treated as `Bottom` and flipped 180°).
+
+**Why this matters:** the slicer should see a print-ready STL. Without this flip, the user has to manually re-orient the bottom in Elegoo Slicer every time, and an "auto-orient" feature can flip it the wrong way. With this flip baked into the export, dropping any of these STLs into the slicer Just Works.
+
+To override per bead — for instance if you build the bottom already-flipped — change the dict value to `0.0` for that part and re-export.
 
 ## Output location
 
@@ -61,3 +88,12 @@ For deeper verification (per `prompts/nfc-bead/prompt.md` gotcha #8 — "verify 
 
 - Mid-build, before the bead geometry is finalized — exporting partial geometry produces non-printable STLs. Run `build_<charm>.py` to completion first.
 - If you genuinely WANT to export a debug overlay (you usually don't) — use `bpy.ops.wm.stl_export` directly.
+- If the build pipeline already produces print-oriented STLs (rare) and you don't want a double flip — set `EXPORT_FLIP_X_DEG["Bottom"] = 0.0` in the script's tunables block.
+
+## Single-color vs multi-color top half
+
+If `Top` and `Decoration` are still **separate objects** in the scene, `export.py` writes them to separate STLs — use both in the slicer for a multi-color print (red body + black decoration, or any pairing).
+
+If they've been **boolean-UNIONed** (e.g. via the build pipeline's UNION step or by an earlier session), `Top` already contains the decoration as raised relief and `Decoration` may be missing or hidden — the export then produces a single unified `Top.stl` for single-color printing.
+
+To go from unified back to multi-color, you have to rebuild from `build_<charm>.py` (the union is destructive). To go from multi-color to unified, re-run the boolean UNION on `Top` with `Decoration` as the operand.
