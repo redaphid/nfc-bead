@@ -29,16 +29,6 @@ EXPECTED_OBJECTS = [
     "Top",
     "Decoration",
 ]
-# Fallback by suffix if canonical names aren't present
-FALLBACK_SUFFIXES = [
-    ("_bottom",     "Bottom"),
-    ("_top_body",   "Top"),
-    ("_top",        "Top"),
-    ("_top_spiral", "Decoration"),
-    ("_spiral",     "Decoration"),
-    ("_decor",      "Decoration"),
-    ("_accent",     "Decoration"),
-]
 
 OUT_DIR = None     # default: tmp/stl_export_<timestamp>/ in repo root
 
@@ -99,16 +89,6 @@ def _resolve_targets():
         o = bpy.data.objects.get(name)
         if o and o.type == 'MESH':
             targets.append(o)
-    if targets:
-        return targets
-    # Fallback by suffix
-    for suffix, fallback in FALLBACK_SUFFIXES:
-        for o in bpy.data.objects:
-            if o.type == 'MESH' and o.name.lower().endswith(suffix):
-                targets.append(o)
-        if not targets and (o := bpy.data.objects.get(fallback)):
-            if o.type == 'MESH':
-                targets.append(o)
     return targets
 
 
@@ -189,14 +169,8 @@ print(f"[stl_export] writing to {out_dir}")
 # while the live scene is identical to its pre-export state.
 
 def _resolve_flip(obj_name):
-    """Return the flip-deg for a given object, falling back via FALLBACK_SUFFIXES."""
-    if obj_name in EXPORT_FLIP_X_DEG:
-        return EXPORT_FLIP_X_DEG[obj_name]
-    low = obj_name.lower()
-    for suffix, canonical in FALLBACK_SUFFIXES:
-        if low.endswith(suffix) and canonical in EXPORT_FLIP_X_DEG:
-            return EXPORT_FLIP_X_DEG[canonical]
-    return 0.0
+    """Return the flip-deg for the given canonical object name (Bottom/Top/Decoration)."""
+    return EXPORT_FLIP_X_DEG.get(obj_name, 0.0)
 
 manifest = []
 for obj in targets:
@@ -216,12 +190,26 @@ for obj in targets:
         bb = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
         center = Vector((sum(v.x for v in bb)/8, sum(v.y for v in bb)/8, sum(v.z for v in bb)/8))
         rot = Matrix.Rotation(math.radians(flip_deg), 4, 'X')
-        # New world matrix: translate to origin, rotate, translate back to bbox center
         T_neg = Matrix.Translation(-center)
         T_pos = Matrix.Translation(center)
         obj.matrix_world = T_pos @ rot @ T_neg @ obj.matrix_world
         bpy.context.view_layer.update()
-        print(f"[stl_export]   {obj.name}: applied {flip_deg:.0f}° X-flip about bbox center for export")
+        print(f"[stl_export]   {obj.name}: applied {flip_deg:.0f} deg X-flip about bbox center for export")
+
+    # ── Shift each part to (X=0, Y=0, Z>=0) so the slicer sees it bed-flat ──
+    # Without this, parts that sit above world z=0 in the live scene (e.g. a
+    # spiral on top of the top body at world z=2.5) export with their min-Z
+    # at 2.5, which the slicer renders as floating above the build plate
+    # (looks like a raft / gap). Shifting min-Z to 0 makes each STL load
+    # flush on the build plate; centering X/Y means the slicer's auto-arrange
+    # has nothing to fight against.
+    bb = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
+    cx = sum(v.x for v in bb) / 8
+    cy = sum(v.y for v in bb) / 8
+    zmin = min(v.z for v in bb)
+    obj.matrix_world = Matrix.Translation((-cx, -cy, -zmin)) @ obj.matrix_world
+    bpy.context.view_layer.update()
+    print(f"[stl_export]   {obj.name}: bed-flattened (shift X={-cx:+.2f} Y={-cy:+.2f} Z={-zmin:+.2f})")
 
     bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)

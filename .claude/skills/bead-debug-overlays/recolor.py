@@ -87,20 +87,14 @@ def add_widget(name, mesh_call, rgba, location, rotation=(0, 0, 0), display='WIR
     return obj
 
 
-# ─── Recolor printable parts ───
-# Canonical names first ("Bottom"/"Top"/decoration), then rezz-style fallbacks.
-def _find_mesh(canonical, fallback_suffixes):
-    o = bpy.data.objects.get(canonical)
-    if o and o.type == 'MESH':
-        return o
-    for o in bpy.data.objects:
-        if o.type == 'MESH' and any(o.name.lower().endswith(s) for s in fallback_suffixes):
-            return o
-    return None
+# ─── Recolor printable parts (canonical names only — no legacy fallbacks) ───
+def _find_mesh(name):
+    o = bpy.data.objects.get(name)
+    return o if (o and o.type == 'MESH') else None
 
-bottom = _find_mesh("Bottom", ("_bottom",))
-top    = _find_mesh("Top",    ("_top_body", "_top"))
-decor  = _find_mesh(DECORATION_NAME, ("_spiral", "_decor", "_accent"))
+bottom = _find_mesh("Bottom")
+top    = _find_mesh("Top")
+decor  = _find_mesh(DECORATION_NAME)
 
 if bottom: repaint(bottom, COL_BOTTOM, "DBG_Bottom_BlueprintGray")
 if top:    repaint(top,    COL_TOP,    "DBG_TopBody_BlueprintSage")
@@ -130,16 +124,16 @@ _BY = -1.0 if BOTTOM_FLIPPED else 1.0
 # inner-face=z=0) AND for STL imports (where halves keep their print-layout
 # z-range). The canonical PEG_HEIGHT lets us infer where the inner face sits
 # without scanning vertex normals.
-def _world_z_range(name_canonical, name_suffix):
+def _world_z_range(name):
     """Return (zmin, zmax) of the mesh bbox in world coords, or None if missing."""
-    o = bpy.data.objects.get(name_canonical) or _find_mesh(name_canonical, (name_suffix,))
+    o = _find_mesh(name)
     if o is None:
         return None
     zs = [(o.matrix_world @ v.co).z for v in o.data.vertices]
     return (min(zs), max(zs)) if zs else None
 
-_bottom_z = _world_z_range("Bottom", "_bottom")
-_top_z    = _world_z_range("Top",    "_top_body")
+_bottom_z = _world_z_range("Bottom")
+_top_z    = _world_z_range("Top")
 
 if _bottom_z is None:
     _BOTTOM_INNER_Z = 0.0

@@ -113,33 +113,23 @@ mat_blue   = _matte("MA_Body_BlueGray",  BOTTOM_FILL)
 mat_sage   = _matte("MA_Body_Sage",      TOP_FILL)
 mat_bronze = _matte("MA_Decor_Bronze",   ACCENT_FILL)
 
-# Bead-component naming convention (project-wide):
+# Bead-component naming convention (project-wide, NO legacy fallbacks):
 #   "Bottom"     — bottom half (NFC pocket recess + pegs)
 #   "Top"        — top half (peg holes; outer face may host the decoration)
 #   "Decoration" — raised relief on top's outer face (spiral, emboss, etc.)
-# Build scripts (build_<charm>.py) MUST produce these canonical names. STL
-# filenames may still be bead-prefixed (rezz_bottom.stl) but in-Blender object
-# names are bead-agnostic. Legacy fallbacks below cover historical names.
-def _find_canonical(canonical, *legacy_suffixes):
-    o = bpy.data.objects.get(canonical)
-    if o is not None and o.type == 'MESH':
-        return o
-    for o in bpy.data.objects:
-        if o.type != 'MESH':
-            continue
-        low = o.name.lower()
-        if any(low.endswith(s) for s in legacy_suffixes):
-            return o
-    return None
-
-def _assign(obj, mat):
-    if obj is None: return
+# Build scripts MUST produce these canonical names. If they're missing,
+# this skill is a no-op for that part — that's a build-pipeline bug, not
+# something to paper over with suffix matching.
+def _assign(name, mat):
+    obj = bpy.data.objects.get(name)
+    if obj is None or obj.type != 'MESH':
+        return
     obj.data.materials.clear()
     obj.data.materials.append(mat)
 
-_assign(_find_canonical("Bottom",     "_bottom"),                       mat_blue)
-_assign(_find_canonical("Top",        "_top_body", "_top"),             mat_sage)
-_assign(_find_canonical("Decoration", "_spiral",   "_decor", "_accent"), mat_bronze)
+_assign("Bottom",     mat_blue)
+_assign("Top",        mat_sage)
+_assign("Decoration", mat_bronze)
 
 # ─── DBG_* overlay re-tint to architect palette (optional) ─────────────
 if RETINT_DBG_OVERLAYS:
