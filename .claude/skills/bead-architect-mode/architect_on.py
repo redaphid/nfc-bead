@@ -37,22 +37,27 @@ PARCHMENT      = (0.93, 0.86, 0.72, 1.0)   # warm cream world
 INK_GRAPHITE   = (0.08, 0.10, 0.14, 1.0)   # GP line-art ink
 INK_RADIUS     = 0.05                      # Blender 5.0 GP modifier (NOT 'thickness')
 
-# Watercolor washes for the printable bodies
-BOTTOM_FILL    = (0.62, 0.74, 0.82, 1.0)   # blueprint blue-gray
-TOP_FILL       = (0.70, 0.80, 0.74, 1.0)   # sage
-ACCENT_FILL    = (0.85, 0.62, 0.32, 1.0)   # warm bronze (raised decorations)
+# Canonical body colors. These read as deliberate hue (not cream-pastel)
+# under the warm key sun. Bumped from the original watercolor values
+# `(0.62,0.74,0.82) / (0.70,0.80,0.74) / (0.85,0.62,0.32)` which were
+# desaturated enough that the warm light washed them all toward beige.
+BOTTOM_FILL    = (0.42, 0.60, 0.82, 1.0)   # blueprint blue — clearly cool
+TOP_FILL       = (0.50, 0.72, 0.58, 1.0)   # sage green — clearly green
+ACCENT_FILL    = (0.92, 0.52, 0.18, 1.0)   # burnished copper — clearly warm
 BODY_ROUGH     = 0.85
 BODY_METALLIC  = 0.0
 
 # Architect-aesthetic highlight palette for any DBG_* overlays
 # left in the scene by recolor.py. Same hue families as the CAD palette
-# (yellow=peg, red=hole, magenta=NFC, orange=string) but desaturated to
-# read as draftsman's marker annotations on parchment, not engineering CAD.
-# ⚠ PROPOSED — verify visually before treating as canonical.
-PEG_ARCHITECT          = (0.92, 0.78, 0.30, 1.0)   # bright muted ochre
-PEG_HOLE_ARCHITECT     = (0.62, 0.22, 0.20, 1.0)   # venetian red
-NFC_ARCHITECT          = (0.55, 0.30, 0.50, 1.0)   # dusty rose
-STRING_HOLE_ARCHITECT  = (0.78, 0.45, 0.20, 1.0)   # drafted rust
+# (yellow=peg, red=hole, magenta=NFC, orange=string) but tuned to read
+# CLEARLY against parchment + warm light. Each is solid (with optional
+# semi-transparency for the void-features) so they render visibly in
+# Cycles instead of disappearing as wireframe-only.
+PEG_ARCHITECT          = (0.95, 0.74, 0.18, 1.0)   # warm ochre (solid, opaque)
+PEG_HOLE_ARCHITECT     = (0.78, 0.22, 0.20, 0.55)  # venetian red, semi-transparent
+                                                   # (alpha < 1 so the hole reads as a "void" through the body)
+NFC_ARCHITECT          = (0.78, 0.32, 0.62, 0.55) # bright rose, semi-transparent (void)
+STRING_HOLE_ARCHITECT  = (0.95, 0.52, 0.18, 0.55) # bright rust, semi-transparent (void)
 
 # Light setup
 KEY_COLOR      = (1.00, 0.92, 0.78)        # tungsten warm
@@ -137,20 +142,41 @@ _assign(_find_canonical("Decoration", "_spiral",   "_decor", "_accent"), mat_bro
 
 # ─── DBG_* overlay re-tint to architect palette (optional) ─────────────
 if RETINT_DBG_OVERLAYS:
+    # Order matters: longer prefixes FIRST, so DBG_PegHole doesn't match
+    # DBG_Peg (which is a prefix of it).
     palette_map = (
-        ("DBG_Peg",        PEG_ARCHITECT,         "MA_Overlay_Peg"),
-        ("DBG_PegHole",    PEG_HOLE_ARCHITECT,    "MA_Overlay_PegHole"),
-        ("DBG_NFC",        NFC_ARCHITECT,         "MA_Overlay_NFC"),
-        ("DBG_StringHole", STRING_HOLE_ARCHITECT, "MA_Overlay_StringHole"),
+        ("DBG_PegHole",    PEG_HOLE_ARCHITECT,    "MA_Overlay_PegHole",    True ),  # void = alpha
+        ("DBG_Peg",        PEG_ARCHITECT,         "MA_Overlay_Peg",        False),  # solid
+        ("DBG_NFCPocket",  NFC_ARCHITECT,         "MA_Overlay_NFCPocket",  True ),  # void
+        ("DBG_NFC",        NFC_ARCHITECT,         "MA_Overlay_NFC",        True ),  # void (legacy name)
+        ("DBG_StringHole", STRING_HOLE_ARCHITECT, "MA_Overlay_StringHole", True ),  # void
     )
+
+    def _make_overlay_mat(name, rgba, transparent):
+        m = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+        m.use_nodes = True
+        p = m.node_tree.nodes.get("Principled BSDF")
+        if p:
+            p.inputs["Base Color"].default_value = (rgba[0], rgba[1], rgba[2], 1.0)
+            p.inputs["Roughness"].default_value  = 0.55
+            p.inputs["Metallic"].default_value   = 0.0
+            if "Alpha" in p.inputs:
+                p.inputs["Alpha"].default_value = rgba[3]
+        m.blend_method = 'BLEND' if transparent else 'OPAQUE'
+        return m
+
     for o in bpy.data.objects:
         if not o.name.startswith("DBG_"):
             continue
-        for prefix, rgba, mat_name in palette_map:
+        for prefix, rgba, mat_name, is_void in palette_map:
             if o.name.startswith(prefix):
-                m = _matte(mat_name, rgba)
+                m = _make_overlay_mat(mat_name, rgba, is_void)
                 o.data.materials.clear()
                 o.data.materials.append(m)
+                # Solid display so colors render in Cycles (wireframe mode is
+                # easy to miss in render). Voids are alpha-blended so the body
+                # geometry shows through them as a true "see-into-the-hole".
+                o.display_type = 'TEXTURED' if is_void else 'TEXTURED'
                 break
 
 # ─── Grease Pencil scene line-art (verified Blender 5.0 settings) ──────
