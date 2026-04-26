@@ -1,21 +1,28 @@
-"""Slow Z-orbit animation with optional X-wobble and dolly breath.
+"""Slow Z-orbit animation with X-wobble + optional dolly breath.
 
 The canonical 'Westworld-tempo' animation: camera orbits the scene
-on a vertical axis, optional sinusoidal vertical swing (wobble), and
-optional in/out breathing dolly.
+on a vertical axis, sinusoidal vertical swing (wobble), and optional
+in/out breathing dolly.
 
-Idempotent — clears any prior animation on `CameraPivot` and
-`Camera`, then re-keys.
+Stores its keyframes in a named Action that persists with the .blend:
+  BeadAnim_orbit_pivot
+  BeadAnim_orbit_cam   (only when DOLLY_BREATH is on)
 
-Tunables at the top. Defaults are 'semi-slow' (90s/rev) — gentler
-than the master_architect canonical 4-min orbit.
+Switch to a different stored anim with `anim_switch.py`. Re-running this
+script clears + re-keys the named actions but leaves OTHER anims' actions
+untouched.
 
-Requires `architect_on.py` to have set up the camera rig
-(CameraPivot + CameraTarget + Camera w/ TRACK_TO).
+Defaults are 'semi-slow' (90 s/rev) — gentler than the master_architect
+canonical 4-min orbit.
+
+Requires `architect_on.py` to have set up the camera rig.
 """
-import bpy, math
+import bpy
+import math
 
 # ─── Tunables ─────────────────────────────────────────────────────────
+ANIM_NAME       = "orbit"
+
 PERIOD          = 2160        # frames per Z revolution (24 fps → 90 s)
 FPS             = 24
 
@@ -32,9 +39,28 @@ cam = bpy.data.objects.get("Camera")
 if not piv or not cam:
     raise RuntimeError("CameraPivot or Camera missing — run architect_on.py first.")
 
-# ─── Wipe prior animation ─────────────────────────────────────────────
-if piv.animation_data: piv.animation_data_clear()
-if cam.animation_data: cam.animation_data_clear()
+
+# ─── Named-action helper (used by every anim_*.py) ────────────────────
+def _named_action(obj, role: str):
+    """Get or recreate a named Action for this anim+role; assign it to obj.
+
+    Naming: BeadAnim_<anim>_<role>; use_fake_user=True so the action
+    persists in the .blend even when not currently assigned. Re-running
+    fully recreates the action (the layered-Action API in Blender 5.0
+    doesn't expose a single fcurves list to clear, so a fresh data
+    block is the simplest correct path).
+    """
+    name = f"BeadAnim_{ANIM_NAME}_{role}"
+    old = bpy.data.actions.get(name)
+    if old is not None:
+        bpy.data.actions.remove(old)
+    action = bpy.data.actions.new(name)
+    action.use_fake_user = True
+    if not obj.animation_data:
+        obj.animation_data_create()
+    obj.animation_data.action = action
+    return action
+
 
 # ─── Frame range ──────────────────────────────────────────────────────
 scn = bpy.context.scene
@@ -43,6 +69,7 @@ scn.frame_end   = PERIOD
 scn.render.fps  = FPS
 
 # ─── Z-orbit (linear) ─────────────────────────────────────────────────
+_named_action(piv, "pivot")
 piv.rotation_euler = (0, 0, 0)
 piv.keyframe_insert(data_path="rotation_euler", index=2, frame=1)
 piv.rotation_euler = (0, 0, math.radians(360))
@@ -59,12 +86,13 @@ if WOBBLE_DEG > 0:
 
 # ─── Set interpolation: LINEAR for Z, BEZIER for wobble ───────────────
 def _iter_fcurves(action):
-    if hasattr(action, 'fcurves') and action.fcurves:
+    """Walk both legacy `action.fcurves` and Blender 5.0 layered actions."""
+    if hasattr(action, "fcurves") and action.fcurves:
         yield from action.fcurves
-    if hasattr(action, 'layers'):
+    if hasattr(action, "layers"):
         for layer in action.layers:
             for strip in layer.strips:
-                if hasattr(strip, 'channelbags'):
+                if hasattr(strip, "channelbags"):
                     for cb in strip.channelbags:
                         for fc in cb.fcurves:
                             yield fc
@@ -75,8 +103,9 @@ if piv.animation_data and piv.animation_data.action:
         for kp in fc.keyframe_points:
             kp.interpolation = kind
 
-# ─── Dolly breath (optional, on the camera object's own Y) ────────────
+# ─── Dolly breath (optional, on cam.location.y) ───────────────────────
 if DOLLY_BREATH:
+    _named_action(cam, "cam")
     base_x, _, base_z = cam.location[:]
     y_lo, y_hi = DOLLY_RANGE
     for i in range(BREATH_SAMPLES + 1):
@@ -85,12 +114,15 @@ if DOLLY_BREATH:
                         y_lo + (y_hi - y_lo) * 0.5 * (1 + math.sin(2 * math.pi * (i / BREATH_SAMPLES))),
                         base_z)
         cam.keyframe_insert(data_path="location", index=1, frame=f)
+elif cam.animation_data:
+    # Disable any prior orbit-cam action without losing other anims' actions
+    cam.animation_data.action = None
 
 # ─── Start playback ───────────────────────────────────────────────────
 scn.frame_current = 1
 if not bpy.context.screen.is_animation_playing:
     bpy.ops.screen.animation_play()
 
-print(f"[anim_orbit] Z-orbit {PERIOD}f @ {FPS}fps = {PERIOD/FPS:.0f}s/rev"
-      + (f", wobble +-{WOBBLE_DEG}deg ({WOBBLE_SAMPLES} samples)" if WOBBLE_DEG > 0 else "")
-      + (f", dolly breath y={DOLLY_RANGE}" if DOLLY_BREATH else ""))
+print(f"[anim_orbit] action 'BeadAnim_{ANIM_NAME}_pivot' written ({PERIOD}f @ {FPS}fps = {PERIOD/FPS:.0f}s/rev)"
+      + (f", wobble +-{WOBBLE_DEG}deg" if WOBBLE_DEG > 0 else "")
+      + (", dolly breath on" if DOLLY_BREATH else ""))

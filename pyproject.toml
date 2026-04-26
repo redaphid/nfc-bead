@@ -40,6 +40,8 @@ nfc-make-3mf      = "tools.make_3mf:main"
 # from a reference 3MF in tmp/latest/r1_extracted/. Recommended path for
 # the rezz bead specifically.
 nfc-build-rezz-3mf = "tools.build_rezz_3mf:main"
+# Switch the live Blender scene to a stored animation (orbit, tour, etc.)
+nfc-anim-switch    = "tools.anim_switch:main"
 
 [build-system]
 requires = ["hatchling"]
