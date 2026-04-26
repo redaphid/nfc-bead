@@ -21,6 +21,17 @@ Companion: `architect_off.py` strips everything this adds.
 import bpy, math
 from mathutils import Vector
 
+# bpy.ops.object.* operators require OBJECT mode. If the user (or a previous
+# script) left an object in edit/sculpt/paint mode, ALL of our object ops fail
+# their poll. Drop back to OBJECT mode unconditionally.
+if bpy.context.mode != 'OBJECT':
+    try:
+        bpy.ops.object.mode_set(mode='OBJECT')
+    except Exception:
+        # If the active object is gone or can't change mode, force-clear it
+        if bpy.context.view_layer.objects.active:
+            bpy.context.view_layer.objects.active = None
+
 # ─── Tunables (verified values) ─────────────────────────────────────────
 PARCHMENT      = (0.93, 0.86, 0.72, 1.0)   # warm cream world
 INK_GRAPHITE   = (0.08, 0.10, 0.14, 1.0)   # GP line-art ink
@@ -148,8 +159,22 @@ old_gp = bpy.data.objects.get("MA_LineArt")
 if old_gp:
     bpy.data.objects.remove(old_gp, do_unlink=True)
 
-bpy.ops.object.grease_pencil_add(type='LINEART_SCENE')
-gp = bpy.context.active_object
+# bpy.ops.object.grease_pencil_add poll requires a 3D viewport context.
+# When this script is run via the BlenderMCP socket (or any non-UI handler)
+# the default context's area may be wrong. Find a VIEW_3D area and use
+# temp_override so the operator polls cleanly.
+def _add_lineart_gp():
+    for area in bpy.context.screen.areas:
+        if area.type == 'VIEW_3D':
+            region = next((r for r in area.regions if r.type == 'WINDOW'), area.regions[-1])
+            with bpy.context.temp_override(area=area, region=region):
+                bpy.ops.object.grease_pencil_add(type='LINEART_SCENE')
+            return bpy.context.active_object
+    # Fallback: no 3D viewport in the current screen — try without override
+    bpy.ops.object.grease_pencil_add(type='LINEART_SCENE')
+    return bpy.context.active_object
+
+gp = _add_lineart_gp()
 gp.name = "MA_LineArt"
 gp.location = (0, 0, 0)
 gp.show_in_front = False                           # ← critical for Cycles render
