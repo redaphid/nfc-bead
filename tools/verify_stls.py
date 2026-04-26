@@ -30,10 +30,11 @@ import numpy as np
 import trimesh
 
 # ─── Expected dimensions ───────────────────────────────────────────────
-# Sized for a Kandi bracelet bead: as small as we can comfortably fit the
-# NTAG215 sticker (10.5 mm dia), 3 friction-fit pegs, and a 2 mm string
-# hole through the head. Practical minimum diameter is 20 mm.
-EXPECTED_DIA_MM        = 20.0
+# Sized for a Kandi bracelet bead: smallest comfortable diameter that
+# encloses the NTAG215 sticker (10.5 mm dia), 3 friction-fit pegs, and
+# a 2 mm string hole. 18 mm with NFC pocket centered + pegs at radius
+# 7 mm gives 0.75 mm peg-to-NFC gap and 1 mm peg-to-bead-edge wall.
+EXPECTED_DIA_MM        = 18.0
 DIA_TOL_MM             = 1.5
 BOTTOM_THICK_MM        = 4.0    # 2.5 mm puck + 1.5 mm pegs above
 BOTTOM_THICK_TOL_MM    = 0.5
