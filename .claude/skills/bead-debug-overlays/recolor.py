@@ -31,6 +31,7 @@ Coordinate convention (the canonical print-layout produced by build_*.py):
 import bpy, math
 
 # ─── CONFIG — pull from beads/<name>/build_<name>.py CONFIG block ───
+# Active bead: rezz (post-flip; print-layout halves at X=±18; HOLE_Y=9 etc.)
 PEGS         = [(-7.5, 3.0), (7.5, 3.0), (0.0, -10.0)]
 PEG_DIA      = 2.0
 PEG_HEIGHT   = 1.5
@@ -41,9 +42,14 @@ NFC_DEPTH    = 0.8
 HOLE_Y       = 9.0
 HOLE_DIA     = 2.0
 
-DECORATION_NAME = "RezzSpiral"
+DECORATION_NAME = "Decoration"   # canonical project name; legacy *_spiral / *_decor still found by fallback
 BOTTOM_X     = -18.0
 TOP_X        =  18.0
+
+# True post-flip (print-layout — bottom rotated 180° around X so the silhouette
+# face is on the build plate and pegs point up). The y-axis sign on bottom-half
+# widgets flips accordingly.
+BOTTOM_FLIPPED = True
 
 # ─── CAD / drafting palette ───
 # Bodies — muted blueprint tones
@@ -82,9 +88,19 @@ def add_widget(name, mesh_call, rgba, location, rotation=(0, 0, 0), display='WIR
 
 
 # ─── Recolor printable parts ───
-bottom = bpy.data.objects.get("Bottom")
-top    = bpy.data.objects.get("Top")
-decor  = bpy.data.objects.get(DECORATION_NAME)
+# Canonical names first ("Bottom"/"Top"/decoration), then rezz-style fallbacks.
+def _find_mesh(canonical, fallback_suffixes):
+    o = bpy.data.objects.get(canonical)
+    if o and o.type == 'MESH':
+        return o
+    for o in bpy.data.objects:
+        if o.type == 'MESH' and any(o.name.lower().endswith(s) for s in fallback_suffixes):
+            return o
+    return None
+
+bottom = _find_mesh("Bottom", ("_bottom",))
+top    = _find_mesh("Top",    ("_top_body", "_top"))
+decor  = _find_mesh(DECORATION_NAME, ("_spiral", "_decor", "_accent"))
 
 if bottom: repaint(bottom, COL_BOTTOM, "DBG_Bottom_BlueprintGray")
 if top:    repaint(top,    COL_TOP,    "DBG_TopBody_BlueprintSage")
@@ -105,6 +121,55 @@ for obj in list(bpy.data.objects):
     if obj.name.startswith("DBG_") and obj.name not in _protected:
         bpy.data.objects.remove(obj, do_unlink=True)
 
+# Sign for bottom-half widget Y. If bottom has been flipped 180° around X,
+# its mesh-local +Y now reads as world -Y. Pre-flip, +Y stays +Y.
+_BY = -1.0 if BOTTOM_FLIPPED else 1.0
+
+# ── Inner-face Z is computed from the ACTUAL mesh bbox in world coords. ──
+# This works for both build-pipeline scenes (where halves are recentered to
+# inner-face=z=0) AND for STL imports (where halves keep their print-layout
+# z-range). The canonical PEG_HEIGHT lets us infer where the inner face sits
+# without scanning vertex normals.
+def _world_z_range(name_canonical, name_suffix):
+    """Return (zmin, zmax) of the mesh bbox in world coords, or None if missing."""
+    o = bpy.data.objects.get(name_canonical) or _find_mesh(name_canonical, (name_suffix,))
+    if o is None:
+        return None
+    zs = [(o.matrix_world @ v.co).z for v in o.data.vertices]
+    return (min(zs), max(zs)) if zs else None
+
+_bottom_z = _world_z_range("Bottom", "_bottom")
+_top_z    = _world_z_range("Top",    "_top_body")
+
+if _bottom_z is None:
+    _BOTTOM_INNER_Z = 0.0
+elif BOTTOM_FLIPPED:
+    # Print-layout: pegs stick UP from inner face; inner face is at zmax-PEG_HEIGHT.
+    # If the puck has no protruding pegs in this mesh (rare), zmax IS the inner face.
+    span = _bottom_z[1] - _bottom_z[0]
+    _BOTTOM_INNER_Z = (_bottom_z[1] - PEG_HEIGHT) if span >= PEG_HEIGHT * 1.5 else _bottom_z[1]
+else:
+    # Pre-flip: inner face is the top of the mesh
+    _BOTTOM_INNER_Z = _bottom_z[1]
+
+if _top_z is None:
+    _TOP_INNER_Z = 0.0
+else:
+    # Top is never flipped. Inner face = mating face = bottom of mesh = zmin.
+    _TOP_INNER_Z = _top_z[0]
+
+# Pegs grow upward from the inner face in both build-time AND print-layout
+# (post-flip the bottom is upside-down so its "up" still points toward the top).
+_PEG_DZ      = PEG_HEIGHT / 2
+# NFC pocket is recessed INTO the puck from the inner face
+_NFC_DZ      = -NFC_DEPTH / 2
+# Peg holes are recesses UP into the top half from inner face = z=0 in print-layout
+peg_hole_depth = PEG_HEIGHT + 0.3
+_PH_DZ       = peg_hole_depth / 2
+
+print(f"[recolor] inner_z bottom={_BOTTOM_INNER_Z:.2f} top={_TOP_INNER_Z:.2f}  "
+      f"(bottom z range={_bottom_z}, top z range={_top_z})")
+
 # ─── PEGS — positive features, SOLID yellow widgets ───
 for i, (px, py) in enumerate(PEGS):
     add_widget(
@@ -112,19 +177,18 @@ for i, (px, py) in enumerate(PEGS):
         lambda **kw: bpy.ops.mesh.primitive_cylinder_add(
             vertices=24, radius=PEG_DIA / 2, depth=PEG_HEIGHT, **kw),
         COL_PEG,
-        location=(BOTTOM_X + px, -py, PEG_HEIGHT / 2),
+        location=(BOTTOM_X + px, _BY * py, _BOTTOM_INNER_Z + _PEG_DZ),
         display='TEXTURED',                # SOLID — represents added material
     )
 
 # ─── PEG HOLES — negative features, RED wireframe ───
-peg_hole_depth = PEG_HEIGHT + 0.3
 for i, (px, py) in enumerate(PEGS):
     add_widget(
         f"DBG_PegHole{i}",
         lambda **kw: bpy.ops.mesh.primitive_cylinder_add(
             vertices=24, radius=PEG_HOLE_DIA / 2, depth=peg_hole_depth, **kw),
         COL_PEGHOLE,
-        location=(TOP_X + px, py, peg_hole_depth / 2),
+        location=(TOP_X + px, py, _TOP_INNER_Z + _PH_DZ),
         display='WIRE',
     )
 
@@ -134,7 +198,7 @@ add_widget(
     lambda **kw: bpy.ops.mesh.primitive_cylinder_add(
         vertices=48, radius=NFC_DIA / 2, depth=NFC_DEPTH, **kw),
     COL_NFC,
-    location=(BOTTOM_X + NFC_POS[0], -NFC_POS[1], NFC_DEPTH / 2),
+    location=(BOTTOM_X + NFC_POS[0], _BY * NFC_POS[1], _BOTTOM_INNER_Z + _NFC_DZ),
     display='WIRE',
 )
 
@@ -154,11 +218,11 @@ add_widget("DBG_StringHole_Bottom",
     lambda **kw: bpy.ops.mesh.primitive_cylinder_add(
         vertices=24, radius=HOLE_DIA / 2, depth=30, **kw),
     COL_HOLE,
-    location=(BOTTOM_X, -HOLE_Y, _midz(bottom)),
+    location=(BOTTOM_X, _BY * HOLE_Y, _midz(bottom)),
     rotation=(0, math.radians(90), 0),
     display='WIRE')
 
-print("[bead-debug-colors] CAD palette applied:")
+print("[bead-debug-overlays] CAD palette applied:")
 print("  Bottom=blueprint blue-gray   Top=blueprint sage   Decor=bronze")
 print("  POSITIVE (solid):  Pegs=YELLOW")
 print("  NEGATIVE (wire):   PegHoles=RED  NFC=MAGENTA  StringHole=ORANGE")

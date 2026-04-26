@@ -122,7 +122,10 @@ A common reflex is to trim the show-face decoration around features like the str
 
 - **Bottom half**: rotate 180° around X so the silhouette face is on the build plate and the **pegs point up**. Prints flat, no supports.
 - **Top half**: inner face (with peg holes) goes on the build plate. Prints flat, no supports.
+- **Decoration** (raised spiral / emboss / etc.): flat side on the build plate.
 - Settings: PLA or PETG, 0.12–0.16 mm layer height, 100% infill (these are tiny), no supports.
+
+**Build vs print orientation:** build scripts (`build_<charm>.py`) typically lay out the geometry in *build orientation* — the natural pose for boolean operations and inspection. The actual rotation to print orientation happens at export-time via `.claude/skills/bead-stl-export/export.py`, which has an `EXPORT_FLIP_X_DEG` dict that applies a deterministic per-part flip just before writing each STL. The live scene is unchanged; only the STL on disk is print-ready. This means the slicer should never need an auto-orient step.
 
 ---
 

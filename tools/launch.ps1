@@ -54,6 +54,15 @@ if (-not $BlendFile -and $Bead) {
     if (Test-Path $candidate) { $BlendFile = $candidate }
 }
 
+# Fallback: ship the rezz sample scene if nothing more specific resolved.
+# samples/rezz_sample.blend is a tracked reference scene with canonical
+# Bottom/Top/Decoration objects — handy for exercising the architect /
+# debug-overlays / stl-export skills without first running a full build.
+if (-not $BlendFile) {
+    $sample = Join-Path $Repo 'samples\rezz_sample.blend'
+    if (Test-Path $sample) { $BlendFile = $sample }
+}
+
 # Build argument list. Blender CLI: [blendfile] --python <script>
 $blenderArgs = @()
 if ($BlendFile) { $blenderArgs += $BlendFile }

@@ -33,7 +33,15 @@ You are helping the user design and build a new two-half snap-fit NFC charm. The
 - **Blender MCP** (configured in `.mcp.json` as `blender`) — direct Blender control if the user has the Blender MCP addon running. Useful for live-iterating geometry before committing to the script.
 - **Headless Blender** via `blender --background --python <script>.py` — repeatable, what the script targets.
 - **`tools/launch.ps1`** — Windows one-shot launcher that opens Blender with the addon installed/enabled and the MCP server running. Wraps `tools/blender_bootstrap.py` (idempotent: copies-if-stale → enables → saves prefs → starts server).
+- **`tools/blender_send.py`** — bypasses the Claude-Code MCP layer and talks directly to the BlenderMCP socket on `localhost:9876`. Useful when the MCP bridge has dropped but Blender is still running.
 - Standard file tools (Read/Write/Edit) for the SVG and script.
+
+## Companion skills
+
+- **`bead-debug-overlays`** — CAD palette + DBG_* overlays for hidden features (yellow pegs, red peg-hole wireframes, magenta NFC pocket, orange string hole). Run `recolor.py` to apply, `restore.py` to wipe and repaint production colors. Canonical object names: `Bottom`, `Top`, `Decoration`.
+- **`bead-architect-mode`** — drape a parchment+ink architect aesthetic and seamless-loopable cinematic camera animations (`anim_orbit.py`, `anim_locked_profile.py`, `anim_macro_pull.py`, `anim_top_down.py`, `anim_raking_light.py`, `anim_tour.py`). Pairs with `bead-debug-overlays` — when layered on top, it auto-retints the DBG_* overlays to a parchment-friendly palette.
+- **`theater-mode`** — the *attitude* layer for working with `bead-architect-mode`: the Westworld-bar quality target, the screenshot-verified iteration protocol, the shot vocabulary, and the "done" criteria. Reach for it whenever the user is iterating on the cinematic look or you need to know whether a shot is good enough yet.
+- **`bead-stl-export`** — defensive STL export with a deterministic per-part print-orientation flip (`EXPORT_FLIP_X_DEG`). Strips MA_* and DBG_* before writing so the slicer never sees the cinematic / debug layer. Outputs land in `tmp/stl_export_<timestamp>/` by default.
 
 ## Helping the user get into a working live-MCP state
 

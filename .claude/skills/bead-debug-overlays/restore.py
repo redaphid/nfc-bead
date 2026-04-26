@@ -17,7 +17,7 @@ COL_BOTTOM_PROD  = (0.85, 0.10, 0.10, 1)   # red
 COL_TOP_PROD     = (0.85, 0.10, 0.10, 1)   # red
 COL_DECOR_PROD   = (0.05, 0.05, 0.05, 1)   # black
 
-DECORATION_NAME = "RezzSpiral"
+DECORATION_NAME = "Decoration"   # canonical project name
 
 
 def repaint(obj, rgba, name):
@@ -54,5 +54,5 @@ for name, rgba, mat_name in [
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.shade_flat()
 
-print(f"[bead-debug-colors] restored production palette ({removed} overlay(s) removed)")
+print(f"[bead-debug-overlays] restored production palette ({removed} overlay(s) removed)")
 print("  Bottom + Top = RED, Decor = BLACK")

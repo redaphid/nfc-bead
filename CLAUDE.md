@@ -25,7 +25,14 @@ Don't repeat the greeting on later turns even if the conversation pauses; once i
 - **`GUIDE.md`** — long-form lessons-learned walkthrough.
 - **`SETUP.md`** — one-time and per-session setup for the live Blender MCP workflow (Windows-focused; macOS / Linux outlined).
 - **`tools/launch.ps1`** + **`tools/blender_bootstrap.py`** — one-shot launcher that opens Blender with the addon installed/enabled and the MCP server running. Use this when the user wants to start (or restart after a crash) the live workflow. Don't walk them through the manual click-through unless they specifically ask.
-- **`.claude/skills/nfc-bead/`** — the `nfc-bead` skill that auto-loads on charm requests. Bundles the Blender MCP addon source.
+- **`tools/blender_send.py`** — sends Python code directly to the BlenderMCP socket (`localhost:9876`). Use when the Claude Code MCP layer has dropped but Blender is still up.
+- **`samples/rezz_sample.blend`** — tracked reference scene with canonical `Bottom`/`Top`/`Decoration` objects. `tools/launch.ps1` falls back to this when no charm-specific blend exists, so the architect / debug-overlays / stl-export skills always have something to act on.
+- **`print/PRINT_GUIDE.md`** — multi-color print workflow for the Centauri Carbon 2 / Elegoo Slicer (filament assignment, layer height, wipe tower, slice verification).
+- **`.claude/skills/nfc-bead/`** — auto-loads on charm requests. Bundles the Blender MCP addon source.
+- **`.claude/skills/bead-debug-overlays/`** — CAD palette + DBG_* overlays for hidden structural features. Canonical object names: `Bottom`, `Top`, `Decoration`.
+- **`.claude/skills/bead-architect-mode/`** — parchment+ink aesthetic + cinematic camera animations (`architect_on.py`, `anim_*.py`, `architect_off.py`).
+- **`.claude/skills/theater-mode/`** — protocol and quality bar for iterating on the architect aesthetic. The "Westworld bar" + screenshot-verified iteration loop.
+- **`.claude/skills/bead-stl-export/`** — defensive STL export with deterministic per-part print-orientation flip; strips MA_* and DBG_* first.
 - **`.mcp.json`** — wires up `uvx blender-mcp` as a project-scoped MCP server. Loaded at Claude Code startup.
 
 ## Working norms in this repo
