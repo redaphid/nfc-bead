@@ -66,20 +66,19 @@ PEG_CLEARANCE = 0.1
 #   to bead edge: TARGET_WIDTH/2 - 6.75 - 1 (peg radius) = 0.75 mm
 PEGS = [(-6.75, 0.0), (6.75, 0.0), (0.0, -6.75)]
 
-# Spiral — raised on outer face of top half. Tuned to match the dense
-# red-on-black spiral reference: many tight turns with the gap between
-# arms wider than the arms themselves, so the bead-color shows MORE
-# than the spiral-color (black-dominant if printed black-body / red-
-# spiral, red-dominant for the inverse).
+# Spiral — raised on outer face of top half. Tuned to match the chunky
+# red-on-black reference image: 3 strong turns, thick arms, arm-dominant
+# (arm wider than gap). The reference's "many turns" appearance is
+# motion-blur ghosting in the post-processing, not actual extra arms.
 SPIRAL_HEIGHT      = 0.5    # mm above outer face
 SPIRAL_OUTER_R     = 6.5    # mm  (~76% of bead radius)
-SPIRAL_TURNS       = 6.0    # was 3.5 — denser turns to match the reference
-SPIRAL_ARM_WIDTH   = 0.5    # mm — at 6 turns / 6.5 mm radius the gap is ~0.58 mm
-                            # so the body color shows slightly more than the
-                            # spiral color (matching the reference proportion).
-                            # 0.5 mm is also the safe floor for a 0.4 mm nozzle.
-SPIRAL_SAMPLES     = 1200   # bumped from 720 — the tighter turns at the center
-                            # need more samples to stay smooth
+SPIRAL_TURNS       = 3.0    # 3 strong turns — matches the reference's actual
+                            # turn count once the motion blur is stripped
+SPIRAL_ARM_WIDTH   = 1.6    # mm — at 3 turns / 6.5 mm radius the gap is ~0.57 mm
+                            # so the spiral arm is roughly 3× the gap (arm-dominant,
+                            # matching the reference where the spiral color
+                            # dominates over the background between turns)
+SPIRAL_SAMPLES     = 720    # 3 turns of fewer revs needs fewer samples
 SPIRAL_HOLE_GUARD  = 5.0    # trim spiral above this Y so it clears the string hole
 
 # ═══════════════════════════════════════════════════════════
