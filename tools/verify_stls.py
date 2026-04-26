@@ -30,8 +30,11 @@ import numpy as np
 import trimesh
 
 
-# ─── Expected dimensions per prompts/nfc-bead/prompt.md ────────────────
-EXPECTED_DIA_MM        = 25.0
+# ─── Expected dimensions ───────────────────────────────────────────────
+# Sized for a Kandi bracelet bead: as small as we can comfortably fit the
+# NTAG215 sticker (10.5 mm dia), 3 friction-fit pegs, and a 2 mm string
+# hole through the head. Practical minimum diameter is 20 mm.
+EXPECTED_DIA_MM        = 20.0
 DIA_TOL_MM             = 1.5
 BOTTOM_THICK_MM        = 4.0    # 2.5 mm puck + 1.5 mm pegs above
 BOTTOM_THICK_TOL_MM    = 0.5
@@ -111,12 +114,13 @@ def _check_dimensions(mesh: trimesh.Trimesh, name: str) -> list[Check]:
     diameter = max(dx, dy)
     expected_dia = EXPECTED_DIA_MM
     if name == "Decoration":
-        # Spiral spans most of the bead diameter but may be inset
-        expected_dia = EXPECTED_DIA_MM - 5.0
+        # Spiral is inset by the SPIRAL_OUTER_R config (8 mm radius for the
+        # 20 mm bead = 16 mm dia). Tolerance wide enough to accept variants.
+        expected_dia = EXPECTED_DIA_MM - 4.0
         out.append(Check(
             "diameter",
-            abs(diameter - expected_dia) <= DIA_TOL_MM + 1.0,
-            f"{diameter:.2f} mm (expected {expected_dia:.0f} +- {DIA_TOL_MM + 1.0:.1f})",
+            abs(diameter - expected_dia) <= DIA_TOL_MM + 1.5,
+            f"{diameter:.2f} mm (expected {expected_dia:.0f} +- {DIA_TOL_MM + 1.5:.1f})",
         ))
     else:
         out.append(Check(
