@@ -21,7 +21,7 @@ You are helping the user design and build a new two-half snap-fit NFC charm. The
 5. **Ask the user** for what they actually need to make creative decisions on:
    - The silhouette: SVG path on disk, or a description (offer to sketch via SVG if needed).
    - String-hole position: usually through the head/top of the silhouette along the long axis. Specify Y in mm.
-   - Any dimension overrides (default is 25mm wide, 5mm thick, 10.5mm × 0.8mm NFC pocket, 3 pegs).
+   - Any dimension overrides (default is **17 mm wide** for kandi-bracelet beads — bump for larger charms; 5 mm thick, 10.5 × 0.8 mm NFC pocket, 3 pegs at radius 6.75 mm, 1.2 mm string hole for elastic cord).
    - Theme/aesthetic notes for naming and any flourishes.
 6. **Propose** peg positions and NFC pocket center based on the silhouette's bounding box and interior — show the user before building. Triangulated, ≥1mm clear of NFC pocket / string hole / silhouette edge.
 7. **Build**: copy `build_charm.py.example` to a per-charm script at `beads/<name>/build_<name>.py`, update the CONFIG block at the top, run via the Blender MCP if connected (preferred) or `blender --background --python beads/<name>/build_<name>.py` headless.
