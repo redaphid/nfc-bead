@@ -1,6 +1,6 @@
 # Print Guide — Multi-color NFC Bead on Centauri Carbon 2
 
-End-to-end workflow for printing a 20 mm kandi-bracelet NFC bead in two filament colors (red body + black decoration) on a Centauri Carbon 2 with Elegoo Slicer.
+End-to-end workflow for printing a **17 mm kandi-bracelet NFC bead** in two filament colors (red body + black decoration, or any pairing) on a Centauri Carbon 2 with Elegoo Slicer. 17 mm is the Kandi floor — smallest comfortable diameter that fits the NTAG215 sticker, 3 friction-fit pegs, and a 1.2 mm string hole for elastic cord.
 
 The Centauri Carbon 2 is **multi-filament** — auto-feeds between filaments mid-print. **Do NOT use M600 / manual filament-swap workflows on this hardware.** The slicer assigns filaments per part and the printer handles every transition automatically.
 
@@ -59,7 +59,7 @@ If you don't have a reference 3MF set up yet, drop the three STLs in directly:
 
 ## Print
 
-Send the gcode to the printer. Total print time at 0.12 mm / 100% infill / 20 mm bead: **~20–30 minutes per half** including the wipe tower. The Centauri Carbon 2 auto-feeds the right filament at every transition — zero operator intervention.
+Send the gcode to the printer. Total print time at 0.12 mm / 100% infill / 17 mm bead: **~15–25 minutes per half** including the wipe tower. The Centauri Carbon 2 auto-feeds the right filament at every transition — zero operator intervention.
 
 ## After printing
 
@@ -84,7 +84,7 @@ It loads the 3 STLs in `tmp/latest/` via `trimesh` and checks:
 | `geometry` | vertex/face counts > 0 |
 | `watertight` | manifold (every edge has exactly 2 face uses) |
 | `bed-flat` | `Bottom` and `Top` start at z=0 |
-| `diameter` | within ±1.5 mm of the expected 20 mm |
+| `diameter` | within ±1.5 mm of the expected 17 mm |
 | `thickness` | bottom 4 mm ±0.5, top 2.5 mm ±0.3, decoration relief 0.5 mm ±0.2 |
 | `decoration on top` | gap top_max → deco_min in [-0.02, +0.10] mm |
 | `decoration X/Y aligned` | top center and decoration center within 1 mm X / 2 mm Y |

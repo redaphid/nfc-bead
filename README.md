@@ -57,13 +57,13 @@ Headless `blender --background --python` works without any of this — the MCP i
 
 | Feature | Value |
 |---|---|
-| Width | 25 mm (sized for Kandi bracelets) |
+| Width | **17 mm** (Kandi-bracelet floor — smallest comfortable diameter that fits the NFC sticker + pegs + string hole) |
 | Thickness | 5 mm (2.5 mm × 2 halves) |
-| String hole | 2 mm dia, X-axis through head |
-| NFC pocket | 10.5 mm dia × 0.8 mm deep (NTAG215, 10mm sticker) |
-| Pegs | 3 × 2 mm dia × 1.5 mm tall, 0.1 mm clearance per side |
+| String hole | **1.2 mm dia**, X-axis through head (sized for elastic Kandi cord) |
+| NFC pocket | 10.5 mm dia × 0.8 mm deep (NTAG215, 10mm sticker) — **centered** |
+| Pegs | 3 × 2 mm dia × 1.5 mm tall, 0.1 mm clearance per side, at radius 6.75 mm from origin |
 
-Override any of these per charm in the CONFIG block.
+Override any of these per charm in the CONFIG block. Larger silhouettes (e.g. the original Wooli mammoth at 25 mm) just bump `TARGET_WIDTH` and re-derive peg positions.
 
 ## Print settings
 

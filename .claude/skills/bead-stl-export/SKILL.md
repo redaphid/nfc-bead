@@ -55,7 +55,7 @@ Per part:
 - **geometry** — vertex/face counts > 0
 - **watertight** — manifold per `trimesh.is_watertight` (every edge has exactly 2 face uses)
 - **bed-flat** — `Bottom` and `Top` start at z=0 (Decoration exempt — it lives in Top's frame)
-- **diameter** — within tolerance of `EXPECTED_DIA_MM` (default 25 mm ±1.5)
+- **diameter** — within tolerance of `EXPECTED_DIA_MM` (default 17 mm ±1.5 — kandi-bracelet floor)
 - **thickness** — Bottom 4 mm ±0.5, Top 2.5 mm ±0.3, Decoration 0.5 mm ±0.2
 
 Cross-part:

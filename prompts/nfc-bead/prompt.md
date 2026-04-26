@@ -24,9 +24,9 @@ Target NFC tag: NTAG215, 10mm diameter sticker (e.g. `https://www.amazon.com/dp/
 
 | Feature | Value | Notes |
 |---|---|---|
-| Overall width | 25 mm | sized for Kandi bracelets; scale on import |
+| Overall width | 17 mm | Kandi-bracelet floor; smallest comfortable diameter that fits the 10.5 mm NFC pocket + 3 pegs + a 1.2 mm string hole. Larger silhouettes bump up to 20–25 mm. |
 | Total thickness | 5 mm | split as 2.5 mm + 2.5 mm |
-| String hole | 2 mm dia | runs along the X axis (lengthwise through the head/top) |
+| String hole | 1.2 mm dia | runs along the X axis (lengthwise through the head/top); sized for elastic Kandi cord (~1 mm). Larger thread → bump to 2 mm. |
 | NFC pocket | 10.5 mm dia × 0.8 mm deep | on the inside face of the bottom half only |
 | Peg diameter | 2 mm | bumped up from 1.5 — stronger, less prone to snapping |
 | Peg height | 1.5 mm | |
