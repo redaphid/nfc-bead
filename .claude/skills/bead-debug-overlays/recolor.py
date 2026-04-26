@@ -31,25 +31,25 @@ Coordinate convention (the canonical print-layout produced by build_*.py):
 import bpy, math
 
 # ─── CONFIG — pull from beads/<name>/build_<name>.py CONFIG block ───
-# Active bead: deadmau5 (mid-pipeline, pre-flip)
-PEGS         = [(-6.0, 5.0), (6.0, 5.0), (0.0, -9.0)]
+# Active bead: rezz (post-flip; print-layout halves at X=±18; HOLE_Y=9 etc.)
+PEGS         = [(-7.5, 3.0), (7.5, 3.0), (0.0, -10.0)]
 PEG_DIA      = 2.0
 PEG_HEIGHT   = 1.5
 PEG_HOLE_DIA = PEG_DIA + 0.2          # 0.1 mm clearance per side
-NFC_POS      = (0.0, -1.5)
+NFC_POS      = (0.0, -1.0)
 NFC_DIA      = 10.5
 NFC_DEPTH    = 0.8
-HOLE_Y       = 6.0
+HOLE_Y       = 9.0
 HOLE_DIA     = 2.0
 
-DECORATION_NAME = "RezzSpiral"
-BOTTOM_X     = -15.0
-TOP_X        =  15.0
+DECORATION_NAME = "rezz_top_spiral"
+BOTTOM_X     = -18.0
+TOP_X        =  18.0
 
-# Set False if invoking mid-pipeline before bottom has been flipped 180° around X
-# (i.e. inner face still pointing up at z=0). The y-axis sign on bottom widgets
-# changes accordingly.
-BOTTOM_FLIPPED = False
+# True post-flip (print-layout — bottom rotated 180° around X so the silhouette
+# face is on the build plate and pegs point up). The y-axis sign on bottom-half
+# widgets flips accordingly.
+BOTTOM_FLIPPED = True
 
 # ─── CAD / drafting palette ───
 # Bodies — muted blueprint tones
@@ -88,9 +88,19 @@ def add_widget(name, mesh_call, rgba, location, rotation=(0, 0, 0), display='WIR
 
 
 # ─── Recolor printable parts ───
-bottom = bpy.data.objects.get("Bottom")
-top    = bpy.data.objects.get("Top")
-decor  = bpy.data.objects.get(DECORATION_NAME)
+# Canonical names first ("Bottom"/"Top"/decoration), then rezz-style fallbacks.
+def _find_mesh(canonical, fallback_suffixes):
+    o = bpy.data.objects.get(canonical)
+    if o and o.type == 'MESH':
+        return o
+    for o in bpy.data.objects:
+        if o.type == 'MESH' and any(o.name.lower().endswith(s) for s in fallback_suffixes):
+            return o
+    return None
+
+bottom = _find_mesh("Bottom", ("_bottom",))
+top    = _find_mesh("Top",    ("_top_body", "_top"))
+decor  = _find_mesh(DECORATION_NAME, ("_spiral", "_decor", "_accent"))
 
 if bottom: repaint(bottom, COL_BOTTOM, "DBG_Bottom_BlueprintGray")
 if top:    repaint(top,    COL_TOP,    "DBG_TopBody_BlueprintSage")
