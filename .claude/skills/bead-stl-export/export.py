@@ -23,12 +23,23 @@ from mathutils import Matrix, Vector
 # ─── Tunables ─────────────────────────────────────────────────────────
 # Canonical bead-component names (project-wide convention):
 #   Bottom, Top, Decoration. Build scripts must produce these names.
-# Legacy bead-specific names (rezz_bottom etc.) are accepted as a fallback.
+# No legacy fallbacks — canonical only.
 EXPECTED_OBJECTS = [
     "Bottom",
     "Top",
     "Decoration",
 ]
+
+# Parts that should share another part's bed-flatten shift instead of using
+# their own bbox center. This preserves the assembly position when the user
+# merges them in the slicer ("one object with parts" / "Combine").
+#   Decoration shares Top's shift so it stays on top of Top's outer face
+#   when merged. Without this, both Decoration.stl and Top.stl import to the
+#   build plate with their own bbox centers at origin → spiral overlaps the
+#   body inside the merged object.
+EXPORT_SHARE_SHIFT_WITH = {
+    "Decoration": "Top",
+}
 
 OUT_DIR = None     # default: tmp/stl_export_<timestamp>/ in repo root
 
@@ -173,6 +184,7 @@ def _resolve_flip(obj_name):
     return EXPORT_FLIP_X_DEG.get(obj_name, 0.0)
 
 manifest = []
+_shifts = {}   # remember each parent's bed-flatten shift so children can re-use
 for obj in targets:
     flip_deg = _resolve_flip(obj.name)
 
@@ -197,19 +209,29 @@ for obj in targets:
         print(f"[stl_export]   {obj.name}: applied {flip_deg:.0f} deg X-flip about bbox center for export")
 
     # ── Shift each part to (X=0, Y=0, Z>=0) so the slicer sees it bed-flat ──
-    # Without this, parts that sit above world z=0 in the live scene (e.g. a
-    # spiral on top of the top body at world z=2.5) export with their min-Z
-    # at 2.5, which the slicer renders as floating above the build plate
-    # (looks like a raft / gap). Shifting min-Z to 0 makes each STL load
-    # flush on the build plate; centering X/Y means the slicer's auto-arrange
-    # has nothing to fight against.
+    # Bottom and Top use their own bbox center → they import flush on the
+    # build plate. Decoration uses Top's shift (X,Y) and Top's Z-zero so
+    # the spiral preserves its position above Top's outer face when the
+    # user merges them as "one object with parts" in the slicer.
     bb = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
-    cx = sum(v.x for v in bb) / 8
-    cy = sum(v.y for v in bb) / 8
-    zmin = min(v.z for v in bb)
-    obj.matrix_world = Matrix.Translation((-cx, -cy, -zmin)) @ obj.matrix_world
+    cx_own = sum(v.x for v in bb) / 8
+    cy_own = sum(v.y for v in bb) / 8
+    zmin_own = min(v.z for v in bb)
+
+    share_with = EXPORT_SHARE_SHIFT_WITH.get(obj.name)
+    if share_with and share_with in _shifts:
+        cx, cy, zoff = _shifts[share_with]
+        # Use parent's X/Y shift verbatim; use parent's Z-shift too so the
+        # decoration keeps its world-Z relative to the parent (Top sits at
+        # Z=0..2.5, Decoration sits at Z=2.5..3.0 — stacked correctly).
+        obj.matrix_world = Matrix.Translation((cx, cy, zoff)) @ obj.matrix_world
+        print(f"[stl_export]   {obj.name}: shared shift from {share_with} (X={cx:+.2f} Y={cy:+.2f} Z={zoff:+.2f}); preserves stacking")
+    else:
+        obj.matrix_world = Matrix.Translation((-cx_own, -cy_own, -zmin_own)) @ obj.matrix_world
+        # Remember this shift so any child parts can reuse it
+        _shifts[obj.name] = (-cx_own, -cy_own, -zmin_own)
+        print(f"[stl_export]   {obj.name}: bed-flattened (shift X={-cx_own:+.2f} Y={-cy_own:+.2f} Z={-zmin_own:+.2f})")
     bpy.context.view_layer.update()
-    print(f"[stl_export]   {obj.name}: bed-flattened (shift X={-cx:+.2f} Y={-cy:+.2f} Z={-zmin:+.2f})")
 
     bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)
