@@ -32,40 +32,47 @@ SVG_PATH     = os.path.join(_HERE, "silhouette.svg")
 OUTPUT_DIR   = os.path.join(_HERE, "print")
 STAGES_DIR   = os.path.join(_HERE, "stages")
 
-# Sized for a Kandi bracelet bead — small enough to comfortably wear on a
-# wrist, large enough to enclose the NTAG215 sticker (10.5 mm dia) plus
-# the peg array.  Practical minimum diameter is ~20 mm: at 18 mm the
-# peg-clearance from the NFC pocket conflicts with the string-hole zone.
-TARGET_WIDTH  = 20.0    # mm — bead diameter (Kandi-compatible)
+# Sized for a Kandi bracelet bead — smallest comfortable diameter that
+# encloses the NTAG215 sticker (10.5 mm dia), 3 friction-fit pegs, and a
+# 2 mm string hole.  At 18 mm with NFC pocket CENTERED the peg array fits
+# at radius 7 mm from origin (1 mm wall to bead edge, 0.75 mm gap from NFC
+# edge), and the string hole at Y=7.5 leaves a 0.5 mm wall to the top.
+# Below 17 mm walls drop to single-extrusion-line thickness — printable
+# but fragile.
+TARGET_WIDTH  = 18.0    # mm — bead diameter (Kandi-compatible, comfortable floor)
 THICKNESS     = 5.0     # mm — total split into 2 × 2.5 mm halves
 
 # String hole — horizontal through top of bead so it lays face-forward on a wrist.
 # 2 mm dia is the standard Kandi thread size — keep this fixed regardless of
 # overall bead size.
 HOLE_DIAMETER = 2.0
-HOLE_Y        = 7.0     # mm — through the top edge (was 9.0 for the 25 mm bead)
+HOLE_Y        = 7.5     # mm — through the top edge (top wall = 18/2 - 7.5 - 1 = 0.5 mm)
 
 # NFC pocket on bottom half inner face — fixed by NTAG215 sticker geometry.
+# Centered (was (0,-1) at 20 mm; the south offset forced awkward peg positions
+# that didn't fit at 18 mm). Centering frees the peg array to use the full
+# annulus around the NFC pocket.
 NFC_DIAMETER  = 10.5
 NFC_DEPTH     = 0.8
-NFC_POS       = (0.0, -1.0)   # slightly south of center to clear string hole
+NFC_POS       = (0.0, 0.0)
 
 # Pegs — friction fit
 PEG_DIAMETER  = 2.0
 PEG_HEIGHT    = 1.5
 PEG_CLEARANCE = 0.1
 
-# Peg positions — triangulated around the NFC pocket. Each peg center is at
-# distance >= NFC_DIAMETER/2 + 1 mm gap + PEG_DIAMETER/2 = 7.25 mm from NFC
-# center (0, -1), and at most TARGET_WIDTH/2 - 1 mm wall - PEG_DIAMETER/2 = 8 mm
-# from bead center. Avoid Y > +5 (would intersect the string-hole zone at Y=7±1).
-PEGS = [(-7.25, -1.0), (7.25, -1.0), (0.0, -8.25)]
+# Peg positions — triangulated at radius 7 mm from origin (NFC center).
+# East + west avoid the string-hole zone at +Y; the third peg sits south of
+# the NFC pocket. Each clearance: 7 - 5.25 (NFC radius) - 1 (peg radius) =
+# 0.75 mm gap from NFC edge; bead radius 9 - 7 - 1 (peg radius) = 1 mm wall
+# to bead edge.
+PEGS = [(-7.0, 0.0), (7.0, 0.0), (0.0, -7.0)]
 
 # Spiral — raised on outer face of top half. Scales with bead diameter.
 SPIRAL_HEIGHT      = 0.5    # mm above outer face
-SPIRAL_OUTER_R     = 8.0    # mm  (was 10.0 for the 25 mm bead)
+SPIRAL_OUTER_R     = 7.0    # mm  (proportional: ~80% of bead radius)
 SPIRAL_TURNS       = 3.5
-SPIRAL_ARM_WIDTH   = 1.2    # mm  (was 1.4; tighter to fit the smaller spiral)
+SPIRAL_ARM_WIDTH   = 1.0    # mm  (tighter to fit the smaller spiral)
 SPIRAL_SAMPLES     = 720    # polyline samples around the spiral
 SPIRAL_HOLE_GUARD  = 5.5    # trim spiral above this Y so it clears the string hole
 
