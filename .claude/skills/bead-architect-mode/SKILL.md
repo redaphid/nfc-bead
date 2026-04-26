@@ -7,7 +7,7 @@ description: Drape a hand-drafted parchment+ink+watercolor 'architect' aesthetic
 
 ## Project-wide naming convention
 
-Same as `bead-debug-overlays`: canonical Blender object names are `Bottom`, `Top`, `Decoration`. `architect_on.py` paints these by exact name — no fallback. Build scripts must produce these names.
+Same as `bead-debug-overlays`: canonical Blender object names are `Bottom`, `Top`, `Decoration`. `architect_on.py` paints these directly. **No legacy-suffix fallbacks** — if the canonical names aren't present, the script no-ops rather than guessing.
 
 Two layers: the **look** (parchment + ink + watercolor) and the **animations** (5 seamless-loopable camera moves). All idempotent.
 
@@ -21,6 +21,28 @@ Two layers: the **look** (parchment + ink + watercolor) and the **animations** (
 ## Animation scripts
 
 Each `anim_*.py` requires `architect_on.py` to have set up the camera rig. **All produce seamless continuous loops** when Blender's playback wraps from `frame_end` back to `frame_start` — kick one off, walk away, the viewport keeps moving forever.
+
+### Stored in the .blend → instant switch
+
+Each `anim_*.py` writes its keyframes into **named Action data blocks** with the convention `BeadAnim_<anim>_<role>` and `use_fake_user=True` so they persist when the .blend is saved. Roles are `pivot` / `cam` / `tgt` / `sun` depending on what the anim drives. **Switching between anims is then a one-line action reassignment** — no re-keying, no rebuild.
+
+Host-shell CLI (the easy way):
+
+```sh
+uv run nfc-anim-switch _LIST          # list all stored anims
+uv run nfc-anim-switch orbit          # apply
+uv run nfc-anim-switch tour
+uv run nfc-anim-switch raking_light
+```
+
+Inside Blender:
+
+```python
+ANIM_NAME = "orbit"
+exec(open(r"<repo>/.claude/skills/bead-architect-mode/anim_switch.py").read())
+```
+
+The switcher reads `bpy.data.actions`, looks up `BeadAnim_<name>_<role>` for each rig component, assigns it (or `None` to clear that role), recomputes the scene frame range from the union of the active actions' frame ranges, and starts/stops playback (static anims pause at frame 1; animated anims play). Re-running an `anim_*.py` recreates its action from scratch; other anims' actions are untouched.
 
 | Script | Loop type | Default cadence | What it does |
 |---|---|---|---|
@@ -72,8 +94,6 @@ When `RETINT_DBG_OVERLAYS = True` in `architect_on.py`, any overlays from `bead-
 
 ## How to invoke
 
-Need a scene to test against? `samples/rezz_sample.blend` ships with canonical `Bottom`/`Top`/`Decoration` objects — open it via `tools/launch.ps1` (which falls back to it automatically when no charm-specific blend exists) or directly in Blender. Drop straight into the architect look:
-
 ```python
 # Apply look + start orbit
 exec(open(r"<repo>/.claude/skills/bead-architect-mode/architect_on.py").read())
@@ -102,3 +122,6 @@ exec(open(r"<repo>/.claude/skills/bead-architect-mode/anim_tour.py").read())
 exec(open(r"<repo>/.claude/skills/bead-stl-export/export.py").read())
 ```
 
+## Legacy
+
+`legacy/master_architect.py` and `legacy/technical_diagram.py` are the original monolith versions. Superseded by the decomposed `architect_on.py` + `anim_*.py`. Kept on the branch for reference; do not invoke.

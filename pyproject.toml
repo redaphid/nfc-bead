@@ -40,6 +40,8 @@ nfc-make-3mf      = "tools.make_3mf:main"
 # from a reference 3MF in tmp/latest/slicer_template/. Recommended path
 # when you have a slicer template; falls back to nfc-make-3mf otherwise.
 nfc-build-3mf     = "tools.build_3mf:main"
+# Switch the live Blender scene to a stored animation (orbit, tour, etc.)
+nfc-anim-switch    = "tools.anim_switch:main"
 
 [build-system]
 requires = ["hatchling"]
