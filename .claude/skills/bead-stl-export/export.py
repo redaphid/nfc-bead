@@ -258,9 +258,13 @@ tmp_root = os.path.dirname(out_dir)            # e.g. <repo>/tmp
 latest_dir = os.path.join(tmp_root, "latest")
 # Wipe any prior contents so 'latest' truly reflects the most recent export
 if os.path.isdir(latest_dir):
+    # Only delete files this script previously created — never touch
+    # user-placed files (e.g. a hand-built .3mf project file).
     for old in os.listdir(latest_dir):
         old_path = os.path.join(latest_dir, old)
-        if os.path.isfile(old_path):
+        if not os.path.isfile(old_path):
+            continue
+        if old.lower().endswith(".stl") or old == "manifest.txt":
             try: os.remove(old_path)
             except OSError: pass
 os.makedirs(latest_dir, exist_ok=True)
