@@ -34,24 +34,22 @@ STAGES_DIR   = os.path.join(_HERE, "stages")
 
 # Sized for a Kandi bracelet bead — smallest comfortable diameter that
 # encloses the NTAG215 sticker (10.5 mm dia), 3 friction-fit pegs, and a
-# 2 mm string hole.  At 18 mm with NFC pocket CENTERED the peg array fits
-# at radius 7 mm from origin (1 mm wall to bead edge, 0.75 mm gap from NFC
-# edge), and the string hole at Y=7.5 leaves a 0.5 mm wall to the top.
-# Below 17 mm walls drop to single-extrusion-line thickness — printable
-# but fragile.
-TARGET_WIDTH  = 18.0    # mm — bead diameter (Kandi-compatible, comfortable floor)
+# string hole sized for elastic Kandi cord (~1 mm). At 17 mm with NFC
+# centered + a 1.2 mm string hole, the peg array fits at radius 6.75 mm
+# (0.5 mm gap to NFC edge, 0.75 mm wall to bead edge), and the string
+# hole at Y=7 leaves a 0.9 mm top wall.
+# 16 mm requires sub-0.5 mm walls everywhere — fragile, not recommended.
+TARGET_WIDTH  = 17.0    # mm — bead diameter (Kandi floor with 1.2 mm string hole)
 THICKNESS     = 5.0     # mm — total split into 2 × 2.5 mm halves
 
-# String hole — horizontal through top of bead so it lays face-forward on a wrist.
-# 2 mm dia is the standard Kandi thread size — keep this fixed regardless of
-# overall bead size.
-HOLE_DIAMETER = 2.0
-HOLE_Y        = 7.5     # mm — through the top edge (top wall = 18/2 - 7.5 - 1 = 0.5 mm)
+# String hole — horizontal through top of bead so it lays face-forward on a
+# wrist. 1.2 mm fits standard Kandi elastic cord (~1 mm dia) with margin.
+HOLE_DIAMETER = 1.2
+HOLE_Y        = 7.0     # mm — top wall = TARGET_WIDTH/2 - HOLE_Y - HOLE_DIAMETER/2 = 0.9 mm
 
 # NFC pocket on bottom half inner face — fixed by NTAG215 sticker geometry.
-# Centered (was (0,-1) at 20 mm; the south offset forced awkward peg positions
-# that didn't fit at 18 mm). Centering frees the peg array to use the full
-# annulus around the NFC pocket.
+# Centered (south offset would force awkward peg positions that don't fit
+# below 18 mm).
 NFC_DIAMETER  = 10.5
 NFC_DEPTH     = 0.8
 NFC_POS       = (0.0, 0.0)
@@ -61,20 +59,28 @@ PEG_DIAMETER  = 2.0
 PEG_HEIGHT    = 1.5
 PEG_CLEARANCE = 0.1
 
-# Peg positions — triangulated at radius 7 mm from origin (NFC center).
+# Peg positions — triangulated at radius 6.75 mm from origin (NFC center).
 # East + west avoid the string-hole zone at +Y; the third peg sits south of
-# the NFC pocket. Each clearance: 7 - 5.25 (NFC radius) - 1 (peg radius) =
-# 0.75 mm gap from NFC edge; bead radius 9 - 7 - 1 (peg radius) = 1 mm wall
-# to bead edge.
-PEGS = [(-7.0, 0.0), (7.0, 0.0), (0.0, -7.0)]
+# the NFC pocket. Clearances:
+#   to NFC edge:  6.75 - 5.25 (NFC radius) - 1 (peg radius) = 0.5 mm
+#   to bead edge: TARGET_WIDTH/2 - 6.75 - 1 (peg radius) = 0.75 mm
+PEGS = [(-6.75, 0.0), (6.75, 0.0), (0.0, -6.75)]
 
-# Spiral — raised on outer face of top half. Scales with bead diameter.
+# Spiral — raised on outer face of top half. Tuned to match the dense
+# red-on-black spiral reference: many tight turns with the gap between
+# arms wider than the arms themselves, so the bead-color shows MORE
+# than the spiral-color (black-dominant if printed black-body / red-
+# spiral, red-dominant for the inverse).
 SPIRAL_HEIGHT      = 0.5    # mm above outer face
-SPIRAL_OUTER_R     = 7.0    # mm  (proportional: ~80% of bead radius)
-SPIRAL_TURNS       = 3.5
-SPIRAL_ARM_WIDTH   = 1.0    # mm  (tighter to fit the smaller spiral)
-SPIRAL_SAMPLES     = 720    # polyline samples around the spiral
-SPIRAL_HOLE_GUARD  = 5.5    # trim spiral above this Y so it clears the string hole
+SPIRAL_OUTER_R     = 6.5    # mm  (~76% of bead radius)
+SPIRAL_TURNS       = 6.0    # was 3.5 — denser turns to match the reference
+SPIRAL_ARM_WIDTH   = 0.5    # mm — at 6 turns / 6.5 mm radius the gap is ~0.58 mm
+                            # so the body color shows slightly more than the
+                            # spiral color (matching the reference proportion).
+                            # 0.5 mm is also the safe floor for a 0.4 mm nozzle.
+SPIRAL_SAMPLES     = 1200   # bumped from 720 — the tighter turns at the center
+                            # need more samples to stay smooth
+SPIRAL_HOLE_GUARD  = 5.0    # trim spiral above this Y so it clears the string hole
 
 # ═══════════════════════════════════════════════════════════
 # BUILD HELPERS
