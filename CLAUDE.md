@@ -26,6 +26,11 @@ Don't repeat the greeting on later turns even if the conversation pauses; once i
 - **`SETUP.md`** — one-time and per-session setup for the live Blender MCP workflow (Windows-focused; macOS / Linux outlined).
 - **`tools/launch.ps1`** + **`tools/blender_bootstrap.py`** — one-shot launcher that opens Blender with the addon installed/enabled and the MCP server running. Use this when the user wants to start (or restart after a crash) the live workflow. Don't walk them through the manual click-through unless they specifically ask.
 - **`tools/blender_send.py`** — sends Python code directly to the BlenderMCP socket (`localhost:9876`). Use when the Claude Code MCP layer has dropped but Blender is still up.
+- **`pyproject.toml`** — uv-managed Python project. Host-side CLI commands (run via `uv run <name>`):
+  - `nfc-blender-send` — send code to Blender's MCP socket (alternative to `python tools/blender_send.py`)
+  - `nfc-verify-stls` — load `tmp/latest/*.stl` via trimesh, run 14+ structural checks, exit non-zero on any failure
+  - `nfc-make-3mf` — generic 3MF Consortium bundle of the latest STLs (no slicer-specific config)
+  - `nfc-build-3mf` — slicer-ready Bambu Studio / Elegoo Slicer 3MF with parts pre-merged, extruders assigned, brim/raft disabled, printer profile inherited from a reference template at `tmp/latest/slicer_template/`
 - **`samples/rezz_sample.blend`** — tracked reference scene with canonical `Bottom`/`Top`/`Decoration` objects. `tools/launch.ps1` falls back to this when no charm-specific blend exists, so the architect / debug-overlays / stl-export skills always have something to act on.
 - **`print/PRINT_GUIDE.md`** — multi-color print workflow for the Centauri Carbon 2 / Elegoo Slicer (filament assignment, layer height, wipe tower, slice verification).
 - **`.claude/skills/nfc-bead/`** — auto-loads on charm requests. Bundles the Blender MCP addon source.

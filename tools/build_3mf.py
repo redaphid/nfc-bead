@@ -528,9 +528,13 @@ def verify(path, parts):
     print(f"[3mf] OK — {path}")
 
 
-if __name__ == "__main__":
+def main():
     p = argparse.ArgumentParser()
     p.add_argument("-o", "--out", default=str(DEFAULT_OUT))
     p.add_argument("-t", "--template-dir", default=str(TEMPLATE_DIR))
     args = p.parse_args()
     build(out_path=Path(args.out), template_dir=Path(args.template_dir))
+
+
+if __name__ == "__main__":
+    main()
