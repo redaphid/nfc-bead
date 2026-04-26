@@ -68,7 +68,7 @@ A shot is done when:
 
 1. A still screenshot taken at any frame in the loop could plausibly appear in a slick design portfolio.
 2. The full loop (90 s for orbit, 12 s for macro pull, etc.) can play in the background without the user wanting to look away.
-3. The shot survives running on at least three different bead silhouettes (deadmau5, Marshmello, Daft Punk hexagon, rezz, etc.) without visual artifacts unique to one shape.
+3. The shot survives running on at least three different bead silhouettes (deadmau5, Marshmello, Daft Punk hexagon, etc.) without visual artifacts unique to one shape.
 
 Until those three pass: keep iterating. Take screenshots. Read them. Fix the biggest issue. Repeat.
 

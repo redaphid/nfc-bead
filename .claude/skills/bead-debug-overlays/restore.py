@@ -8,7 +8,8 @@ Idempotent: safe to run when there are no overlays or when overlays
 are already gone.
 
 Edit the CONFIG block to match the bead's production palette. Defaults
-mirror the rezz bead (red bodies + black spiral, per build_rezz.py).
+are red bodies + black decoration, the most common two-color setup;
+override per charm in `build_<charm>.py`.
 """
 import bpy
 

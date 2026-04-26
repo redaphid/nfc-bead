@@ -9,7 +9,7 @@
 
 .PARAMETER Bead
     Charm name under beads/<bead>/. Loads beads/<bead>/print/<bead>_charm.blend
-    if it exists. Default: rezz.
+    if it exists. Defaults to no specific charm — falls back to the sample.
 
 .PARAMETER BlendFile
     Explicit .blend path. Overrides -Bead.
@@ -19,13 +19,13 @@
     D:\tools\blender\blender.exe.
 
 .EXAMPLE
-    .\tools\launch.ps1                          # rezz bead, default Blender
-    .\tools\launch.ps1 -Bead wooli              # different bead
+    .\tools\launch.ps1                          # opens samples/rezz_sample.blend (the canonical reference scene)
+    .\tools\launch.ps1 -Bead wooli              # loads beads/wooli/print/wooli_charm.blend
     .\tools\launch.ps1 -BlendFile foo.blend     # arbitrary file
-    .\tools\launch.ps1 -Bead rezz -Blender 'C:\Program Files\Blender Foundation\Blender 4.4\blender.exe'
+    .\tools\launch.ps1 -Blender 'C:\Program Files\Blender Foundation\Blender 4.4\blender.exe'
 #>
 param(
-    [string]$Bead      = 'rezz',
+    [string]$Bead      = '',
     [string]$BlendFile = '',
     [string]$Blender   = ''
 )
@@ -54,10 +54,10 @@ if (-not $BlendFile -and $Bead) {
     if (Test-Path $candidate) { $BlendFile = $candidate }
 }
 
-# Fallback: ship the rezz sample scene if nothing more specific resolved.
+# Fallback: open the canonical sample scene if nothing more specific resolved.
 # samples/rezz_sample.blend is a tracked reference scene with canonical
-# Bottom/Top/Decoration objects — handy for exercising the architect /
-# debug-overlays / stl-export skills without first running a full build.
+# Bottom/Top/Decoration objects — exercises the architect / debug-overlays /
+# stl-export skills without first running a full charm build.
 if (-not $BlendFile) {
     $sample = Join-Path $Repo 'samples\rezz_sample.blend'
     if (Test-Path $sample) { $BlendFile = $sample }

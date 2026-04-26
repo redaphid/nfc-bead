@@ -10,11 +10,10 @@ Idempotent. Safe to run when nothing is on (no-op).
 Does NOT touch DBG_* debug overlays or production materials. To return
 to production palette, run `restore.py` afterwards.
 
-Note: STL export from build_*.py uses name-targeted selection of the
-printable parts (Bottom, Top, decoration), so `architect_on.py`'s
-extras are already invisible to the export pipeline. This script
-exists for cases where the user wants the scene visually clean without
-exporting.
+Note: STL export selects the printable parts by canonical name
+(`Bottom`, `Top`, `Decoration`), so `architect_on.py`'s MA_* extras
+are already invisible to the export pipeline. This script exists for
+cases where the user wants the scene visually clean without exporting.
 """
 import bpy
 
@@ -34,12 +33,8 @@ def _strip_material(obj):
     for m in keep:
         obj.data.materials.append(m)
 
-for name in ("Bottom", "Top", "RezzSpiral", "Spiral", "Decoration", "Decor"):
+for name in ("Bottom", "Top", "Decoration"):
     _strip_material(bpy.data.objects.get(name))
-for o in bpy.data.objects:
-    if o.type == 'MESH' and o.name.lower().endswith(("_bottom", "_top", "_spiral",
-                                                      "_decor", "_accent")):
-        _strip_material(o)
 
 # Also drop unused MA_ materials from the data block list
 removed_mats = []

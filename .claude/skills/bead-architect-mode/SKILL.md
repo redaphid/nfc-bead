@@ -7,7 +7,7 @@ description: Drape a hand-drafted parchment+ink+watercolor 'architect' aesthetic
 
 ## Project-wide naming convention
 
-Same as `bead-debug-overlays`: canonical Blender object names are `Bottom`, `Top`, `Decoration`. `architect_on.py` paints these directly; legacy bead-specific names (`rezz_bottom`, `rezz_top_body`, `rezz_top_spiral`) are accepted as a suffix fallback (`_top_body` is checked BEFORE `_top` since `rezz_top_body` ends in `_body`).
+Same as `bead-debug-overlays`: canonical Blender object names are `Bottom`, `Top`, `Decoration`. `architect_on.py` paints these by exact name — no fallback. Build scripts must produce these names.
 
 Two layers: the **look** (parchment + ink + watercolor) and the **animations** (5 seamless-loopable camera moves). All idempotent.
 
@@ -102,6 +102,3 @@ exec(open(r"<repo>/.claude/skills/bead-architect-mode/anim_tour.py").read())
 exec(open(r"<repo>/.claude/skills/bead-stl-export/export.py").read())
 ```
 
-## Legacy
-
-`legacy/master_architect.py` and `legacy/technical_diagram.py` are the original monolith versions. Superseded by the decomposed `architect_on.py` + `anim_*.py`. Kept on the branch for reference; do not invoke.

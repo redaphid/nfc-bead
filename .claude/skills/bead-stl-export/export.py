@@ -21,23 +21,12 @@ import time
 from mathutils import Matrix, Vector
 
 # ─── Tunables ─────────────────────────────────────────────────────────
-# Canonical bead-component names (project-wide convention):
-#   Bottom, Top, Decoration. Build scripts must produce these names.
-# Legacy bead-specific names (rezz_bottom etc.) are accepted as a fallback.
+# Canonical bead-component names (project-wide convention).
+# Build scripts MUST produce in-Blender objects with exactly these names.
 EXPECTED_OBJECTS = [
     "Bottom",
     "Top",
     "Decoration",
-]
-# Fallback by suffix if canonical names aren't present
-FALLBACK_SUFFIXES = [
-    ("_bottom",     "Bottom"),
-    ("_top_body",   "Top"),
-    ("_top",        "Top"),
-    ("_top_spiral", "Decoration"),
-    ("_spiral",     "Decoration"),
-    ("_decor",      "Decoration"),
-    ("_accent",     "Decoration"),
 ]
 
 OUT_DIR = None     # default: tmp/stl_export_<timestamp>/ in repo root
@@ -48,15 +37,13 @@ OUT_DIR = None     # default: tmp/stl_export_<timestamp>/ in repo root
 #   Bottom: 180  → silhouette face on build plate, pegs point up
 #   Top:    0    → peg-hole face naturally on build plate, outer face up
 #   Decoration: 0
-# Override per bead by editing this dict; the value is keyed on the canonical
-# component name so legacy bead-specific names route correctly via FALLBACK_SUFFIXES.
 EXPORT_FLIP_X_DEG = {
     "Bottom":     180.0,
     "Top":          0.0,
     "Decoration":   0.0,
 }
 
-# Expected dimensions per prompts/nfc-bead/prompt.md (rezz defaults).
+# Expected dimensions per prompts/nfc-bead/prompt.md.
 # Overall bead is ~25mm diameter × ~5.5mm total thickness.
 EXPECTED_DIA_MM    = 25.0
 DIA_TOL_MM         = 1.5     # wide tolerance (different beads scale differently)
@@ -99,16 +86,6 @@ def _resolve_targets():
         o = bpy.data.objects.get(name)
         if o and o.type == 'MESH':
             targets.append(o)
-    if targets:
-        return targets
-    # Fallback by suffix
-    for suffix, fallback in FALLBACK_SUFFIXES:
-        for o in bpy.data.objects:
-            if o.type == 'MESH' and o.name.lower().endswith(suffix):
-                targets.append(o)
-        if not targets and (o := bpy.data.objects.get(fallback)):
-            if o.type == 'MESH':
-                targets.append(o)
     return targets
 
 
@@ -140,7 +117,7 @@ if removed_mats:
 # ─── Step 3: locate printable targets ─────────────────────────────────
 targets = _resolve_targets()
 if not targets:
-    raise RuntimeError(f"No printable objects found. Expected one of {EXPECTED_OBJECTS} or any *_bottom/_top/_spiral mesh.")
+    raise RuntimeError(f"No printable objects found. Scene must contain meshes named {EXPECTED_OBJECTS}.")
 
 print(f"[stl_export] export targets: {[o.name for o in targets]}")
 
@@ -189,14 +166,8 @@ print(f"[stl_export] writing to {out_dir}")
 # while the live scene is identical to its pre-export state.
 
 def _resolve_flip(obj_name):
-    """Return the flip-deg for a given object, falling back via FALLBACK_SUFFIXES."""
-    if obj_name in EXPORT_FLIP_X_DEG:
-        return EXPORT_FLIP_X_DEG[obj_name]
-    low = obj_name.lower()
-    for suffix, canonical in FALLBACK_SUFFIXES:
-        if low.endswith(suffix) and canonical in EXPORT_FLIP_X_DEG:
-            return EXPORT_FLIP_X_DEG[canonical]
-    return 0.0
+    """Return the flip-deg for a given object — straight dict lookup."""
+    return EXPORT_FLIP_X_DEG.get(obj_name, 0.0)
 
 manifest = []
 for obj in targets:
@@ -242,9 +213,39 @@ for obj in targets:
     manifest.append({"obj": obj.name, "stl": out_path, "bytes": size, "flipped": flip_deg != 0.0})
     print(f"[stl_export] {obj.name} -> {out_path} ({size} bytes" + (" [print-flipped]" if flip_deg != 0.0 else "") + ")")
 
-# ─── Step 7: report ───────────────────────────────────────────────────
+# ─── Step 7: also mirror to tmp/latest/ so the user always has a known-path copy ──
+import shutil
+tmp_root = os.path.dirname(out_dir)            # e.g. <repo>/tmp
+latest_dir = os.path.join(tmp_root, "latest")
+# Wipe any prior contents so 'latest' truly reflects the most recent export
+if os.path.isdir(latest_dir):
+    for old in os.listdir(latest_dir):
+        old_path = os.path.join(latest_dir, old)
+        if os.path.isfile(old_path):
+            try: os.remove(old_path)
+            except OSError: pass
+os.makedirs(latest_dir, exist_ok=True)
+for m in manifest:
+    if os.path.isfile(m["stl"]):
+        latest_path = os.path.join(latest_dir, os.path.basename(m["stl"]))
+        shutil.copy2(m["stl"], latest_path)
+        m["latest"] = latest_path
+
+# Also drop a manifest.txt in latest/ so the user (or future Claude) knows
+# what was exported and from where.
+manifest_path = os.path.join(latest_dir, "manifest.txt")
+with open(manifest_path, "w", encoding="utf-8") as fh:
+    fh.write(f"timestamp:    {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+    fh.write(f"timestamped:  {out_dir}\n")
+    fh.write(f"latest:       {latest_dir}\n\n")
+    for m in manifest:
+        flag = " [print-flipped]" if m.get("flipped") else ""
+        fh.write(f"  {m['obj']:<24} {m['bytes']:>8} bytes{flag}\n")
+
+# ─── Step 8: report ───────────────────────────────────────────────────
 print("\n=== STL EXPORT MANIFEST ===")
 for m in manifest:
     print(f"  {m['obj']:<24} {m['bytes']:>8} bytes   {m['stl']}")
 print("============================")
 print(f"[stl_export] done. {len(manifest)} STL(s) in {out_dir}")
+print(f"[stl_export] mirrored to {latest_dir}/ (always-current copy + manifest.txt)")

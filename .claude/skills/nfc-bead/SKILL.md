@@ -12,9 +12,9 @@ You are helping the user design and build a new two-half snap-fit NFC charm. The
 1. **Branch off `main` first.** Per-charm work never lives on `main`. Run `git status` to see the current branch — if the user is on `main` (or any branch that isn't named after this charm), create the charm branch before touching geometry:
    ```bash
    git checkout main && git pull --ff-only
-   git checkout -b <bead-name>          # name should match the charm — e.g. `rezz`, `wooli`
+   git checkout -b <bead-name>          # name should match the charm — e.g. `wooli`, `mammoth`
    ```
-   If they're already on a charm branch (e.g. resuming work), confirm and continue. If unsure what to name the branch, ask the user — usually the charm's theme/subject is the right name (`rezz`, `mammoth`, `octopus`).
+   If they're already on a charm branch (e.g. resuming work), confirm and continue. If unsure what to name the branch, ask the user — usually the charm's theme/subject is the right name (`wooli`, `mammoth`, `octopus`).
 2. **Read `prompts/nfc-bead/prompt.md`** to load the full recipe into context.
 3. **Read `build_charm.py.example`** to see the canonical Blender pipeline implementation. This is what you'll copy and adapt per charm.
 4. **Read `GUIDE.md`** for long-form context on lessons learned.
@@ -50,8 +50,8 @@ If the user wants the live Blender MCP workflow but doesn't have it running yet,
 1. **Verify prerequisites.** Blender 4.x+ installed (default `D:\tools\blender\blender.exe` on Windows; override via env `NFC_BEAD_BLENDER`) and `uvx` on `PATH` (winget package `astral-sh.uv`). If either is missing, install it before continuing — `winget install BlenderFoundation.Blender astral-sh.uv` (open a fresh shell after `uv` so PATH refreshes).
 2. **Use `tools/launch.ps1`** for everything. It's idempotent and one-shot:
    ```powershell
-   .\tools\launch.ps1                       # opens Blender pre-wired for the rezz bead
-   .\tools\launch.ps1 -Bead <other>         # different bead from beads/<other>/
+   .\tools\launch.ps1                       # opens Blender, falls back to samples/rezz_sample.blend if no charm-specific blend
+   .\tools\launch.ps1 -Bead <name>          # loads beads/<name>/print/<name>_charm.blend
    .\tools\launch.ps1 -BlendFile foo.blend  # arbitrary file
    ```
    The launcher calls `tools/blender_bootstrap.py` inside Blender, which copies the bundled addon into the user-addons directory if missing/stale, enables it persistently (`addon_utils.enable(..., persistent=True)`), saves user prefs (so a Blender crash doesn't wipe the enable state), and starts the MCP server.

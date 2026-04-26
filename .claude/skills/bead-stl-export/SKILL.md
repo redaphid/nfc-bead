@@ -7,7 +7,7 @@ description: Export the printable bead halves to STL files in a known-good state
 
 ## Project-wide naming convention
 
-Canonical Blender object names: `Bottom`, `Top`, `Decoration`. `export.py` defaults to these, with bead-specific suffix fallbacks (`_bottom`, `_top_body`, `_top`, `_top_spiral`, `_spiral`, `_decor`, `_accent`). STL filenames mirror the live object name — canonical-named scenes produce `Bottom.stl` / `Top.stl` / `Decoration.stl`. Rename the in-scene objects before invoking `export.py` if you need bead-prefixed STL filenames.
+Canonical Blender object names: `Bottom`, `Top`, `Decoration`. The scene must contain meshes with exactly these names — no fallback. STL filenames mirror the live object name, so the export produces `Bottom.stl`, `Top.stl`, `Decoration.stl`. Rename in-scene first if you want the on-disk filenames to be different (e.g. bead-prefixed for organizing across charms).
 
 A defensive STL export skill that guarantees the exported geometry is the **pure printable form**, not the cinematic / debug-decorated version of the scene.
 
@@ -43,23 +43,21 @@ EXPORT_FLIP_X_DEG = {
 
 The flip is applied as a temporary 180° rotation **around the part's bbox center** (not its origin — origin may not be the geometric center) just before `bpy.ops.wm.stl_export`. The original transform is restored after the write, so re-running the live scene's animations / camera shots is unaffected.
 
-Routes through `FALLBACK_SUFFIXES` so legacy bead-specific names get the same flip as their canonical counterpart (e.g. `rezz_bottom` is treated as `Bottom` and flipped 180°).
-
 **Why this matters:** the slicer should see a print-ready STL. Without this flip, the user has to manually re-orient the bottom in Elegoo Slicer every time, and an "auto-orient" feature can flip it the wrong way. With this flip baked into the export, dropping any of these STLs into the slicer Just Works.
 
 To override per bead — for instance if you build the bottom already-flipped — change the dict value to `0.0` for that part and re-export.
 
 ## Output location
 
-Default: `<repo>/tmp/stl_export_<timestamp>/`. Override via the `OUT_DIR` tunable at the top of `export.py`.
+Default: `<repo>/tmp/stl_export_<timestamp>/` for the timestamped archive of the run. Override via the `OUT_DIR` tunable at the top of `export.py`.
+
+**Always-current copy at `<repo>/tmp/latest/`**: every run also wipes and re-writes the same files into `tmp/latest/` so there's a known-path location for "the latest STLs" — no need to find the most-recent timestamped folder. A `manifest.txt` in that dir records what was exported and from where. `tmp/` is gitignored so these files stay local; they're derived artifacts that any export run will recreate.
 
 ## How to invoke
 
 ```python
 exec(open(r"<repo>/.claude/skills/bead-stl-export/export.py").read())
 ```
-
-For a different bead, edit `export.py`'s `EXPECTED_OBJECTS` list (defaults match the rezz bead: `rezz_bottom`, `rezz_top_body`, `rezz_top_spiral`).
 
 ## Why this exists
 

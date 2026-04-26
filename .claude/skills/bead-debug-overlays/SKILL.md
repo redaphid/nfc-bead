@@ -13,7 +13,7 @@ description: Apply or strip CAD-style debug coloring + wireframe overlays for an
 | `Top` | top half — peg holes; outer face hosts the decoration |
 | `Decoration` | raised relief on `Top`'s outer face (spiral / emboss / etc.) |
 
-Build scripts (`build_<charm>.py`) MUST produce these canonical Blender object names. STL filenames may still be bead-prefixed (e.g. `rezz_bottom.stl`) since they distinguish across charm projects, but in-scene object names are bead-agnostic. Skills accept legacy names (`rezz_bottom`, `rezz_top_body`, `rezz_top_spiral`) as suffix fallback only.
+Build scripts (`build_<charm>.py`) MUST produce in-Blender objects with exactly these names. On-disk STL filenames may still be bead-prefixed (e.g. `<charm>_bottom.stl`) since they distinguish across charm projects, but the in-scene names are non-negotiable — skills look these up by exact match with no fallback.
 
 Two scripts that toggle the engineering-drawing visualization for an NFC bead:
 
@@ -42,7 +42,7 @@ Engineering convention: **positive features (added material) = solid warm; negat
 
 ## Production palette (`restore.py`)
 
-Mirrors what the build script applied. Defaults match the rezz bead (red bodies + black spiral); update the CONFIG block at the top of `restore.py` for other beads.
+Mirrors what the build script applied. Defaults are red bodies + black decoration (the most common two-color setup); override the CONFIG block at the top of `restore.py` per charm.
 
 | Element | Color | Notes |
 |---|---|---|
@@ -86,10 +86,6 @@ The bottom-half "inner face" (where pegs and the NFC pocket attach) is at differ
 - **STL-imported scene** (the common one — what `tools/launch.ps1` produces): the bottom STL keeps its print-layout `z = 0..4`. Show face is at `z = 0` (touching the build plate), inner face is at `z = zmax - PEG_HEIGHT`, pegs occupy `z = zmax - PEG_HEIGHT..zmax`.
 
 `recolor.py` reads `Bottom`'s actual world Z bbox and computes `_BOTTOM_INNER_Z` from it. **Do not assume `inner_z = 0`** — that bug placed all DBG widgets below the puck.
-
-### Top has `_top_body` suffix, not `_top`
-
-Build scripts produce three printable objects per charm: `<charm>_bottom`, `<charm>_top_body`, `<charm>_top_spiral`. The `_top_body` half is what hosts the peg holes. Suffix-fallback resolvers must check `_top_body` BEFORE `_top` (otherwise `rezz_top_body` won't match `_top` because it ends in `_body`).
 
 ### `bpy.ops.object.*` requires OBJECT mode
 

@@ -17,8 +17,9 @@ follows engineering drawings:
 
 Idempotent: running it twice produces the same scene state.
 
-Edit the CONFIG block at the top to match the bead being debugged. The
-defaults here mirror the rezz bead's print-layout (halves at x=±18).
+Edit the CONFIG block at the top to match the bead being debugged.
+Defaults are the canonical print-layout (halves at x=±18, three pegs
+in a triangle, NFC pocket at the head, string hole at Y=+9).
 
 Coordinate convention (the canonical print-layout produced by build_*.py):
   - Bottom is FLIPPED 180° around X then placed at (BOTTOM_X, 0, dim.z/2).
@@ -31,7 +32,7 @@ Coordinate convention (the canonical print-layout produced by build_*.py):
 import bpy, math
 
 # ─── CONFIG — pull from beads/<name>/build_<name>.py CONFIG block ───
-# Active bead: rezz (post-flip; print-layout halves at X=±18; HOLE_Y=9 etc.)
+# Defaults: print-layout halves at X=±18, 3-peg triangle, HOLE_Y=9.
 PEGS         = [(-7.5, 3.0), (7.5, 3.0), (0.0, -10.0)]
 PEG_DIA      = 2.0
 PEG_HEIGHT   = 1.5
@@ -42,7 +43,7 @@ NFC_DEPTH    = 0.8
 HOLE_Y       = 9.0
 HOLE_DIA     = 2.0
 
-DECORATION_NAME = "Decoration"   # canonical project name; legacy *_spiral / *_decor still found by fallback
+DECORATION_NAME = "Decoration"   # canonical project name (no fallback)
 BOTTOM_X     = -18.0
 TOP_X        =  18.0
 
@@ -88,19 +89,14 @@ def add_widget(name, mesh_call, rgba, location, rotation=(0, 0, 0), display='WIR
 
 
 # ─── Recolor printable parts ───
-# Canonical names first ("Bottom"/"Top"/decoration), then rezz-style fallbacks.
-def _find_mesh(canonical, fallback_suffixes):
-    o = bpy.data.objects.get(canonical)
-    if o and o.type == 'MESH':
-        return o
-    for o in bpy.data.objects:
-        if o.type == 'MESH' and any(o.name.lower().endswith(s) for s in fallback_suffixes):
-            return o
-    return None
+# Canonical names only — no fallback. Build scripts must produce these.
+def _mesh(name):
+    o = bpy.data.objects.get(name)
+    return o if (o and o.type == 'MESH') else None
 
-bottom = _find_mesh("Bottom", ("_bottom",))
-top    = _find_mesh("Top",    ("_top_body", "_top"))
-decor  = _find_mesh(DECORATION_NAME, ("_spiral", "_decor", "_accent"))
+bottom = _mesh("Bottom")
+top    = _mesh("Top")
+decor  = _mesh(DECORATION_NAME)
 
 if bottom: repaint(bottom, COL_BOTTOM, "DBG_Bottom_BlueprintGray")
 if top:    repaint(top,    COL_TOP,    "DBG_TopBody_BlueprintSage")
@@ -130,16 +126,16 @@ _BY = -1.0 if BOTTOM_FLIPPED else 1.0
 # inner-face=z=0) AND for STL imports (where halves keep their print-layout
 # z-range). The canonical PEG_HEIGHT lets us infer where the inner face sits
 # without scanning vertex normals.
-def _world_z_range(name_canonical, name_suffix):
+def _world_z_range(name):
     """Return (zmin, zmax) of the mesh bbox in world coords, or None if missing."""
-    o = bpy.data.objects.get(name_canonical) or _find_mesh(name_canonical, (name_suffix,))
+    o = _mesh(name)
     if o is None:
         return None
     zs = [(o.matrix_world @ v.co).z for v in o.data.vertices]
     return (min(zs), max(zs)) if zs else None
 
-_bottom_z = _world_z_range("Bottom", "_bottom")
-_top_z    = _world_z_range("Top",    "_top_body")
+_bottom_z = _world_z_range("Bottom")
+_top_z    = _world_z_range("Top")
 
 if _bottom_z is None:
     _BOTTOM_INNER_Z = 0.0
