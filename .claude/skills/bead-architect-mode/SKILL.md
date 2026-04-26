@@ -22,6 +22,28 @@ Two layers: the **look** (parchment + ink + watercolor) and the **animations** (
 
 Each `anim_*.py` requires `architect_on.py` to have set up the camera rig. **All produce seamless continuous loops** when Blender's playback wraps from `frame_end` back to `frame_start` — kick one off, walk away, the viewport keeps moving forever.
 
+### Stored in the .blend → instant switch
+
+Each `anim_*.py` writes its keyframes into **named Action data blocks** with the convention `BeadAnim_<anim>_<role>` and `use_fake_user=True` so they persist when the .blend is saved. Roles are `pivot` / `cam` / `tgt` / `sun` depending on what the anim drives. **Switching between anims is then a one-line action reassignment** — no re-keying, no rebuild.
+
+Host-shell CLI (the easy way):
+
+```sh
+uv run nfc-anim-switch _LIST          # list all stored anims
+uv run nfc-anim-switch orbit          # apply
+uv run nfc-anim-switch tour
+uv run nfc-anim-switch raking_light
+```
+
+Inside Blender:
+
+```python
+ANIM_NAME = "orbit"
+exec(open(r"<repo>/.claude/skills/bead-architect-mode/anim_switch.py").read())
+```
+
+The switcher reads `bpy.data.actions`, looks up `BeadAnim_<name>_<role>` for each rig component, assigns it (or `None` to clear that role), recomputes the scene frame range from the union of the active actions' frame ranges, and starts/stops playback (static anims pause at frame 1; animated anims play). Re-running an `anim_*.py` recreates its action from scratch; other anims' actions are untouched.
+
 | Script | Loop type | Default cadence | What it does |
 |---|---|---|---|
 | `anim_orbit.py` | rotational | 90 s/rev (`PERIOD=2160` @ 24fps) | Z-orbit + ±15° X-wobble + optional dolly breath |
