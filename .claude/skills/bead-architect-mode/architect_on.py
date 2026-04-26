@@ -37,13 +37,13 @@ PARCHMENT      = (0.93, 0.86, 0.72, 1.0)   # warm cream world
 INK_GRAPHITE   = (0.08, 0.10, 0.14, 1.0)   # GP line-art ink
 INK_RADIUS     = 0.05                      # Blender 5.0 GP modifier (NOT 'thickness')
 
-# Canonical body colors. These read as deliberate hue (not cream-pastel)
-# under the warm key sun. Bumped from the original watercolor values
-# `(0.62,0.74,0.82) / (0.70,0.80,0.74) / (0.85,0.62,0.32)` which were
-# desaturated enough that the warm light washed them all toward beige.
-BOTTOM_FILL    = (0.42, 0.60, 0.82, 1.0)   # blueprint blue — clearly cool
-TOP_FILL       = (0.50, 0.72, 0.58, 1.0)   # sage green — clearly green
-ACCENT_FILL    = (0.92, 0.52, 0.18, 1.0)   # burnished copper — clearly warm
+# Canonical body colors — verified high-contrast palette in EEVEE.
+# Each part is a different primary/secondary hue family so the three never
+# blur together visually. Saturated enough to read as their hue under the
+# warm key sun against the parchment world.
+BOTTOM_FILL    = (0.16, 0.42, 0.88, 1.0)   # ultramarine blue   #296BE0
+TOP_FILL       = (0.20, 0.68, 0.40, 1.0)   # emerald green      #33AD66
+ACCENT_FILL    = (0.96, 0.38, 0.08, 1.0)   # vermilion / copper #F56115
 BODY_ROUGH     = 0.85
 BODY_METALLIC  = 0.0
 
@@ -76,9 +76,10 @@ TARGET_LOC     = (0, 0, 1.5)
 CAM_BASE_LOC   = (0, -50, 18)
 CAM_LENS_MM    = 50
 
-# Render
-RENDER_SAMPLES = 64
-USE_OPTIX      = True
+# Render: EEVEE always (faster than Cycles, more saturated/flat which suits
+# the watercolor-ink architect aesthetic; no GPU/OptiX dependency)
+RENDER_ENGINE  = "BLENDER_EEVEE"           # falls back if a newer Eevee variant is named
+EEVEE_SAMPLES  = 32                         # TAA samples
 
 # When set, will re-tint any DBG_* overlay objects (from recolor.py) with
 # the architect palette above. STL export is unaffected — DBG_* objects
@@ -282,30 +283,29 @@ trk.track_axis = 'TRACK_NEGATIVE_Z'
 trk.up_axis    = 'UP_Y'
 bpy.context.scene.camera = cam_obj
 
-# ─── Render: Cycles + OptiX (RTX denoiser) ────────────────────────────
+# ─── Render: EEVEE (always — fast, saturated, suits ink-and-fill) ────
 scn = bpy.context.scene
-scn.render.engine = 'CYCLES'
-scn.cycles.device = 'GPU'
-if USE_OPTIX:
+# Try the requested engine name first, then fall back to anything Eevee-ish.
+_engine_tried = []
+for engine in (RENDER_ENGINE, "BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):
+    if engine in _engine_tried:
+        continue
+    _engine_tried.append(engine)
     try:
-        cprefs = bpy.context.preferences.addons['cycles'].preferences
-        for backend in ('OPTIX', 'CUDA', 'HIP', 'ONEAPI', 'METAL'):
-            try:
-                cprefs.compute_device_type = backend
-                cprefs.refresh_devices()
-                break
-            except (TypeError, AttributeError):
-                continue
-        for d in cprefs.devices:
-            d.use = (d.type != 'CPU')
-        scn.cycles.use_denoising = True
-        scn.cycles.denoiser = 'OPTIX'
-        scn.cycles.use_preview_denoising = True
-        scn.cycles.preview_denoiser = 'OPTIX'
-    except Exception as e:
-        print(f"[architect_on] OptiX setup warning: {e}")
-scn.cycles.samples = RENDER_SAMPLES
-scn.cycles.preview_samples = max(24, RENDER_SAMPLES // 2)
+        scn.render.engine = engine
+        break
+    except (TypeError, AttributeError):
+        continue
+else:
+    print(f"[architect_on] WARN: none of {_engine_tried} accepted; engine remains {scn.render.engine}")
+
+# Eevee tunables (only the attributes that exist on this Blender version)
+if hasattr(scn, "eevee"):
+    if hasattr(scn.eevee, "taa_samples"):           scn.eevee.taa_samples = EEVEE_SAMPLES
+    if hasattr(scn.eevee, "taa_render_samples"):    scn.eevee.taa_render_samples = EEVEE_SAMPLES * 2
+    if hasattr(scn.eevee, "use_gtao"):              scn.eevee.use_gtao = True
+    if hasattr(scn.eevee, "use_bloom"):             scn.eevee.use_bloom = False
+    if hasattr(scn.eevee, "use_ssr"):               scn.eevee.use_ssr   = False
 
 # Viewport: camera + RENDERED so the live preview matches the render
 for area in bpy.context.screen.areas:
