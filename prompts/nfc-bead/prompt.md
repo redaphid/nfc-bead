@@ -40,6 +40,24 @@ Target NFC tag: NTAG215, 10mm diameter sticker (e.g. `https://www.amazon.com/dp/
 - Triangulated, not collinear (gives torsional stability)
 - ≥ ~1 mm from the silhouette edge (so the wall around the peg hole isn't paper-thin)
 
+**String-hole placement rules** — the hole hangs the bead off a bracelet, so the
+wall around it is a load-bearing feature. Don't pick the obvious spot if it
+leaves thin material:
+
+- Y must sit on a *wide* part of the silhouette — not on a narrow tip, ear-
+  flap, hair-ridge, or other protrusion. Aim for the band where the
+  silhouette is at full width.
+- ≥ 2.5 mm of solid silhouette **above** the hole (between hole top and the
+  silhouette's top edge). With a 2 mm-dia hole that's ≥ 1.5 mm of wall above.
+  Less than that, the bead snaps off the bracelet under load.
+- ≥ 1.5 mm of solid silhouette to either side at the hole's Y. The hole runs
+  along X, so the silhouette's X-extent at the chosen Y must comfortably
+  exceed the bead's diameter at the hole.
+- For shapes whose top is a narrow protrusion (mammoth tusk, shaggy hair
+  bumps, animal ears), drop the hole *down* into the wider head/forehead
+  body even if it costs aesthetic intent. The dangling bead doesn't notice
+  where the cord exits, but the wall above does.
+
 ---
 
 ## Pipeline (in order — order matters)
