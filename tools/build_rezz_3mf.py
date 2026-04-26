@@ -431,11 +431,29 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
         '</Relationships>\n'
     )
 
-    # Pull printer/process settings from the template if present
+    # Pull printer/process settings from the template, then patch them.
+    # The user reported "raft" appearance — that's actually the BRIM
+    # (auto_brim, 5mm wide) the user's saved profile has. Disable brim and
+    # raft for these tiny press-fit parts; the Centauri Carbon's textured
+    # plate has plenty of bed adhesion at this footprint.
     project_settings = None
     proj_path = template_dir / "Metadata" / "project_settings.config"
     if proj_path.is_file():
         project_settings = proj_path.read_text(encoding="utf-8")
+        # Patch settings via simple regex (the file is JSON-formatted but with
+        # comments/extras in places, safer than full-parse for now).
+        patches = {
+            "brim_type":    "no_brim",
+            "brim_width":   "0",
+            "raft_layers":  "0",
+        }
+        for key, value in patches.items():
+            project_settings = re.sub(
+                rf'"{key}"\s*:\s*"[^"]*"',
+                f'"{key}": "{value}"',
+                project_settings,
+            )
+        print(f"[3mf] patched project_settings: {', '.join(patches.keys())}")
 
     slice_info = (
         '<?xml version="1.0" encoding="UTF-8"?>\n<config>\n  <header>\n'
@@ -510,9 +528,13 @@ def verify(path, parts):
     print(f"[3mf] OK — {path}")
 
 
-if __name__ == "__main__":
+def main():
     p = argparse.ArgumentParser()
     p.add_argument("-o", "--out", default=str(DEFAULT_OUT))
     p.add_argument("-t", "--template-dir", default=str(TEMPLATE_DIR))
     args = p.parse_args()
     build(out_path=Path(args.out), template_dir=Path(args.template_dir))
+
+
+if __name__ == "__main__":
+    main()

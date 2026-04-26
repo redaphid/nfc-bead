@@ -11,13 +11,14 @@ A defensive STL exporter + companion verifier and 3MF packager. The exported geo
 
 Canonical Blender object names: **`Bottom`**, **`Top`**, **`Decoration`**. Build scripts MUST produce these names. There are no legacy-suffix fallbacks (per `feedback_canonical_names_only` in user memory).
 
-## Three scripts
+## Four scripts
 
 | Script | Runs in | What it does |
 |---|---|---|
-| `export.py` | Blender (via MCP or `tools/blender_send.py`) | Strips overlays, flips, bed-flattens, exports 3 STLs to `tmp/stl_export_<ts>/` AND mirrors to `tmp/latest/` |
-| `tools/verify_stls.py` | host (uv) | Loads `tmp/latest/*.stl` via trimesh, runs 14+ structural checks, exits non-zero on any failure |
-| `tools/make_3mf.py` | host (uv) | Bundles the 3 STLs into a slicer-ready `tmp/latest/rezz.3mf` with `Top` + `Decoration` pre-merged as a ComponentsObject |
+| `export.py` | Blender (via MCP or `nfc-blender-send`) | Strips overlays, flips, bed-flattens, exports 3 STLs to `tmp/stl_export_<ts>/` AND mirrors to `tmp/latest/` |
+| `tools/verify_stls.py` (`nfc-verify-stls`) | host (uv) | Loads `tmp/latest/*.stl` via trimesh, runs 14+ structural checks, exits non-zero on any failure |
+| `tools/build_rezz_3mf.py` (`nfc-build-rezz-3mf`) | host (uv) | **Recommended.** Builds a slicer-ready Bambu Studio / Elegoo Slicer 3MF for the rezz bead. Pre-merges Top + Decoration, assigns extruders (1 = decoration, 2 = body), disables brim/raft (the actual fix for the "raft above plate" appearance), and inherits the user's printer profile from a reference 3MF in `tmp/latest/r1_extracted/`. Output: `tmp/latest/rezz_multicolor.3mf`. |
+| `tools/make_3mf.py` (`nfc-make-3mf`) | host (uv) | Generic fallback. Plain 3MF Consortium bundle via `lib3mf` (no Bambu/Elegoo extensions). Use only when you don't have a reference 3MF template. Output: `tmp/latest/rezz.3mf`. |
 
 Typical workflow:
 
@@ -26,13 +27,15 @@ Typical workflow:
 exec(open(r"<repo>/.claude/skills/bead-stl-export/export.py").read())
 
 # 2. (host shell) verify alignment + manifoldness
-uv run python -m tools.verify_stls
+uv run nfc-verify-stls
 
-# 3. (host shell) generate the slicer-ready 3MF
-uv run python -m tools.make_3mf
+# 3. (host shell) build a slicer-ready 3MF for the rezz bead
+uv run nfc-build-rezz-3mf
 
-# 4. drag tmp/latest/rezz.3mf into Elegoo Slicer
+# 4. drag tmp/latest/rezz_multicolor.3mf into Elegoo Slicer
 ```
+
+The reference 3MF template (`tmp/latest/r1_extracted/`) is created once: save a project from Elegoo Slicer with the printer + filament setup the user wants preserved, drop the `.3mf` into `tmp/latest/`, and extract it to `r1_extracted/`. From then on every `nfc-build-rezz-3mf` run produces a 3MF that opens with that profile.
 
 ## What `export.py` does
 

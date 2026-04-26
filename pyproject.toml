@@ -27,9 +27,19 @@ dev = [
 ]
 
 [project.scripts]
+# Talk to a running Blender via the BlenderMCP socket addon (works whether or
+# not Claude Code's MCP layer is connected).
 nfc-blender-send  = "tools.blender_send:main"
+# Validate the latest STL set (manifold, dimensions, alignment).
 nfc-verify-stls   = "tools.verify_stls:main"
+# Generic STL → 3MF Consortium bundle (no slicer-specific config; useful when
+# you don't have an Elegoo Slicer template handy).
 nfc-make-3mf      = "tools.make_3mf:main"
+# Build a slicer-ready Bambu Studio / Elegoo Slicer 3MF for the rezz bead with
+# extruder assignments, brim/raft disabled, and printer profile preserved
+# from a reference 3MF in tmp/latest/r1_extracted/. Recommended path for
+# the rezz bead specifically.
+nfc-build-rezz-3mf = "tools.build_rezz_3mf:main"
 
 [build-system]
 requires = ["hatchling"]

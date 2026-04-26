@@ -16,9 +16,18 @@ Three skills carry the operational guidance — that's the source of truth, not 
 |---|---|
 | `.claude/skills/bead-architect-mode/` | The architect aesthetic (parchment + ink + watercolor) and 6 seamless-loopable camera animations. Toggle on with `architect_on.py`, off with `architect_off.py`. EEVEE renderer. |
 | `.claude/skills/bead-debug-overlays/` | CAD-palette body coloring + `DBG_*` overlay widgets for hidden features (pegs, peg holes, NFC pocket, string hole). Pairs under the architect drape. |
-| `.claude/skills/bead-stl-export/` | Defensive STL export — strips overlays, applies the deterministic per-part print-orientation flip (`EXPORT_FLIP_X_DEG`), validates manifold + dimensions. |
+| `.claude/skills/bead-stl-export/` | Defensive STL export — strips overlays, applies the deterministic per-part print-orientation flip (`EXPORT_FLIP_X_DEG`), bed-flattens to z=0. |
 
-Each skill's `SKILL.md` documents its scripts, tunables, and gotchas. Don't re-document those here.
+Plus four host-side CLI tools (run via uv, registered as `[project.scripts]` in `pyproject.toml`):
+
+| Command | What |
+|---|---|
+| `uv run nfc-blender-send` | Send Python to a running Blender via the BlenderMCP socket (works even when Claude Code's MCP layer is dropped) |
+| `uv run nfc-verify-stls`  | Validate the `tmp/latest/` STL set via trimesh — manifold, dimensions, alignment |
+| `uv run nfc-build-rezz-3mf` | Build slicer-ready Bambu/Elegoo 3MF for the rezz bead with extruder assignments + printer profile preserved |
+| `uv run nfc-make-3mf` | Generic 3MF Consortium bundle (fallback when no slicer template is available) |
+
+Each skill's `SKILL.md` and the host scripts' module docstrings are the sources of truth. Don't re-document those here.
 
 ## The protocol — depth-first, screenshot-verified
 
