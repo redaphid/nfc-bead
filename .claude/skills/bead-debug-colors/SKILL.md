@@ -82,7 +82,17 @@ When `RETINT_DBG_OVERLAYS = True` in `architect_on.py`, any `DBG_*` overlay obje
 
 ## Animations — pairing with `architect_on.py`
 
-Each `anim_*.py` requires `architect_on.py` to have set up the camera rig.
+Each `anim_*.py` requires `architect_on.py` to have set up the camera rig. **All animation scripts produce seamless continuous loops** when Blender's playback wraps from `frame_end` back to `frame_start`:
+
+| Animation | Loop type | How it loops |
+|---|---|---|
+| `anim_orbit.py` | rotational | Z-orbit goes 0°→360° (visually identical at wrap); X-wobble samples include matched endpoints |
+| `anim_raking_light.py` | rotational | sun's location traces a full circle; first and last keyframes are the same (R, 0, Z) point |
+| `anim_macro_pull.py` | ping-pong | wide → close at midpoint → wide at end; bezier ease at both extremes; wrap is seamless |
+| `anim_locked_profile.py` | trivial | static (single frame) — every wrap is identical |
+| `anim_top_down.py` | trivial | static (single frame) — every wrap is identical |
+
+This means: kick off any animation, walk away, the viewport keeps moving forever without a visible jolt.
 
 ### `anim_orbit.py` — the canonical Westworld-tempo orbit
 
