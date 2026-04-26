@@ -49,8 +49,7 @@ OUT_DIR = None     # default: tmp/stl_export_<timestamp>/ in repo root
 #   Bottom: 180  → silhouette face on build plate, pegs point up
 #   Top:    0    → peg-hole face naturally on build plate, outer face up
 #   Decoration: 0
-# Override per bead by editing this dict; the value is keyed on the canonical
-# component name so legacy bead-specific names route correctly via FALLBACK_SUFFIXES.
+# Override per bead by editing this dict; keyed on the canonical component name.
 EXPORT_FLIP_X_DEG = {
     "Bottom":     180.0,
     "Top":          0.0,

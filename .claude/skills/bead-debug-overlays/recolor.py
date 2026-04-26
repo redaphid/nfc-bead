@@ -42,7 +42,7 @@ NFC_DEPTH    = 0.8
 HOLE_Y       = 9.0
 HOLE_DIA     = 2.0
 
-DECORATION_NAME = "Decoration"   # canonical project name; legacy *_spiral / *_decor still found by fallback
+DECORATION_NAME = "Decoration"   # canonical project name
 BOTTOM_X     = -18.0
 TOP_X        =  18.0
 

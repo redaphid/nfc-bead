@@ -13,7 +13,7 @@ description: Apply or strip CAD-style debug coloring + wireframe overlays for an
 | `Top` | top half — peg holes; outer face hosts the decoration |
 | `Decoration` | raised relief on `Top`'s outer face (spiral / emboss / etc.) |
 
-Build scripts (`build_<charm>.py`) MUST produce these canonical Blender object names. STL filenames may still be bead-prefixed (e.g. `rezz_bottom.stl`) since they distinguish across charm projects, but in-scene object names are bead-agnostic. Skills accept legacy names (`rezz_bottom`, `rezz_top_body`, `rezz_top_spiral`) as suffix fallback only.
+Build scripts (`build_<charm>.py`) MUST produce these canonical Blender object names. STL filenames may still be bead-prefixed (e.g. `rezz_bottom.stl`) since they distinguish across charm projects, but in-scene object names are bead-agnostic. **No legacy-suffix fallbacks** — if the canonical names aren't present, the skills no-op rather than guessing (per the `feedback_canonical_names_only` user-memory rule).
 
 Two scripts that toggle the engineering-drawing visualization for an NFC bead:
 

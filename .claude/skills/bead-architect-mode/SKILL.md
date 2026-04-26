@@ -7,7 +7,7 @@ description: Drape a hand-drafted parchment+ink+watercolor 'architect' aesthetic
 
 ## Project-wide naming convention
 
-Same as `bead-debug-overlays`: canonical Blender object names are `Bottom`, `Top`, `Decoration`. `architect_on.py` paints these directly; legacy bead-specific names (`rezz_bottom`, `rezz_top_body`, `rezz_top_spiral`) are accepted as a suffix fallback (`_top_body` is checked BEFORE `_top` since `rezz_top_body` ends in `_body`).
+Same as `bead-debug-overlays`: canonical Blender object names are `Bottom`, `Top`, `Decoration`. `architect_on.py` paints these directly. **No legacy-suffix fallbacks** — if the canonical names aren't present, the script no-ops rather than guessing.
 
 Two layers: the **look** (parchment + ink + watercolor) and the **animations** (5 seamless-loopable camera moves). All idempotent.
 
