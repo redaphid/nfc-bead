@@ -224,6 +224,18 @@ When you (the user) start a new charm session, you only need to talk about:
 
 Everything else (peg placement, NFC pocket position, gap-fill regions) is a derived decision — Claude should propose values based on the silhouette and ask for confirmation before building.
 
+## Per-charm documentation
+
+Every charm branch must ship a `beads/<name>/README.md` that captures the *intent* — the technical recipe is generic; the README is the only place future-Claude (or future-you) can recover *why this charm was built this way*. At minimum:
+
+- **Source** — what input the silhouette came from (SVG path, image, sketch). If image-derived, the absolute path so the extraction can be re-run.
+- **Why this charm exists** — what it's exercising or commemorating. Some charms exist to stress-test the pipeline with a new input format; some are gifts; some are commissioned. Knowing this informs how aggressively to refactor the build script later.
+- **Key creative decisions and their tradeoffs** — every charm makes choices that aren't obvious from the build script's CONFIG block (multi-color regions vs flat, thinner profile, asymmetric layout, etc.). One row per decision, with the cost it imposed.
+- **What's transferable / what's specific** — call out which parts of the build script generalize to future charms vs. which are tuned to this one's proportions. Keeps later charms from cargo-culting tuning constants.
+- **Files** — pointer table to silhouette.svg, build script, .blend, stages, print/.
+
+`beads/redaphid-portrait/README.md` is the reference example. Charm-branch builds should produce a README before the first commit lands, and update it whenever a creative decision changes (a region split is added, a dimension default is overridden, etc.).
+
 ---
 
 ## Reference files in this repo
