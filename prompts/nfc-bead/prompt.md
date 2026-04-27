@@ -134,6 +134,72 @@ When a separately-printed decoration (raised spiral, embossed text) sits on the 
 ### 12. Don't cut decorative "clearance" against features the decoration never touches
 A common reflex is to trim the show-face decoration around features like the string hole "for clearance." If the feature physically interacts with the decoration, yes — trim. But the string hole runs *horizontally through the bead body*; the decoration sits on the *outer face*; they never touch. Cutting a notch in the decoration to "clear" the hole's top opening just leaves a visible bite in the decoration that adds nothing functional. Question whether the cut is necessary before adding it.
 
+### 13. Drill the string hole at the mesh's *actual* z-midpoint, never at `THICKNESS/2`
+If your build pipeline centers the FullBead on the origin (so verts span `−THICKNESS/2..+THICKNESS/2`), hard-coding `location=(0, HOLE_Y, THICKNESS/2)` puts the hole at the **top face** of the bead — entirely inside the Top half after the box-cut split. Bottom ends up with no opening, and you can't thread a cord through. Compute `z_mid` from the live mesh:
+
+```python
+zs = [v.co.z for v in mesh.data.vertices]
+z_mid = (min(zs) + max(zs)) / 2.0
+location = (0, HOLE_Y, z_mid)
+```
+
+This is silent — the build runs to completion, the STL passes manifold checks, and you only notice when you try to thread a cord (or run a side-view raycast). The reference `build_charm.py.example` doesn't trip this because it leaves the silhouette at z=0..THICKNESS rather than centering it; centered-mesh builds need the live z_mid.
+
+### 14. Pegs go on Bottom — multi-color decoration on Top precludes flipping it
+The recipe's "pegs on Bottom + sockets on Top" assignment isn't arbitrary. With pegs on Top hanging *down* off the inner face, the slicer flags the Top assembly as a cantilever (the body is suspended on three thin pillars). The natural fix — flipping Top so pegs point *up* — doesn't work either, because the show-face decoration (Hair slab, raised eyes) would then point INTO the build plate. Pegs *must* live on Bottom for any charm with raised decoration on Top.
+
+### 15. Importing a subset SVG into the silhouette's frame requires a viewBox-shift
+When the build script imports a second SVG that's a *subset* of the silhouette (e.g. a `hair.svg` that traces only the haircut region of the same viewBox), Blender's `bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')` re-centers the imported curve on its own bbox, NOT on the viewBox. Two SVGs with the same viewBox end up overlapping their bbox centers at world (0,0) — which mis-aligns them, since the silhouette's bbox-center IS the viewBox-center but the subset's isn't.
+
+Fix: parse the subset's path bounds and the viewBox dimensions out of the SVG, and shift the imported subset by `(subset_cx − viewBox_cx, viewBox_cy − subset_cy)` mm (Y-flip because Blender Y is up while SVG Y is down). Set `obj.location = (shift_x, shift_y, 0)` — don't *add* to the location after `origin_set`, since `origin_set` already moved the location to the world position of the bbox-center.
+
+### 16. The build pipeline's print orientation may not match the export skill's flip dict
+`bead-stl-export/export.py` defaults to flipping Bottom 180° around X — that assumes the live scene has Bottom *upside-down* (silhouette face UP, pegs DOWN), so the flip lands silhouette-on-plate-pegs-up for printing. A *centered-mesh* build pipeline (FullBead centered on origin) produces Bottom *already* in print orientation (silhouette DOWN, pegs UP); applying the flip un-orients it.
+
+Override per build by setting `bpy.context.scene["nfc_export_flip_override"]` to a JSON dict before running the export skill:
+
+```python
+import json
+bpy.context.scene["nfc_export_flip_override"] = json.dumps({
+    "Bottom": 0.0, "Top": 0.0, "Hair": 0.0, "Decoration": 0.0,
+})
+```
+
+Other beads using the canonical flipped-build pattern keep the default behavior.
+
+### 17. `bpy.ops.read_factory_settings()` unloads the BlenderMCP addon
+"Wiping the scene to a clean slate" via `bpy.ops.wm.read_factory_settings(use_empty=True)` also unregisters the BlenderMCP addon — silently dropping the MCP socket. Subsequent `mcp__blender__*` calls fail with "Could not connect to Blender." Either delete objects/collections explicitly instead of factory-resetting, or relaunch Blender via `tools/launch.ps1` (which re-installs the addon and restarts the socket).
+
+### 18. `exec(open(script).read())` doesn't trigger `if __name__ == "__main__"`
+When you run a build script through Blender MCP via `exec(open(...).read())`, the script's `__name__` is the *calling* module, not `"__main__"` — so any `if __name__ == "__main__": main()` at the bottom never fires. Pass an explicit namespace:
+
+```python
+ns = {"__name__": "__main__"}
+exec(script, ns)
+```
+
+This is the same trap as running scripts via Blender's `--python` flag in some contexts; either pass the namespace or call `main()` directly.
+
+### 19. `gaussian_filter` blurs the channel axis too — use per-axis sigma for color images
+`scipy.ndimage.gaussian_filter(rgb, sigma=4.0)` smears RGB channels into each other along with spatial pixels — saturation collapses to ≈ 0 because the R/G/B values converge. For color-aware extraction (face vs outline by hue), use:
+
+```python
+ndimage.gaussian_filter(rgb.astype(np.float32), sigma=(BLUR, BLUR, 0))
+```
+
+The `(s, s, 0)` tuple blurs height/width but leaves channels untouched.
+
+### 20. Stale `FullBead` (or other helper) duplicates accumulate across rebuilds
+Re-running a build script that creates intermediate objects (`FullBead`, peg cylinders, cutters) without first wiping them produces `FullBead.001`, `.002`, etc., that pile up in the scene. They're hidden, but they cost memory, slow boolean operations, and confuse later raycasts that walk `bpy.data.objects`. Either clear them explicitly at the top of the build:
+
+```python
+for n in list(bpy.data.objects.keys()):
+    if n.startswith("FullBead"):
+        bpy.data.objects.remove(bpy.data.objects[n], do_unlink=True)
+```
+
+or wipe the whole scene at the start of the build (but mind gotcha #17 — don't `read_factory_settings`).
+
 ---
 
 ## Print orientation

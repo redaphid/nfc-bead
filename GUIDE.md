@@ -156,6 +156,14 @@ else:
 | SVG rectangle doesn't fill hole | Separate path creates separate boundary | Select and fill the hole boundary in mesh edit mode |
 | Solidify breaks interior holes | Solidify modifier produces bad topology | Use extrude instead |
 | String hole splits a thin top wall | `HOLE_Y` placed in a narrow protrusion (hair ridge, ear, tip) | Drop hole down into the wider head/forehead — need ≥ 2.5 mm of solid silhouette above the hole |
+| String hole only carves Top half (Bottom solid) | `location.z = THICKNESS/2` on a centered-mesh pipeline puts the cylinder at the TOP face, not the middle | Compute `z_mid = (min(zs)+max(zs))/2` from live verts and drill there. See prompt.md gotcha #13 |
+| Slicer flags Top assembly as cantilever | Pegs hung off Top instead of Bottom; the body is suspended on three thin pillars | Pegs MUST be on Bottom for any charm with show-face decoration on Top — flipping Top to put pegs up would point the hair into the build plate. See gotcha #14 |
+| Imported subset SVG (e.g. `hair.svg`) lands off-center | `origin_set BOUNDS` re-centers on the path bbox, not the viewBox center the silhouette is anchored to | Parse viewBox dims + path bbox, set `obj.location = (subset_cx − vbox_cx, vbox_cy − subset_cy, 0)` (Y-flipped). See gotcha #15 |
+| Bottom STL lands silhouette-up after export | Export skill's default 180° X-flip on Bottom assumes a flipped-build live scene; centered-mesh builds are already in print orientation | Set `bpy.context.scene["nfc_export_flip_override"]` to `{"Bottom": 0, ...}` before running the export. See gotcha #16 |
+| MCP socket dies after `read_factory_settings` | Factory reset unregisters the BlenderMCP addon | Don't factory-reset; delete objects explicitly. Or relaunch via `tools/launch.ps1`. See gotcha #17 |
+| `if __name__ == "__main__"` block doesn't run | `exec(open(...).read())` keeps the calling module's `__name__` | Pass `ns = {"__name__": "__main__"}` to `exec(script, ns)`, or call `main()` directly. See gotcha #18 |
+| Color extraction loses saturation under blur | `gaussian_filter(rgb, sigma=4)` blurs the channel axis too, collapsing chrominance | Use `sigma=(blur, blur, 0)` to leave channels untouched. See gotcha #19 |
+| `FullBead.001..N` accumulating across rebuilds | Re-running the build doesn't clean intermediate objects | Wipe `FullBead*` at the top of the build, or `bpy.data.objects.remove` explicitly. See gotcha #20 |
 
 ## Dimensions Reference (Wooli Charm)
 
