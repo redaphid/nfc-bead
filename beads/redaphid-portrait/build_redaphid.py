@@ -19,7 +19,7 @@ from mathutils import Vector
 
 # ── CONFIG ─────────────────────────────────────────────────────────
 SVG_PATH      = r"D:\Projects\nfc-bead\beads\redaphid-portrait\silhouette.svg"
-FACE_SVG_PATH = r"D:\Projects\nfc-bead\beads\redaphid-portrait\face.svg"
+HAIR_SVG_PATH = r"D:\Projects\nfc-bead\beads\redaphid-portrait\hair.svg"
 REPO_DIR      = r"D:\Projects\nfc-bead"
 BEAD_DIR      = os.path.join(REPO_DIR, "beads", "redaphid-portrait")
 
@@ -64,9 +64,11 @@ PEGS_ON_BOTTOM = False
 EYE_HEIGHT       = 0.5
 EYE_FALLBACK     = [(-2.5, 2.0, 1.3), (2.5, 2.0, 1.3)]  # (x, y, r) mm
 
-# Hair region — silhouette MINUS the real face contour from face.svg.
-# Hair becomes its own raised decoration (Hair object) so it can be
-# printed in a different filament than the face.
+# Hair region — imported directly from hair.svg (the haircut shape:
+# top of silhouette + side ear-flaps). Top's full silhouette show face
+# stays as the skin/face base; Hair sits ON TOP of it, covering only
+# the haircut regions. Where Hair isn't (face + chin/neck), Top's body
+# color shows through.
 HAIR_HEIGHT     = 0.4
 
 # Pegs need to land in HAIR or BODY area, not crossing the face contour
@@ -472,16 +474,19 @@ def build_eye_decoration(eyes_xyr, top):
     return deco
 
 
-def import_face_curve_as_cutter(z_center, depth):
-    """Import face.svg, normalize to mm at TARGET_WIDTH scale, extrude into
-    a thick cylinder cutter centered at the bead origin.
+def build_hair_decoration(top, full_silhouette):
+    """Hair = imported hair.svg (the haircut shape), extruded HAIR_HEIGHT
+    on top of the Top show face. No face subtraction — Top's full
+    silhouette show face stays underneath as the skin/face color, and
+    Hair drapes over the haircut regions on top."""
+    show_z = max((top.matrix_world @ v.co).z for v in top.data.vertices)
 
-    Returns the resulting mesh object, ready for boolean DIFFERENCE."""
+    # Import hair.svg as a fresh curve set
     pre = set(bpy.data.objects.keys())
-    bpy.ops.import_curve.svg(filepath=FACE_SVG_PATH)
+    bpy.ops.import_curve.svg(filepath=HAIR_SVG_PATH)
     new_curves = [bpy.data.objects[n] for n in bpy.data.objects.keys() if n not in pre]
     if not new_curves:
-        raise RuntimeError("face.svg import produced no objects")
+        raise RuntimeError("hair.svg import produced no objects")
     bpy.ops.object.select_all(action='DESELECT')
     for c in new_curves:
         c.select_set(True)
@@ -492,80 +497,114 @@ def import_face_curve_as_cutter(z_center, depth):
     obj.data.dimensions = '2D'
     obj.data.fill_mode = 'BOTH'
     obj.data.resolution_u = 64
+
+    # Convert curve → mesh, scale to share silhouette coordinate frame
     bpy.ops.object.convert(target='MESH')
-    face_mesh = bpy.context.active_object
-    face_mesh.name = "FaceCutter"
-
-    # The SVG has the same width tag as silhouette.svg (25 mm), and Blender
-    # imports SVG dims as meters. Apply the same 1000× scale used for the
-    # silhouette so it lands in the same coordinate frame.
-    cur_w = face_mesh.dimensions.x
-    if cur_w > 0:
-        sf = (TARGET_WIDTH / 1000.0) / cur_w
-        face_mesh.scale = (sf, sf, sf)
-        bpy.ops.object.transform_apply(scale=True)
-    face_mesh.scale = (1000.0, 1000.0, 1000.0)
-    bpy.ops.object.transform_apply(scale=True)
-    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
-
-    # Center X at origin, but Y must MATCH the silhouette's centering.
-    # Both SVGs share the same viewBox so their bbox centers align — set
-    # location to the same origin we used for the silhouette: (0, 0, 0).
-    face_mesh.location = (0, 0, 0)
-    bpy.ops.object.transform_apply(location=True)
-
-    # Currently flat at z=0 (silhouette imports come in flat). Extrude up
-    # to make a thick-enough cutter that survives the boolean.
-    bpy.ops.object.select_all(action='DESELECT')
-    face_mesh.select_set(True)
-    bpy.context.view_layer.objects.active = face_mesh
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.extrude_region_move(
-        TRANSFORM_OT_translate={"value": (0, 0, depth)})
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.remove_doubles(threshold=0.005)
-    bpy.ops.mesh.normals_make_consistent(inside=False)
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Re-center origin and shift to z_center
-    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
-    face_mesh.location = (0, 0, z_center)
-    bpy.ops.object.transform_apply(location=True)
-
-    return face_mesh
-
-
-def build_hair_decoration(top, full_silhouette):
-    """Hair = silhouette outline MINUS imported face contour, raised
-    HAIR_HEIGHT above the show face. Both shapes come from the SVGs that
-    extract_silhouette.py emits, so the geometry tracks the source image
-    instead of a hand-tuned ellipse."""
-    show_z = max((top.matrix_world @ v.co).z for v in top.data.vertices)
-
-    # Duplicate full silhouette, isolate top face → flat polygon
-    bpy.ops.object.select_all(action='DESELECT')
-    full_silhouette.hide_set(False)
-    full_silhouette.select_set(True)
-    bpy.context.view_layer.objects.active = full_silhouette
-    bpy.ops.object.duplicate()
     hair = bpy.context.active_object
     hair.name = "Hair"
+    cur_w = hair.dimensions.x
+    if cur_w > 0:
+        sf = (TARGET_WIDTH / 1000.0) / cur_w
+        hair.scale = (sf, sf, sf)
+        bpy.ops.object.transform_apply(scale=True)
+    hair.scale = (1000.0, 1000.0, 1000.0)
+    bpy.ops.object.transform_apply(scale=True)
 
-    bpy.ops.object.mode_set(mode='EDIT')
-    bm = bmesh.from_edit_mesh(hair.data)
-    bm.faces.ensure_lookup_table()
-    silhouette_top_z = max(v.co.z for v in bm.verts)
-    bpy.ops.mesh.select_all(action='DESELECT')
-    for f in bm.faces:
-        cz = sum(v.co.z for v in f.verts) / len(f.verts)
-        f.select = (cz < silhouette_top_z - 0.05)
-    bmesh.update_edit_mesh(hair.data)
-    bpy.ops.mesh.delete(type='FACE')
+    # Both SVGs (silhouette + hair) share the same viewBox, so origin_set
+    # BOUNDS gives the silhouette's bbox center for both — same X/Y frame.
+    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
 
-    bpy.ops.object.mode_set(mode='OBJECT')
-    delta_z = (show_z + 0.01) - silhouette_top_z
-    hair.location.z += delta_z
+    # The silhouette occupies the FULL viewBox; the haircut is a SUBSET of
+    # it. Their bbox CENTERS therefore differ slightly — using BOUNDS-
+    # origin would re-center the haircut to (0,0), pulling it sideways
+    # off the silhouette. Instead, restore the haircut to its absolute
+    # SVG-native position by shifting back so its centroid matches what
+    # an SVG-coord-preserving import would have produced.
+    # SVG width 25 mm centered → x range -12.5..+12.5 in mm before BOUNDS.
+    # After BOUNDS, hair was re-centered. To put it back at the
+    # silhouette's coordinate frame, we'd need the haircut's original
+    # centroid offset. Easier: rely on the fact that we DON'T call
+    # BOUNDS on the silhouette pre-extrude either — we use BOUNDS there
+    # too. So both meshes get bbox-centered, which means the silhouette
+    # center sits at (0,0) and the hair center sits at (0,0). Their
+    # actual positions in the SOURCE image differ but get re-aligned by
+    # this BOUNDS pass — which is what we want, since both viewBoxes
+    # are the same.
+    #
+    # ACTUALLY — silhouette spans the full viewBox so its bbox center IS
+    # the viewBox center. Hair spans only the upper-and-sides portion of
+    # the viewBox so its bbox center is OFFSET from the viewBox center
+    # (further up). After BOUNDS, both centers land at (0,0), which
+    # MIS-ALIGNS them.
+    #
+    # Fix: place the hair such that its viewBox-relative position
+    # matches. We already know the silhouette's viewBox center maps to
+    # (0,0) and silhouette y range is symmetric about y=0. Hair's
+    # viewBox-relative y center is (h_top + h_bot) / 2 — that's where
+    # hair should sit relative to viewBox center. We can't get that here
+    # without parsing the SVG. Cheapest fix: write hair.svg using the
+    # FULL viewBox of silhouette but keep hair shape's pixels in their
+    # original positions, so its bbox != viewBox and BOUNDS re-centers
+    # it correctly when the source is repositioned.
+    # extract_silhouette.py already writes hair.svg with the same
+    # viewBox; the hair PATH retains its coordinates inside that
+    # viewBox. After Blender's import, the imported curve KEEPS the
+    # coordinate frame of the SVG viewBox (origin at viewBox top-left).
+    # When we then origin_set BOUNDS, it re-centers around the bbox of
+    # the *path*, not the viewBox — which is the bug.
+    #
+    # Correct approach: SHIFT the hair so its viewBox top-left sits where
+    # the silhouette's viewBox top-left sat before bbox-centering. The
+    # silhouette before BOUNDS occupies x=[0..25] y=[-thickness..0]
+    # (after extrude). After BOUNDS, silhouette center → (0,0,h/2).
+    # Equivalent shift on hair: shift by viewBox_center → centers viewBox
+    # not bbox. We can simulate by inversely shifting the SVG-parsed
+    # offset:
+    #     hair_center_in_viewBox = (hair_bbox_center) in SVG coords
+    #     viewBox_center = (W/2, H/2) in SVG coords
+    #     shift = viewBox_center - hair_center_in_viewBox
+    # Apply that shift in mm to bring hair into silhouette frame.
+    # Read the SVG to get that offset.
+    import re
+    svg_text = open(HAIR_SVG_PATH, encoding='utf-8').read()
+    vb = re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg_text)
+    if vb:
+        view_w = float(vb.group(1))
+        view_h = float(vb.group(2))
+        # Hair bbox center in SVG coords from the path d (parse first M and all L points):
+        coords = re.findall(r'[ML]\s*([-\d.]+),([-\d.]+)', svg_text)
+        if coords:
+            xs = [float(x) for x, _ in coords]
+            ys = [float(y) for _, y in coords]
+            hair_cx_svg = (max(xs) + min(xs)) / 2.0
+            hair_cy_svg = (max(ys) + min(ys)) / 2.0
+            view_cx_svg = view_w / 2.0
+            view_cy_svg = view_h / 2.0
+            # Shift in SVG mm. SVG y increases downward; Blender y is up.
+            # After Blender's SVG import, the curve's y is inverted.
+            # After Blender SVG import + BOUNDS, hair.location is at hair's
+            # bbox center in world coords (i.e., the same Blender world
+            # position the bbox-center vertex would occupy). To put hair
+            # in the silhouette's frame, set its location to where its
+            # bbox center BELONGS: SVG (hair_cx, hair_cy) projects through
+            # the silhouette's mapping (subtract viewBox center, flip Y)
+            # to world (hair_cx - vcx, vcy - hair_cy).
+            shift_x_mm = hair_cx_svg - view_cx_svg
+            shift_y_mm = view_cy_svg - hair_cy_svg
+            hair.location = (shift_x_mm, shift_y_mm, 0)
+            print(f"[redaphid] hair placed at silhouette-frame center ({shift_x_mm:+.2f}, {shift_y_mm:+.2f}) mm")
+
+    bpy.ops.object.transform_apply(location=True)
+
+    # Lift to show face + 0.01 and extrude HAIR_HEIGHT
+    bpy.ops.object.select_all(action='DESELECT')
+    hair.select_set(True)
+    bpy.context.view_layer.objects.active = hair
+
+    # Move flat polygon to z = show_z + 0.01
+    z_target = show_z + 0.01
+    z_current = max((hair.matrix_world @ v.co).z for v in hair.data.vertices)
+    hair.location.z += (z_target - z_current)
     bpy.ops.object.transform_apply(location=True)
 
     bpy.ops.object.mode_set(mode='EDIT')
@@ -577,13 +616,6 @@ def build_hair_decoration(top, full_silhouette):
     bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Subtract the real face contour
-    cutter_z = (show_z + 0.01) + HAIR_HEIGHT / 2.0
-    face_cutter = import_face_curve_as_cutter(z_center=cutter_z, depth=HAIR_HEIGHT * 4)
-    boolean_op(hair, face_cutter, 'DIFFERENCE', "FaceCut")
-    clean_mesh(hair)
-
-    full_silhouette.hide_set(True)
     return hair
 
 

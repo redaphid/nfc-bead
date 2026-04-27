@@ -27,7 +27,7 @@ from skimage import measure
 # ── Tunables ───────────────────────────────────────────────────────────
 SRC = r"C:\Users\hypnodroid\Pictures\Screenshots\Screenshot 2026-04-25 235837.png"
 OUT_SVG = Path(r"D:\Projects\nfc-bead\beads\redaphid-portrait\silhouette.svg")
-OUT_FACE_SVG = Path(r"D:\Projects\nfc-bead\beads\redaphid-portrait\face.svg")
+OUT_HAIR_SVG = Path(r"D:\Projects\nfc-bead\beads\redaphid-portrait\hair.svg")
 OUT_DEBUG = Path(r"D:\Projects\nfc-bead\tmp\screenshots")
 
 BLUR_SIGMA       = 3.0     # gaussian sigma, in source pixels
@@ -35,19 +35,17 @@ LUMA_THRESHOLD   = 22       # luma > this = figure pixel  (background ≈ 0–10
 MORPH_CLOSE_R    = 4        # close gaps in the glow ring (pixels)
 FOURIER_HARMONICS = 24      # silhouette: keep low-freq descriptors only
 
-# Face region: the visible head/face area inside the silhouette.
-# Strategy is a euclidean distance transform on the silhouette mask: every
-# interior pixel's value = its distance (in pixels) from the nearest
-# outline pixel. The "face" is everything DEEP in the interior; "hair" is
-# the shallow ring near the outline + the narrow ear/chin protrusions.
-# A single distance threshold separates them naturally.
-FACE_DIST_PX      = 110      # face = pixels with edge-distance > this (px).
-                             # ~25 px/mm in our screenshot, so 110 px ≈ 4.25 mm
-                             # of hair-ring — leaves enough hair above the face
-                             # for a 2 mm string hole sandwiched between
-                             # ≥ 1 mm walls on both sides.
-FACE_MORPH_CLOSE  = 6        # round out the face boundary
-FACE_FOURIER_HARM = 12       # smooth low-freq descriptors
+# Hair region (the haircut shape): the silhouette regions that are clearly
+# HAIR — top of head above the eyebrow line + side ear-flaps above the
+# jawline. The face/skin (and chin/neck) is everything else, automatically.
+# Hair sits ON TOP of Top's full-silhouette show face; where it covers the
+# face, hair color is visible — like an actual haircut draping over the
+# forehead and sides.
+HAIR_EYEBROW_FACTOR = 0.5    # eyebrow line is eye_y - eye_spacing * this
+HAIR_JAWLINE_FACTOR = 1.0    # jawline is eye_y + eye_spacing * this
+HAIR_SIDE_FACTOR    = 0.65   # side hair starts at |x - cx| > eye_spacing * this
+HAIR_MORPH_CLOSE    = 5
+HAIR_FOURIER_HARM   = 14     # smoothing harmonics for hair contour
 
 # Eye chroma: the eyes are warm (R-B large positive) while the pink outline
 # has R-B near zero or negative, so a single warm-channel threshold separates
@@ -109,19 +107,33 @@ def find_outer_contour(mask: np.ndarray):
     return contours[0]
 
 
-def extract_face_mask(rgb: np.ndarray, silhouette_mask: np.ndarray) -> np.ndarray:
-    """Inner 'face' region via euclidean distance transform of the silhouette.
+def extract_hair_mask(silhouette_mask: np.ndarray, eyes_pix) -> np.ndarray:
+    """Haircut shape: silhouette regions ABOVE the eyebrow line, plus
+    silhouette regions FAR from the central column above the jawline
+    (the floppy ear-flaps). The chin/neck protrusion below the jawline
+    stays out → it's face/skin."""
+    if len(eyes_pix) < 2:
+        return np.zeros_like(silhouette_mask)
 
-    Pixels deep in the interior (far from the outline) form the face;
-    pixels near the outline form the hair ring. The narrow ear/chin
-    protrusions get pruned because their max edge-distance is small.
-    """
-    distances = ndimage.distance_transform_edt(silhouette_mask)
-    face = distances > FACE_DIST_PX
-    face = ndimage.binary_closing(face, iterations=FACE_MORPH_CLOSE)
-    face = keep_largest_component(face)
-    face = fill_holes(face)
-    return face
+    eyes = sorted(eyes_pix, key=lambda e: e[0])
+    eye_l, eye_r = eyes[0], eyes[-1]
+    eye_y = (eye_l[1] + eye_r[1]) / 2.0
+    cx = (eye_l[0] + eye_r[0]) / 2.0
+    eye_spacing = abs(eye_r[0] - eye_l[0])
+
+    eyebrow_y = eye_y - eye_spacing * HAIR_EYEBROW_FACTOR
+    jawline_y = eye_y + eye_spacing * HAIR_JAWLINE_FACTOR
+    side_dx   = eye_spacing * HAIR_SIDE_FACTOR
+
+    yy, xx = np.indices(silhouette_mask.shape)
+    above_brow = silhouette_mask & (yy < eyebrow_y)
+    side_flap  = silhouette_mask & (yy < jawline_y) & (np.abs(xx - cx) > side_dx)
+    hair = above_brow | side_flap
+
+    hair = ndimage.binary_closing(hair, iterations=HAIR_MORPH_CLOSE)
+    hair = keep_largest_component(hair)
+    hair = fill_holes(hair)
+    return hair
 
 
 def extract_eyes(rgb: np.ndarray):
@@ -176,27 +188,27 @@ def write_svg(silhouette_pts_xy_mm: np.ndarray, eyes_xy_r_mm, w_mm: float, h_mm:
     out_path.write_text(svg, encoding="utf-8")
 
 
-def write_face_svg(face_pts_xy_mm: np.ndarray, w_mm: float, h_mm: float, out_path: Path):
-    d = _path_d(face_pts_xy_mm)
+def write_hair_svg(hair_pts_xy_mm: np.ndarray, w_mm: float, h_mm: float, out_path: Path):
+    d = _path_d(hair_pts_xy_mm)
     svg = f'''<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="{w_mm:.3f}mm" height="{h_mm:.3f}mm" viewBox="0 0 {w_mm:.3f} {h_mm:.3f}">
-  <path id="face" d="{d}" fill="brown" stroke="none" />
+  <path id="hair" d="{d}" fill="magenta" stroke="none" />
 </svg>
 '''
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(svg, encoding="utf-8")
 
 
-def save_debug_overlay(rgb, silhouette_mask, sil_contour_rc, face_mask, face_contour_rc, eyes_pix, out_path: Path):
+def save_debug_overlay(rgb, silhouette_mask, sil_contour_rc, hair_mask, hair_contour_rc, eyes_pix, out_path: Path):
     """Save a debug PNG showing the original image with both masks + contours + eye markers."""
     overlay = rgb.copy()
     # Cyan tint on the silhouette region
     tint = np.zeros_like(rgb); tint[..., 1] = 80; tint[..., 2] = 80
     overlay = np.where(silhouette_mask[..., None], (overlay * 0.7 + tint * 0.3).astype(np.uint8), overlay)
-    # Yellow tint on the face region (over the silhouette tint)
-    if face_mask is not None:
-        ftint = np.zeros_like(rgb); ftint[..., 0] = 130; ftint[..., 1] = 130
-        overlay = np.where(face_mask[..., None], (overlay * 0.6 + ftint * 0.4).astype(np.uint8), overlay)
+    # Magenta tint on the hair region (over the silhouette tint)
+    if hair_mask is not None:
+        htint = np.zeros_like(rgb); htint[..., 0] = 200; htint[..., 2] = 200
+        overlay = np.where(hair_mask[..., None], (overlay * 0.6 + htint * 0.4).astype(np.uint8), overlay)
 
     def stipple(contour, color):
         if contour is None or len(contour) == 0:
@@ -206,7 +218,7 @@ def save_debug_overlay(rgb, silhouette_mask, sil_contour_rc, face_mask, face_con
         overlay[rr, cc] = color
 
     stipple(sil_contour_rc,  (255, 64, 64))   # red — silhouette
-    stipple(face_contour_rc, (0, 200, 255))   # cyan — face contour
+    stipple(hair_contour_rc, (255, 64, 200))  # magenta — hair contour
 
     for cx, cy, r in eyes_pix:
         for dy in range(-3, 4):
@@ -262,18 +274,19 @@ def main():
     for cx, cy, r in eyes_pix:
         print(f"  eye @ ({cx:.0f},{cy:.0f}) r={r:.1f} px")
 
-    # 10) extract face contour (HSV-style: low saturation inside the silhouette)
-    face_mask = extract_face_mask(rgb, figure)
-    if face_mask.any():
-        face_contour_rc = find_outer_contour(face_mask)
-        if len(face_contour_rc) > 300:
-            idx = np.linspace(0, len(face_contour_rc) - 1, 300).astype(int)
-            face_contour_rc = face_contour_rc[idx]
-        face_smoothed = fourier_smooth(face_contour_rc, FACE_FOURIER_HARM)
-        print(f"Face contour points: {len(face_smoothed)}  area={int(face_mask.sum())}px")
+    # 10) extract HAIR contour (haircut shape: top + side flaps)
+    hair_mask = extract_hair_mask(figure, eyes_pix)
+    if hair_mask.any():
+        hair_contour_rc = find_outer_contour(hair_mask)
+        if len(hair_contour_rc) > 300:
+            idx = np.linspace(0, len(hair_contour_rc) - 1, 300).astype(int)
+            hair_contour_rc = hair_contour_rc[idx]
+        hair_smoothed = fourier_smooth(hair_contour_rc, HAIR_FOURIER_HARM)
+        print(f"Hair contour points: {len(hair_smoothed)}  area={int(hair_mask.sum())}px")
     else:
-        face_smoothed = None
-        print("WARN: face mask empty — face contour skipped")
+        hair_smoothed = None
+        hair_contour_rc = None
+        print("WARN: hair mask empty — hair contour skipped")
 
     # 11) compute silhouette bbox in pixels, scale to target mm width.
     # The face shares the silhouette's pixels-per-mm so it lands inside.
@@ -290,7 +303,7 @@ def main():
         return np.column_stack((sx_mm, sy_mm))
 
     silhouette_xy_mm = to_mm_xy(smoothed)
-    face_xy_mm = to_mm_xy(face_smoothed) if face_smoothed is not None else None
+    hair_xy_mm = to_mm_xy(hair_smoothed) if hair_smoothed is not None else None
 
     eyes_mm = []
     for cx_px, cy_px, r_px in eyes_pix:
@@ -300,22 +313,22 @@ def main():
         eyes_mm.append((ex_mm, ey_mm, er_mm))
 
     print(f"SVG bbox: {SVG_TARGET_W_MM:.2f} x {h_mm:.2f} mm   ({px_per_mm:.2f} px/mm)")
-    if face_xy_mm is not None:
-        fx_min, fx_max = face_xy_mm[:, 0].min(), face_xy_mm[:, 0].max()
-        fy_min, fy_max = face_xy_mm[:, 1].min(), face_xy_mm[:, 1].max()
-        print(f"  face bbox (mm): x={fx_min:.2f}..{fx_max:.2f}  y={fy_min:.2f}..{fy_max:.2f}")
+    if hair_xy_mm is not None:
+        hx_min, hx_max = hair_xy_mm[:, 0].min(), hair_xy_mm[:, 0].max()
+        hy_min, hy_max = hair_xy_mm[:, 1].min(), hair_xy_mm[:, 1].max()
+        print(f"  hair bbox (mm): x={hx_min:.2f}..{hx_max:.2f}  y={hy_min:.2f}..{hy_max:.2f}")
 
-    # 12) write SVGs (silhouette + eyes in one, face contour in its own)
+    # 12) write SVGs (silhouette + eyes in one, hair contour in its own)
     write_svg(silhouette_xy_mm, eyes_mm, SVG_TARGET_W_MM, h_mm, OUT_SVG)
     print(f"Wrote {OUT_SVG}")
-    if face_xy_mm is not None:
-        write_face_svg(face_xy_mm, SVG_TARGET_W_MM, h_mm, OUT_FACE_SVG)
-        print(f"Wrote {OUT_FACE_SVG}")
+    if hair_xy_mm is not None:
+        write_hair_svg(hair_xy_mm, SVG_TARGET_W_MM, h_mm, OUT_HAIR_SVG)
+        print(f"Wrote {OUT_HAIR_SVG}")
 
     # 13) debug overlay
     OUT_DEBUG.mkdir(parents=True, exist_ok=True)
-    save_debug_overlay(rgb, figure, contour_rc, face_mask if face_smoothed is not None else None,
-                       face_contour_rc if face_smoothed is not None else None,
+    save_debug_overlay(rgb, figure, contour_rc, hair_mask if hair_smoothed is not None else None,
+                       hair_contour_rc if hair_smoothed is not None else None,
                        eyes_pix, OUT_DEBUG / "extract_debug.png")
     print(f"Wrote {OUT_DEBUG / 'extract_debug.png'}")
 
