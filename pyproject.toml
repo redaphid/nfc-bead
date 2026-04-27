@@ -18,6 +18,8 @@ dependencies = [
     "manifold3d>=3.4",
     # Pillow for any incidental image work (PNG plate previews in 3MF, etc.)
     "pillow>=10",
+    "scipy>=1.17.1",
+    "scikit-image>=0.26.0",
 ]
 
 [project.optional-dependencies]

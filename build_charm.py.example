@@ -24,8 +24,11 @@ THICKNESS = 5.0           # mm — total (split into 2 x 2.5mm halves)
 
 # String hole
 HOLE_DIAMETER = 2.0       # mm
-HOLE_Y = 7.09             # mm — Y position through head
-# Hole goes along X axis (lengthwise through head)
+HOLE_Y = 7.09             # mm — Y position through head (along X axis)
+# Picking HOLE_Y: see prompts/nfc-bead/prompt.md "String-hole placement rules".
+# Need ≥ 2.5 mm of solid silhouette above the hole, on a *wide* band — not on
+# a narrow ear-flap, hair-ridge, or tip. Drop into the forehead/head body if
+# the natural top is too narrow.
 
 # NFC pocket (bottom half only)
 NFC_DIAMETER = 10.5       # mm

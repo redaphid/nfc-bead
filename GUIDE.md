@@ -155,6 +155,7 @@ else:
 | NFC pocket intersects trunk gap | Pocket placed over interior through-hole | Fill the gap in the mesh, or move the pocket |
 | SVG rectangle doesn't fill hole | Separate path creates separate boundary | Select and fill the hole boundary in mesh edit mode |
 | Solidify breaks interior holes | Solidify modifier produces bad topology | Use extrude instead |
+| String hole splits a thin top wall | `HOLE_Y` placed in a narrow protrusion (hair ridge, ear, tip) | Drop hole down into the wider head/forehead — need ≥ 2.5 mm of solid silhouette above the hole |
 
 ## Dimensions Reference (Wooli Charm)
 
