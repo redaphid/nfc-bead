@@ -41,9 +41,13 @@ FOURIER_HARMONICS = 24      # silhouette: keep low-freq descriptors only
 # Hair sits ON TOP of Top's full-silhouette show face; where it covers the
 # face, hair color is visible — like an actual haircut draping over the
 # forehead and sides.
-HAIR_EYEBROW_FACTOR = 0.5    # eyebrow line is eye_y - eye_spacing * this
-HAIR_JAWLINE_FACTOR = 1.0    # jawline is eye_y + eye_spacing * this
-HAIR_SIDE_FACTOR    = 0.65   # side hair starts at |x - cx| > eye_spacing * this
+HAIR_EYEBROW_FACTOR = 0.55   # eyebrow line is eye_y - eye_spacing * this
+HAIR_JAWLINE_FACTOR = 1.4    # jawline is eye_y + eye_spacing * this — go
+                             # well below the chin so the floppy ears stay
+                             # fully classified as hair to their tips
+HAIR_SIDE_FACTOR    = 1.2    # side hair starts at |x - cx| > eye_spacing
+                             # * this — clear of the eyes and a comfortable
+                             # face margin (cheeks stay skin-colored)
 HAIR_MORPH_CLOSE    = 5
 HAIR_FOURIER_HARM   = 14     # smoothing harmonics for hair contour
 
