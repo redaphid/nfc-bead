@@ -633,13 +633,20 @@ def build_hair_decoration(top, full_silhouette):
 
 
 def mirror_decoration_for_back(obj, new_name):
-    """Duplicate `obj` and mirror it across z=0 so it sits below Bottom's
-    silhouette face instead of above Top's show face. Used to put a copy
-    of Hair / Decoration on the BACK of the bead for symmetric portraits.
+    """Duplicate `obj` and mirror it across world z=0 so it sits below
+    Bottom's silhouette face instead of above Top's show face. Used to put
+    a copy of Hair / Decoration on the BACK of the bead for symmetric
+    portraits.
 
-    Mirroring (scale_z = -1) flips face winding, so we recompute normals
-    afterwards. The duplicate keeps the original's X/Y position and ends up
-    at -Z relative to its source — landing on Bottom's silhouette side."""
+    `scale.z = -1` mirrors about the OBJECT'S origin, not world z=0 — so
+    when the source object's origin isn't at z=0 (e.g., Decoration's
+    origin is at the active eye's Z position after join), the naive
+    approach leaves the back-copy at the SAME world Z as the source.
+    Bake the duplicate's transform into the mesh first; that puts the
+    origin at world (0,0,0) so the subsequent scale.z = -1 mirrors the
+    mesh across world z=0 as intended.
+
+    Mirroring flips face winding, so we recompute normals after."""
     bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
@@ -647,7 +654,9 @@ def mirror_decoration_for_back(obj, new_name):
     back = bpy.context.active_object
     back.name = new_name
 
-    # Mirror across z=0 by scaling Z by −1 about world origin
+    # Bake current world transform into vertex data so origin = world 0,0,0
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    # Now scale.z = -1 mirrors across world z=0 (vertex z values negated)
     back.scale.z = -1.0
     bpy.ops.object.transform_apply(scale=True)
 
