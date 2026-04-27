@@ -756,23 +756,40 @@ def main():
     deco_back.data.materials.clear()
     deco_back.data.materials.append(bpy.data.materials["MAT_EyeGlow"])
 
-    # 9. Inspection layout: halves apart on X. Top stays show-face-up
-    # (its hair + eyes are visible) and Bottom stays inner-face-up (its
-    # NFC pocket + sockets are visible). Top's pegs hang underneath and
-    # are best viewed from below — get a side view in the viewport for
-    # that. The Top half is NOT flipped, so the export captures correct
-    # print orientation directly.
-    # Bottom + its back-decoration go to one side; Top + front-decoration
-    # to the other.
+    # 9. Pre-export orientation flip for the Bottom-side group.
+    # With back-decoration on Bottom's silhouette face, Bottom must print
+    # silhouette-UP so the raised features land on top instead of below
+    # the plate. Top stays show-face-UP (its raised features already on
+    # top). Both halves end up with their decorated face pointing UP,
+    # which matches what the slicer needs.
+    #
+    # Pegs on Bottom now hang DOWN in the flipped orientation — slicer
+    # supports required. The geometry is correct; print-time settings
+    # are a downstream concern.
+    bb_b = [bottom.matrix_world @ Vector(c) for c in bottom.bound_box]
+    pivot_b = Vector((sum(v.x for v in bb_b) / 8,
+                      sum(v.y for v in bb_b) / 8,
+                      sum(v.z for v in bb_b) / 8))
+    bpy.ops.object.select_all(action='DESELECT')
+    bottom.select_set(True)
+    hair_back.select_set(True)
+    deco_back.select_set(True)
+    bpy.context.view_layer.objects.active = bottom
+    bpy.context.scene.cursor.location = pivot_b
+    bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+    bpy.ops.transform.rotate(value=math.radians(180), orient_axis='X')
+    bpy.context.scene.cursor.location = (0, 0, 0)
+
+    # Inspection layout: halves apart on X.
     for o in (bottom, hair_back, deco_back):
         o.location.x -= 16.0
     for o in (top, hair, deco):
         o.location.x += 16.0
 
     # 9a. Communicate print-orientation overrides to the export skill.
-    # Our centered-mesh pipeline produces Bottom in print orientation
-    # (silhouette face DOWN, pegs UP) directly; the canonical 180° X
-    # flip would un-orient it.
+    # We've already flipped Bottom + back-decoration in the live scene
+    # to print-correct orientation, so the export skill should NOT flip
+    # again.
     import json
     bpy.context.scene["nfc_export_flip_override"] = json.dumps({
         "Bottom":         0.0,
