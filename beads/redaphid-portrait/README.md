@@ -51,6 +51,30 @@ Then `build_redaphid.py` imports both SVGs into Blender and runs the canonical N
 - The eye R-B threshold of 30 was set by sampling pixels in this specific screenshot. A different rendering style (cooler eyes, or eyes that aren't warm-dominant) would miss.
 - `silhouette.svg` and `hair.svg` are committed because they're the actual derived geometry — they're the contract between the extraction script and the build script. If the source image changes, regenerate them.
 
+## Print notes (v2 onward)
+
+Bottom prints with **silhouette face UP** so the back-decoration (HairBack +
+DecorationBack) lands raised on top, mirroring the front. Pegs hang
+DOWN as a consequence — **they cantilever onto the build plate**. The
+slicer (Elegoo Slicer for the Centauri Carbon 2) will flag this and
+ask for supports.
+
+Decision (after v1's failed-grip print):
+
+- **Slicer supports under the pegs.** Use tree supports or normal
+  supports limited to the peg region only — no need to support the
+  body itself. Supports leave small marks on the silhouette face
+  underside; acceptable for the back of a portrait charm.
+- *Alternative considered:* 3-piece bead with separate peg cylinders
+  and sockets on both halves. Cleaner print, more assembly. Skipped
+  for now in favor of fewer parts.
+
+Other v2 settings carried over from the recipe defaults: PLA or PETG,
+0.12–0.16 mm layer height, 100 % infill (parts are tiny). Filament
+assignments after import: body filament for `Bottom` + `Top`, hair
+filament for `Hair` + `HairBack`, eye-glow filament for `Decoration`
++ `DecorationBack`.
+
 ## Files
 
 - `silhouette.svg` — outer-outline contour + eye `<circle>` elements
