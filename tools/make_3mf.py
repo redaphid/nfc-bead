@@ -92,20 +92,26 @@ def _translate_transform(lib3mf, dx: float, dy: float, dz: float):
 def make_3mf(stl_dir: str, out_path: str) -> int:
     lib3mf = _import_lib3mf()
 
-    bottom_path = os.path.join(stl_dir, "Bottom.stl")
-    top_path    = os.path.join(stl_dir, "Top.stl")
-    deco_path   = os.path.join(stl_dir, "Decoration.stl")
-    hair_path   = os.path.join(stl_dir, "Hair.stl")     # optional
+    bottom_path     = os.path.join(stl_dir, "Bottom.stl")
+    top_path        = os.path.join(stl_dir, "Top.stl")
+    deco_path       = os.path.join(stl_dir, "Decoration.stl")
+    hair_path       = os.path.join(stl_dir, "Hair.stl")            # optional
+    hair_back_path  = os.path.join(stl_dir, "HairBack.stl")        # optional
+    deco_back_path  = os.path.join(stl_dir, "DecorationBack.stl")  # optional
     for p in (bottom_path, top_path, deco_path):
         if not os.path.isfile(p):
             print(f"missing: {p}", file=sys.stderr)
             return 1
-    has_hair = os.path.isfile(hair_path)
+    has_hair      = os.path.isfile(hair_path)
+    has_hair_back = os.path.isfile(hair_back_path)
+    has_deco_back = os.path.isfile(deco_back_path)
 
-    bottom = _load_stl(bottom_path)
-    top    = _load_stl(top_path)
-    deco   = _load_stl(deco_path)
-    hair   = _load_stl(hair_path) if has_hair else None
+    bottom    = _load_stl(bottom_path)
+    top       = _load_stl(top_path)
+    deco      = _load_stl(deco_path)
+    hair      = _load_stl(hair_path)      if has_hair      else None
+    hair_back = _load_stl(hair_back_path) if has_hair_back else None
+    deco_back = _load_stl(deco_back_path) if has_deco_back else None
 
     wrapper = lib3mf.Wrapper()
     model = wrapper.CreateModel()
@@ -116,10 +122,12 @@ def make_3mf(stl_dir: str, out_path: str) -> int:
     # above Top's outer face). Adding them as components of the same
     # ComponentsObject preserves those relative positions when the slicer
     # imports the bundle.
-    bottom_obj = _add_mesh(model, lib3mf, "Bottom", bottom)
-    top_obj    = _add_mesh(model, lib3mf, "Top", top)
-    deco_obj   = _add_mesh(model, lib3mf, "Decoration", deco)
-    hair_obj   = _add_mesh(model, lib3mf, "Hair", hair) if has_hair else None
+    bottom_obj    = _add_mesh(model, lib3mf, "Bottom", bottom)
+    top_obj       = _add_mesh(model, lib3mf, "Top", top)
+    deco_obj      = _add_mesh(model, lib3mf, "Decoration", deco)
+    hair_obj      = _add_mesh(model, lib3mf, "Hair", hair) if has_hair else None
+    hair_back_obj = _add_mesh(model, lib3mf, "HairBack", hair_back) if has_hair_back else None
+    deco_back_obj = _add_mesh(model, lib3mf, "DecorationBack", deco_back) if has_deco_back else None
 
     # Bundle Top + Hair + Decoration as a single ComponentsObject so the
     # slicer treats them as ONE OBJECT WITH PARTS.
@@ -130,9 +138,21 @@ def make_3mf(stl_dir: str, out_path: str) -> int:
         asm.AddComponent(hair_obj, _identity_transform(lib3mf))
     asm.AddComponent(deco_obj, _identity_transform(lib3mf))
 
+    # If back-decorations are present, bundle Bottom + HairBack + DecorationBack
+    # the same way so the slicer keeps them stacked on Bottom's silhouette face.
+    has_back = has_hair_back or has_deco_back
+    if has_back:
+        asm_b = model.AddComponentsObject()
+        asm_b.SetName("Bottom_with_BackDecoration")
+        asm_b.AddComponent(bottom_obj, _identity_transform(lib3mf))
+        if hair_back_obj is not None:
+            asm_b.AddComponent(hair_back_obj, _identity_transform(lib3mf))
+        if deco_back_obj is not None:
+            asm_b.AddComponent(deco_back_obj, _identity_transform(lib3mf))
+
     # Place build items on the plate.
     model.AddBuildItem(
-        bottom_obj,
+        asm_b if has_back else bottom_obj,
         _translate_transform(lib3mf, *PLATE_BOTTOM_OFFSET),
     )
     model.AddBuildItem(
@@ -153,7 +173,19 @@ def make_3mf(stl_dir: str, out_path: str) -> int:
     writer.WriteToFile(out_path)
     size = os.path.getsize(out_path) if os.path.isfile(out_path) else 0
     print(f"wrote {out_path} ({size} bytes)")
-    print(f"  Bottom: {len(bottom.vertices)} verts / {len(bottom.faces)} faces  -> placed at {PLATE_BOTTOM_OFFSET}")
+    if has_back:
+        b_label_parts = ["Bottom"]
+        if has_hair_back: b_label_parts.append("HairBack")
+        if has_deco_back: b_label_parts.append("DecorationBack")
+        print(f"  {' + '.join(b_label_parts)} (merged components):")
+        print(f"    Bottom:         {len(bottom.vertices)} verts / {len(bottom.faces)} faces")
+        if has_hair_back:
+            print(f"    HairBack:       {len(hair_back.vertices)} verts / {len(hair_back.faces)} faces")
+        if has_deco_back:
+            print(f"    DecorationBack: {len(deco_back.vertices)} verts / {len(deco_back.faces)} faces")
+        print(f"    -> placed at {PLATE_BOTTOM_OFFSET}")
+    else:
+        print(f"  Bottom: {len(bottom.vertices)} verts / {len(bottom.faces)} faces  -> placed at {PLATE_BOTTOM_OFFSET}")
     label = "Top + Hair + Decoration" if has_hair else "Top + Decoration"
     print(f"  {label} (merged components):")
     print(f"    Top:        {len(top.vertices)} verts / {len(top.faces)} faces")

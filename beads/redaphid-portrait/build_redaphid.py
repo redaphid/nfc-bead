@@ -23,33 +23,38 @@ HAIR_SVG_PATH = r"D:\Projects\nfc-bead\beads\redaphid-portrait\hair.svg"
 REPO_DIR      = r"D:\Projects\nfc-bead"
 BEAD_DIR      = os.path.join(REPO_DIR, "beads", "redaphid-portrait")
 
-TARGET_WIDTH  = 25.0           # mm (kandi-bracelet bead size)
-THICKNESS     = 4.0            # mm total (split 2.0 + 2.0) — thinner profile
+TARGET_WIDTH  = 22.0           # mm (kandi-bracelet — shrunk from 25 after first print)
+THICKNESS     = 5.0            # mm total (split 2.5 + 2.5) — recipe default; the 4 mm
+                               # thinner profile didn't leave room for full-height pegs
 
-# String hole: along X axis, through the HAIR BAND. Sits LOW in the band
-# (HOLE_Y=7.5, not 8.5) to keep ≥ 2 mm of solid silhouette wall above the
-# hole — the load-bearing region when the bead hangs off a bracelet.
-# Silhouette top ≈ y=+10.6 → 10.6 − 7.5 − 1 (radius) = 2.1 mm wall above.
+# String hole: along X axis, through the HAIR BAND. Scaled with TARGET_WIDTH.
+# Silhouette top ≈ y=+9.3 (with TARGET_WIDTH=22, h_mm=18.6, half=9.3).
+# y=6.6 leaves 9.3 − 6.6 − 1 (radius) = 1.7 mm wall above — load-bearing.
 HOLE_DIA      = 2.0
-HOLE_Y        = 7.5            # mm — through hair, ≥ 2 mm wall above
+HOLE_Y        = 6.6            # mm — through hair, ≥ 1.7 mm wall above
 
 # NFC pocket — face/snout area, below the eyes, well within head ellipse
 NFC_DIAMETER  = 10.0
 NFC_DEPTH     = 0.8
-NFC_POS       = (0.0, -2.0)    # mm — shifted up so chin peg at y=-9 clears
+NFC_POS       = (0.0, -1.0)    # mm — shifted UP at TARGET_WIDTH=22 so the
+                               # chin peg can sit at y=-8 (≥ 0.3 mm inside the
+                               # silhouette y-min). With no central forehead
+                               # peg in this layout, NFC's top edge has plenty
+                               # of clear space upward.
 
 # Peg friction-fit
 PEG_DIAMETER  = 2.0
-PEG_HEIGHT    = 1.0            # mm — reduced from 1.5 so the thinner 2 mm
-                               # half still has ≥ 0.5 mm wall above sockets
+PEG_HEIGHT    = 1.5            # mm — recipe default; first print at 1.0 mm
+                               # didn't grip. With THICKNESS=5 (halves 2.5),
+                               # sockets at 1.8 mm leave 0.7 mm wall — fine.
 PEG_CLEARANCE = 0.1
-# Triangulated. String hole at y=+7.5 (low in hair band). NFC at (0,-2)
-# r=5. Forehead peg at y=+5 sits between hole and NFC. Two ear pegs
-# triangulate from below.
+# Triangulated. At TARGET_WIDTH=22 with NFC at (0,-1), pegs flank the
+# head's widest band at y≈0 and a chin peg sits at y=-8 (silhouette
+# y_min=-9.3, peg edge inside by 0.3 mm).
 PEG_CANDIDATES = [
-    ( 0.0,  5.0),    # forehead, between string hole and NFC
-    ( 8.5, -3.5),    # right ear/cheek
-    (-8.5, -3.5),    # left ear/cheek
+    ( 8.0,  0.0),    # right side, mid-head
+    (-8.0,  0.0),    # left side, mid-head
+    ( 0.0, -8.0),    # chin / lower face
 ]
 
 # Peg ↔ socket assignment. Recipe default puts pegs on Bottom + sockets on
@@ -627,6 +632,33 @@ def build_hair_decoration(top, full_silhouette):
     return hair
 
 
+def mirror_decoration_for_back(obj, new_name):
+    """Duplicate `obj` and mirror it across z=0 so it sits below Bottom's
+    silhouette face instead of above Top's show face. Used to put a copy
+    of Hair / Decoration on the BACK of the bead for symmetric portraits.
+
+    Mirroring (scale_z = -1) flips face winding, so we recompute normals
+    afterwards. The duplicate keeps the original's X/Y position and ends up
+    at -Z relative to its source — landing on Bottom's silhouette side."""
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.duplicate()
+    back = bpy.context.active_object
+    back.name = new_name
+
+    # Mirror across z=0 by scaling Z by −1 about world origin
+    back.scale.z = -1.0
+    bpy.ops.object.transform_apply(scale=True)
+
+    # Re-fix normals after the inversion
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    return back
+
+
 def apply_materials(bottom, top, hair, deco):
     def mat(name, base, rough, emit_color=None, emit_strength=0.0):
         m = bpy.data.materials.new(name=name)
@@ -696,8 +728,24 @@ def main():
     print(f"[redaphid] eyes (Blender mm): {eyes_xyr}")
     deco = build_eye_decoration(eyes_xyr, top)
 
+    # 7a. Mirror Hair + Decoration onto Bottom's silhouette face — the user
+    # wanted the portrait visible from both sides. The mirror is across z=0
+    # (the cut plane), so Hair_back sits just below Bottom's silhouette
+    # face (z=−2..−2.4) and Decoration_back at z=−2.01..−2.51.
+    #
+    # NOTE on printability: this puts raised features below Bottom's plate-
+    # touching face. Slicer needs supports OR an alternate orientation.
+    # Geometry is captured here; print configuration is a downstream call.
+    hair_back = mirror_decoration_for_back(hair, "HairBack")
+    deco_back = mirror_decoration_for_back(deco, "DecorationBack")
+
     # 8. Materials
     apply_materials(bottom, top, hair, deco)
+    # Match back materials to front so the slicer assigns the same filaments
+    hair_back.data.materials.clear()
+    hair_back.data.materials.append(bpy.data.materials["MAT_Hair"])
+    deco_back.data.materials.clear()
+    deco_back.data.materials.append(bpy.data.materials["MAT_EyeGlow"])
 
     # 9. Inspection layout: halves apart on X. Top stays show-face-up
     # (its hair + eyes are visible) and Bottom stays inner-face-up (its
@@ -705,7 +753,10 @@ def main():
     # are best viewed from below — get a side view in the viewport for
     # that. The Top half is NOT flipped, so the export captures correct
     # print orientation directly.
-    bottom.location = (-16.0, 0.0, bottom.location.z)
+    # Bottom + its back-decoration go to one side; Top + front-decoration
+    # to the other.
+    for o in (bottom, hair_back, deco_back):
+        o.location.x -= 16.0
     for o in (top, hair, deco):
         o.location.x += 16.0
 
@@ -715,10 +766,12 @@ def main():
     # flip would un-orient it.
     import json
     bpy.context.scene["nfc_export_flip_override"] = json.dumps({
-        "Bottom":     0.0,
-        "Top":        0.0,
-        "Hair":       0.0,
-        "Decoration": 0.0,
+        "Bottom":         0.0,
+        "Top":            0.0,
+        "Hair":           0.0,
+        "Decoration":     0.0,
+        "HairBack":       0.0,
+        "DecorationBack": 0.0,
     })
 
     # 10. Save stage snapshot
