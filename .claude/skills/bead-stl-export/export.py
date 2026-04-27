@@ -184,7 +184,21 @@ print(f"[stl_export] writing to {out_dir}")
 # while the live scene is identical to its pre-export state.
 
 def _resolve_flip(obj_name):
-    """Return the flip-deg for a given object — straight dict lookup."""
+    """Flip-deg for a given object. The scene custom-property
+    `nfc_export_flip_override` can override per-charm — useful when a
+    build script's pipeline already produces a part in print orientation
+    and the canonical 180° flip would un-orient it. Set as a JSON
+    string of `{name: deg}` pairs on bpy.context.scene before running
+    the export."""
+    overrides = bpy.context.scene.get("nfc_export_flip_override")
+    if overrides:
+        try:
+            import json  # noqa: PLC0415
+            d = json.loads(overrides) if isinstance(overrides, str) else overrides
+            if obj_name in d:
+                return float(d[obj_name])
+        except (ValueError, TypeError):
+            pass
     return EXPORT_FLIP_X_DEG.get(obj_name, 0.0)
 
 manifest = []

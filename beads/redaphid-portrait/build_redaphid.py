@@ -26,13 +26,12 @@ BEAD_DIR      = os.path.join(REPO_DIR, "beads", "redaphid-portrait")
 TARGET_WIDTH  = 25.0           # mm (kandi-bracelet bead size)
 THICKNESS     = 4.0            # mm total (split 2.0 + 2.0) — thinner profile
 
-# String hole: along X axis, through the HAIR BAND between the face top
-# and the silhouette top. With distance-transform face extraction and a
-# 4mm hair ring, the face top lands around y=+6.2 and the silhouette top
-# at y=+10.6 in centered Blender coords. y=8.5 sits centered in the hair
-# band: ≈ 1 mm wall above the hole, ≈ 1.3 mm of hair below to the face.
+# String hole: along X axis, through the HAIR BAND. Sits LOW in the band
+# (HOLE_Y=7.5, not 8.5) to keep ≥ 2 mm of solid silhouette wall above the
+# hole — the load-bearing region when the bead hangs off a bracelet.
+# Silhouette top ≈ y=+10.6 → 10.6 − 7.5 − 1 (radius) = 2.1 mm wall above.
 HOLE_DIA      = 2.0
-HOLE_Y        = 8.5            # mm — through hair, OUTSIDE face contour
+HOLE_Y        = 7.5            # mm — through hair, ≥ 2 mm wall above
 
 # NFC pocket — face/snout area, below the eyes, well within head ellipse
 NFC_DIAMETER  = 10.0
@@ -44,20 +43,22 @@ PEG_DIAMETER  = 2.0
 PEG_HEIGHT    = 1.0            # mm — reduced from 1.5 so the thinner 2 mm
                                # half still has ≥ 0.5 mm wall above sockets
 PEG_CLEARANCE = 0.1
-# Triangulated. With the string hole at y=+8.5 and the NFC pocket at
-# y=-3 (radius 5 mm), the only solid corridor for a 3rd peg is BELOW
-# the NFC pocket — at the chin/neck. Two side pegs in the ear-flap
-# region triangulate with the chin peg.
+# Triangulated. String hole at y=+7.5 (low in hair band). NFC at (0,-2)
+# r=5. Forehead peg at y=+5 sits between hole and NFC. Two ear pegs
+# triangulate from below.
 PEG_CANDIDATES = [
-    ( 0.0, -9.0),    # chin / neck — below NFC, above silhouette bottom
+    ( 0.0,  5.0),    # forehead, between string hole and NFC
     ( 8.5, -3.5),    # right ear/cheek
     (-8.5, -3.5),    # left ear/cheek
 ]
 
 # Peg ↔ socket assignment. Recipe default puts pegs on Bottom + sockets on
 # Top; setting this False inverts (pegs on Top stick DOWN, sockets recessed
-# UP into Bottom body). User-requested layout for the redaphid charm.
-PEGS_ON_BOTTOM = False
+# UP into Bottom body). PEGS_ON_BOTTOM=False causes a printability problem:
+# pegs hanging off Top become cantilevers in the slicer (Top assembly with
+# Hair + Decoration on the show face can't be flipped to put pegs up because
+# the hair would point into the build plate). Keep True for printable charms.
+PEGS_ON_BOTTOM = True
 
 # Eye decoration — raised cylinders. Positions below are FALLBACKs,
 # overridden if SVG carries <circle> elements.
@@ -310,14 +311,21 @@ def extrude_to_thickness(mesh):
 
 def drill_string_hole(mesh):
     d = mesh.dimensions
+    # Drill at the mesh's actual Z midpoint, NOT THICKNESS/2 — extrude_to_thickness
+    # leaves verts spanning z=−THICKNESS/2..+THICKNESS/2 (centered), so a
+    # hard-coded THICKNESS/2 put the hole at the TOP face instead of the middle.
+    # The hole would end up entirely in the Top half after splitting → Bottom
+    # had no opening, you couldn't thread a cord through. Compute z_mid live.
+    zs = [v.co.z for v in mesh.data.vertices]
+    z_mid = (min(zs) + max(zs)) / 2.0
     bpy.ops.mesh.primitive_cylinder_add(
         vertices=48, radius=HOLE_DIA / 2.0, depth=d.x * 4,
-        location=(0, HOLE_Y, THICKNESS / 2.0),
+        location=(0, HOLE_Y, z_mid),
         rotation=(0, math.radians(90), 0))
     boolean_op(mesh, bpy.context.active_object, 'DIFFERENCE', "Hole")
     clean_mesh(mesh)
     mesh.name = "FullBead"
-    print(f"[redaphid] string hole drilled @ y={HOLE_Y}")
+    print(f"[redaphid] string hole drilled @ y={HOLE_Y}, z_mid={z_mid:.2f}")
 
 
 def split_halves(mesh):
@@ -700,6 +708,18 @@ def main():
     bottom.location = (-16.0, 0.0, bottom.location.z)
     for o in (top, hair, deco):
         o.location.x += 16.0
+
+    # 9a. Communicate print-orientation overrides to the export skill.
+    # Our centered-mesh pipeline produces Bottom in print orientation
+    # (silhouette face DOWN, pegs UP) directly; the canonical 180° X
+    # flip would un-orient it.
+    import json
+    bpy.context.scene["nfc_export_flip_override"] = json.dumps({
+        "Bottom":     0.0,
+        "Top":        0.0,
+        "Hair":       0.0,
+        "Decoration": 0.0,
+    })
 
     # 10. Save stage snapshot
     stages_dir = os.path.join(BEAD_DIR, "stages")
