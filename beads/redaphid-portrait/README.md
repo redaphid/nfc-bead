@@ -51,33 +51,6 @@ Then `build_redaphid.py` imports both SVGs into Blender and runs the canonical N
 - The eye R-B threshold of 30 was set by sampling pixels in this specific screenshot. A different rendering style (cooler eyes, or eyes that aren't warm-dominant) would miss.
 - `silhouette.svg` and `hair.svg` are committed because they're the actual derived geometry — they're the contract between the extraction script and the build script. If the source image changes, regenerate them.
 
-## Print notes (v3 — single-side)
-
-The symmetric-back design (v2 with `HairBack` + `DecorationBack`)
-exposed a printability problem: Bottom had to print silhouette-UP so
-the back decoration could land raised on top, which forced the pegs
-to hang down as cantilevers. After test-printing both single-side
-and symmetric-back versions, the symmetric back was abandoned —
-Centauri Carbon 2 supports under the cantilever left visible scarring
-and the assembly ended up worse than the single-side version.
-
-**Current design is single-side (face on Top only).**
-
-- Bottom prints **silhouette face DOWN** to plate, **pegs UP** —
-  no overhangs, no supports needed.
-- Top prints **inner face DOWN** to plate, **show face UP** with
-  Hair + Decoration raised on top. No supports needed.
-- The back of the assembled bead is smooth body color.
-
-Settings: PLA or PETG, 0.12–0.16 mm layer height, 100 % infill
-(parts are tiny), no supports. Filament assignments after import:
-body filament for `Bottom` + `Top`, hair filament for `Hair`,
-eye-glow filament for `Decoration`.
-
-If you want to revisit symmetric-back later, commit `36c3c78` had
-the build script and `33d1b8f` had the print-orientation fix.
-Both are reachable in git history.
-
 ## Files
 
 - `silhouette.svg` — outer-outline contour + eye `<circle>` elements

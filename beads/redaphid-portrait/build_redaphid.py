@@ -23,44 +23,40 @@ HAIR_SVG_PATH = r"D:\Projects\nfc-bead\beads\redaphid-portrait\hair.svg"
 REPO_DIR      = r"D:\Projects\nfc-bead"
 BEAD_DIR      = os.path.join(REPO_DIR, "beads", "redaphid-portrait")
 
-TARGET_WIDTH  = 20.0           # mm (kandi-bracelet — shrunk further after v2 prints
-                               # were still too big). Floor of 17 mm leaves
-                               # ~3.5 mm horizontal margin around the 10 mm NFC
-                               # pocket — too tight for clean peg placement.
-                               # 20 mm keeps the layout printable.
+TARGET_WIDTH  = 20.0           # mm (kandi-bracelet — shrunk again after second print)
 THICKNESS     = 5.0            # mm total (split 2.5 + 2.5) — recipe default; the 4 mm
                                # thinner profile didn't leave room for full-height pegs
 
 # String hole: along X axis, through the HAIR BAND. Scaled with TARGET_WIDTH.
-# Silhouette top ≈ y=+8.46 (with TARGET_WIDTH=20, h_mm=16.92, half=8.46).
-# y=6.5 leaves 8.46 − 6.5 − 1 (radius) = 0.96 mm wall above — minimum acceptable.
-HOLE_DIA      = 2.0
-HOLE_Y        = 6.5            # mm — through hair, ≥ 0.96 mm wall above
+# Silhouette top ≈ y=+8.46 (TARGET_WIDTH=20, h_mm=16.92, half=8.46).
+# Third-print fix: HOLE_DIA 2.0 → 1.5 + HOLE_Y 6.6 → 5.5 because the
+# previous wall above the hole (0.86 mm) snapped on the printed bead.
+# y=5.5 + 0.75 (radius) leaves 8.46 − 5.5 − 0.75 = 2.21 mm solid wall.
+HOLE_DIA      = 1.5
+HOLE_Y        = 5.5            # mm — through hair, ≥ 2.2 mm wall above
 
-# NFC pocket — centered at origin so chin peg has clearance below the pocket.
-# At TARGET_WIDTH=20, NFC's 5 mm radius leaves 1.5 mm to silhouette y-min and
-# 1.5 mm to the hair-band start (y=+5..+8.46).
+# NFC pocket — face/snout area, below the eyes, well within head ellipse
 NFC_DIAMETER  = 10.0
 NFC_DEPTH     = 0.8
-NFC_POS       = (0.0,  0.0)    # mm — centered: equal margin top/bottom around
-                               # the pocket; allows chin peg at y=-7 to clear
-                               # NFC by 1.0 mm and the silhouette edge by ≥ 0.4 mm.
+NFC_POS       = (0.0, -1.0)    # mm — shifted UP at TARGET_WIDTH=22 so the
+                               # chin peg can sit at y=-8 (≥ 0.3 mm inside the
+                               # silhouette y-min). With no central forehead
+                               # peg in this layout, NFC's top edge has plenty
+                               # of clear space upward.
 
 # Peg friction-fit
 PEG_DIAMETER  = 2.0
-PEG_HEIGHT    = 1.7            # mm — bumped from 1.5 for better grip in
-                               # printed sockets. With THICKNESS=5 (halves
-                               # 2.5), sockets at 2.0 mm leave 0.5 mm wall
-                               # — at the recipe minimum but acceptable.
+PEG_HEIGHT    = 1.5            # mm — recipe default; first print at 1.0 mm
+                               # didn't grip. With THICKNESS=5 (halves 2.5),
+                               # sockets at 1.8 mm leave 0.7 mm wall — fine.
 PEG_CLEARANCE = 0.1
-# Triangulated. At TARGET_WIDTH=20 the silhouette is ±10 wide × ±8.46 tall.
-# Chin peg pulled IN to y=-6.6 (was -7) — at -7 the socket cutter at
-# radius 1.1 was carving into the narrow chin/neck silhouette boundary;
-# at -6.6 the peg edge sits 0.86 mm inside silhouette y-min.
+# Triangulated. At TARGET_WIDTH=22 with NFC at (0,-1), pegs flank the
+# head's widest band at y≈0 and a chin peg sits at y=-8 (silhouette
+# y_min=-9.3, peg edge inside by 0.3 mm).
 PEG_CANDIDATES = [
-    ( 7.0,  0.0),    # right side, mid-head
-    (-7.0,  0.0),    # left side, mid-head
-    ( 0.0, -6.6),    # chin / lower face — pulled in from -7
+    ( 8.0,  0.0),    # right side, mid-head
+    (-8.0,  0.0),    # left side, mid-head
+    ( 0.0, -8.0),    # chin / lower face
 ]
 
 # Peg ↔ socket assignment. Recipe default puts pegs on Bottom + sockets on
@@ -88,6 +84,14 @@ HAIR_HEIGHT     = 0.4
 # only; future iteration could also reject any candidate that lands inside
 # the imported face mesh.
 PEG_CANDIDATES_OVERRIDE = None
+
+# Symmetric back face — raised hair + eyes mirrored onto Bottom's silhouette
+# face. Enables a portrait visible from BOTH sides of the assembled bead.
+# When True the build also flips Bottom 180° around X (so the back-decoration
+# prints UP), which forces pegs to hang DOWN — the slicer needs supports
+# under them. Default OFF for clean printability; flip the flag on if you
+# want the symmetric front/back at the cost of slicer supports.
+SYMMETRIC_BACK = False
 
 # ── HELPERS ─────────────────────────────────────────────────────────
 
@@ -638,6 +642,42 @@ def build_hair_decoration(top, full_silhouette):
     return hair
 
 
+def mirror_decoration_for_back(obj, new_name):
+    """Duplicate `obj` and mirror it across world z=0 so it sits below
+    Bottom's silhouette face instead of above Top's show face. Used to put
+    a copy of Hair / Decoration on the BACK of the bead for symmetric
+    portraits.
+
+    `scale.z = -1` mirrors about the OBJECT'S origin, not world z=0 — so
+    when the source object's origin isn't at z=0 (e.g., Decoration's
+    origin is at the active eye's Z position after join), the naive
+    approach leaves the back-copy at the SAME world Z as the source.
+    Bake the duplicate's transform into the mesh first; that puts the
+    origin at world (0,0,0) so the subsequent scale.z = -1 mirrors the
+    mesh across world z=0 as intended.
+
+    Mirroring flips face winding, so we recompute normals after."""
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.duplicate()
+    back = bpy.context.active_object
+    back.name = new_name
+
+    # Bake current world transform into vertex data so origin = world 0,0,0
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    # Now scale.z = -1 mirrors across world z=0 (vertex z values negated)
+    back.scale.z = -1.0
+    bpy.ops.object.transform_apply(scale=True)
+
+    # Re-fix normals after the inversion
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    return back
+
+
 def apply_materials(bottom, top, hair, deco):
     def mat(name, base, rough, emit_color=None, emit_strength=0.0):
         m = bpy.data.materials.new(name=name)
@@ -707,31 +747,67 @@ def main():
     print(f"[redaphid] eyes (Blender mm): {eyes_xyr}")
     deco = build_eye_decoration(eyes_xyr, top)
 
-    # 7a. Single-side portrait. The previous symmetric-back design produced
-    # printability issues (cantilevered pegs + back decoration on the same
-    # half), so we reverted to face-only-on-Top. Bottom's silhouette face
-    # stays smooth and prints flat on the build plate.
+    # 7a. Optionally mirror Hair + Decoration onto Bottom's silhouette face
+    # for a symmetric front/back portrait. When SYMMETRIC_BACK=False (the
+    # default), skip this step — the canonical print orientation has
+    # silhouette face DOWN to plate, pegs UP (no cantilever). Adding back-
+    # decoration here forces a Bottom flip (silhouette UP) which makes the
+    # pegs hang DOWN as a cantilever the slicer needs supports for.
+    hair_back = None
+    deco_back = None
+    if SYMMETRIC_BACK:
+        hair_back = mirror_decoration_for_back(hair, "HairBack")
+        deco_back = mirror_decoration_for_back(deco, "DecorationBack")
 
     # 8. Materials
     apply_materials(bottom, top, hair, deco)
+    if SYMMETRIC_BACK:
+        # Match back materials to front so the slicer assigns the same filaments
+        hair_back.data.materials.clear()
+        hair_back.data.materials.append(bpy.data.materials["MAT_Hair"])
+        deco_back.data.materials.clear()
+        deco_back.data.materials.append(bpy.data.materials["MAT_EyeGlow"])
 
-    # 9. Inspection layout: halves apart on X. Bottom on the left
-    # (silhouette face DOWN, inner face UP — NFC pocket and pegs visible),
-    # Top on the right (show face UP — hair + eyes visible).
-    bottom.location.x -= 16.0
+    # 9. Pre-export orientation. When SYMMETRIC_BACK is on, flip
+    # Bottom + back-decorations as a group so the back-decoration prints
+    # raised UP from the silhouette face (pegs cantilever down — needs
+    # supports). When SYMMETRIC_BACK is off, leave Bottom in the canonical
+    # orientation (silhouette face DOWN to plate, pegs UP) — cleanest
+    # print, no supports needed.
+    if SYMMETRIC_BACK:
+        bb_b = [bottom.matrix_world @ Vector(c) for c in bottom.bound_box]
+        pivot_b = Vector((sum(v.x for v in bb_b) / 8,
+                          sum(v.y for v in bb_b) / 8,
+                          sum(v.z for v in bb_b) / 8))
+        bpy.ops.object.select_all(action='DESELECT')
+        bottom.select_set(True)
+        hair_back.select_set(True)
+        deco_back.select_set(True)
+        bpy.context.view_layer.objects.active = bottom
+        bpy.context.scene.cursor.location = pivot_b
+        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+        bpy.ops.transform.rotate(value=math.radians(180), orient_axis='X')
+        bpy.context.scene.cursor.location = (0, 0, 0)
+
+    # Inspection layout: halves apart on X.
+    bottom_group = [bottom] + ([hair_back, deco_back] if SYMMETRIC_BACK else [])
+    for o in bottom_group:
+        o.location.x -= 16.0
     for o in (top, hair, deco):
         o.location.x += 16.0
 
     # 9a. Communicate print-orientation overrides to the export skill.
-    # Centered-mesh pipeline produces both halves in print orientation
-    # already (silhouette/show face DOWN respectively); the canonical
-    # 180° flip on Bottom would un-orient it.
+    # We've already flipped Bottom + back-decoration in the live scene
+    # to print-correct orientation, so the export skill should NOT flip
+    # again.
     import json
     bpy.context.scene["nfc_export_flip_override"] = json.dumps({
         "Bottom":         0.0,
         "Top":            0.0,
         "Hair":           0.0,
         "Decoration":     0.0,
+        "HairBack":       0.0,
+        "DecorationBack": 0.0,
     })
 
     # 10. Save stage snapshot
