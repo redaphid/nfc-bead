@@ -20,6 +20,7 @@ dependencies = [
     "pillow>=10",
     "scipy>=1.17.1",
     "scikit-image>=0.26.0",
+    "imageio-ffmpeg>=0.6.0",
 ]
 
 [project.optional-dependencies]

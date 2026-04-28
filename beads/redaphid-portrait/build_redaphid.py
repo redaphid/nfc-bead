@@ -48,18 +48,19 @@ NFC_POS       = (0.0,  0.0)    # mm — centered: equal margin top/bottom around
 
 # Peg friction-fit
 PEG_DIAMETER  = 2.0
-PEG_HEIGHT    = 1.5            # mm — recipe default; first print at 1.0 mm
-                               # didn't grip. With THICKNESS=5 (halves 2.5),
-                               # sockets at 1.8 mm leave 0.7 mm wall — fine.
+PEG_HEIGHT    = 1.7            # mm — bumped from 1.5 for better grip in
+                               # printed sockets. With THICKNESS=5 (halves
+                               # 2.5), sockets at 2.0 mm leave 0.5 mm wall
+                               # — at the recipe minimum but acceptable.
 PEG_CLEARANCE = 0.1
 # Triangulated. At TARGET_WIDTH=20 the silhouette is ±10 wide × ±8.46 tall.
-# Side pegs pulled in to ±7 (was ±8) so peg edges stay 1+ mm inside the
-# silhouette boundary. Chin peg at y=-7 has 1.0 mm NFC clearance and
-# 0.46 mm to silhouette y-min.
+# Chin peg pulled IN to y=-6.6 (was -7) — at -7 the socket cutter at
+# radius 1.1 was carving into the narrow chin/neck silhouette boundary;
+# at -6.6 the peg edge sits 0.86 mm inside silhouette y-min.
 PEG_CANDIDATES = [
     ( 7.0,  0.0),    # right side, mid-head
     (-7.0,  0.0),    # left side, mid-head
-    ( 0.0, -7.0),    # chin / lower face
+    ( 0.0, -6.6),    # chin / lower face — pulled in from -7
 ]
 
 # Peg ↔ socket assignment. Recipe default puts pegs on Bottom + sockets on
