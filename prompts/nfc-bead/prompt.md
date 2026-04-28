@@ -236,6 +236,14 @@ Every charm branch must ship a `beads/<name>/README.md` that captures the *inten
 
 `beads/redaphid-portrait/README.md` is the reference example. Charm-branch builds should produce a README before the first commit lands, and update it whenever a creative decision changes (a region split is added, a dimension default is overridden, etc.).
 
+### Print iteration log
+
+Every charm that gets *physically printed* must also ship a `beads/<name>/PRINT_LOG.md` — append-only, newest at the top. Each entry: date, version, what was actually printed (parameters), failure mode (if any), parameter changes for the next attempt, lesson captured (one-liner that should propagate to the recipe / printability-check skill if it generalizes beyond this charm).
+
+The README captures *intent*; the PRINT_LOG captures *what we learned by feeding plastic into the printer*. Across charms these logs become a corpus future-Claude can grep when starting a new build — "has anyone seen this failure mode before?"
+
+`beads/redaphid-portrait/PRINT_LOG.md` is the reference example.
+
 ---
 
 ## Reference files in this repo
