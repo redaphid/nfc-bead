@@ -632,42 +632,6 @@ def build_hair_decoration(top, full_silhouette):
     return hair
 
 
-def mirror_decoration_for_back(obj, new_name):
-    """Duplicate `obj` and mirror it across world z=0 so it sits below
-    Bottom's silhouette face instead of above Top's show face. Used to put
-    a copy of Hair / Decoration on the BACK of the bead for symmetric
-    portraits.
-
-    `scale.z = -1` mirrors about the OBJECT'S origin, not world z=0 — so
-    when the source object's origin isn't at z=0 (e.g., Decoration's
-    origin is at the active eye's Z position after join), the naive
-    approach leaves the back-copy at the SAME world Z as the source.
-    Bake the duplicate's transform into the mesh first; that puts the
-    origin at world (0,0,0) so the subsequent scale.z = -1 mirrors the
-    mesh across world z=0 as intended.
-
-    Mirroring flips face winding, so we recompute normals after."""
-    bpy.ops.object.select_all(action='DESELECT')
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.duplicate()
-    back = bpy.context.active_object
-    back.name = new_name
-
-    # Bake current world transform into vertex data so origin = world 0,0,0
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    # Now scale.z = -1 mirrors across world z=0 (vertex z values negated)
-    back.scale.z = -1.0
-    bpy.ops.object.transform_apply(scale=True)
-
-    # Re-fix normals after the inversion
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.normals_make_consistent(inside=False)
-    bpy.ops.object.mode_set(mode='OBJECT')
-    return back
-
-
 def apply_materials(bottom, top, hair, deco):
     def mat(name, base, rough, emit_color=None, emit_strength=0.0):
         m = bpy.data.materials.new(name=name)
@@ -737,67 +701,31 @@ def main():
     print(f"[redaphid] eyes (Blender mm): {eyes_xyr}")
     deco = build_eye_decoration(eyes_xyr, top)
 
-    # 7a. Mirror Hair + Decoration onto Bottom's silhouette face — the user
-    # wanted the portrait visible from both sides. The mirror is across z=0
-    # (the cut plane), so Hair_back sits just below Bottom's silhouette
-    # face (z=−2..−2.4) and Decoration_back at z=−2.01..−2.51.
-    #
-    # NOTE on printability: this puts raised features below Bottom's plate-
-    # touching face. Slicer needs supports OR an alternate orientation.
-    # Geometry is captured here; print configuration is a downstream call.
-    hair_back = mirror_decoration_for_back(hair, "HairBack")
-    deco_back = mirror_decoration_for_back(deco, "DecorationBack")
+    # 7a. Single-side portrait. The previous symmetric-back design produced
+    # printability issues (cantilevered pegs + back decoration on the same
+    # half), so we reverted to face-only-on-Top. Bottom's silhouette face
+    # stays smooth and prints flat on the build plate.
 
     # 8. Materials
     apply_materials(bottom, top, hair, deco)
-    # Match back materials to front so the slicer assigns the same filaments
-    hair_back.data.materials.clear()
-    hair_back.data.materials.append(bpy.data.materials["MAT_Hair"])
-    deco_back.data.materials.clear()
-    deco_back.data.materials.append(bpy.data.materials["MAT_EyeGlow"])
 
-    # 9. Pre-export orientation flip for the Bottom-side group.
-    # With back-decoration on Bottom's silhouette face, Bottom must print
-    # silhouette-UP so the raised features land on top instead of below
-    # the plate. Top stays show-face-UP (its raised features already on
-    # top). Both halves end up with their decorated face pointing UP,
-    # which matches what the slicer needs.
-    #
-    # Pegs on Bottom now hang DOWN in the flipped orientation — slicer
-    # supports required. The geometry is correct; print-time settings
-    # are a downstream concern.
-    bb_b = [bottom.matrix_world @ Vector(c) for c in bottom.bound_box]
-    pivot_b = Vector((sum(v.x for v in bb_b) / 8,
-                      sum(v.y for v in bb_b) / 8,
-                      sum(v.z for v in bb_b) / 8))
-    bpy.ops.object.select_all(action='DESELECT')
-    bottom.select_set(True)
-    hair_back.select_set(True)
-    deco_back.select_set(True)
-    bpy.context.view_layer.objects.active = bottom
-    bpy.context.scene.cursor.location = pivot_b
-    bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
-    bpy.ops.transform.rotate(value=math.radians(180), orient_axis='X')
-    bpy.context.scene.cursor.location = (0, 0, 0)
-
-    # Inspection layout: halves apart on X.
-    for o in (bottom, hair_back, deco_back):
-        o.location.x -= 16.0
+    # 9. Inspection layout: halves apart on X. Bottom on the left
+    # (silhouette face DOWN, inner face UP — NFC pocket and pegs visible),
+    # Top on the right (show face UP — hair + eyes visible).
+    bottom.location.x -= 16.0
     for o in (top, hair, deco):
         o.location.x += 16.0
 
     # 9a. Communicate print-orientation overrides to the export skill.
-    # We've already flipped Bottom + back-decoration in the live scene
-    # to print-correct orientation, so the export skill should NOT flip
-    # again.
+    # Centered-mesh pipeline produces both halves in print orientation
+    # already (silhouette/show face DOWN respectively); the canonical
+    # 180° flip on Bottom would un-orient it.
     import json
     bpy.context.scene["nfc_export_flip_override"] = json.dumps({
         "Bottom":         0.0,
         "Top":            0.0,
         "Hair":           0.0,
         "Decoration":     0.0,
-        "HairBack":       0.0,
-        "DecorationBack": 0.0,
     })
 
     # 10. Save stage snapshot
