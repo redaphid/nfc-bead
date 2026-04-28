@@ -21,6 +21,8 @@ dependencies = [
     "scipy>=1.17.1",
     "scikit-image>=0.26.0",
     "imageio-ffmpeg>=0.6.0",
+    "shapely>=2.1.2",
+    "rtree>=1.4.1",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +47,9 @@ nfc-make-3mf      = "tools.make_3mf:main"
 nfc-build-3mf     = "tools.build_3mf:main"
 # Switch the live Blender scene to a stored animation (orbit, tour, etc.)
 nfc-anim-switch    = "tools.anim_switch:main"
+# Pre-flight printability checks (wall above hole, cantilever, peg edges,
+# bed contact). Run after STL export, before slicer.
+nfc-printability-check = "tools.printability_check:main"
 
 [build-system]
 requires = ["hatchling"]
