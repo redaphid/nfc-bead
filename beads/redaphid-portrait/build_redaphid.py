@@ -23,24 +23,28 @@ HAIR_SVG_PATH = r"D:\Projects\nfc-bead\beads\redaphid-portrait\hair.svg"
 REPO_DIR      = r"D:\Projects\nfc-bead"
 BEAD_DIR      = os.path.join(REPO_DIR, "beads", "redaphid-portrait")
 
-TARGET_WIDTH  = 22.0           # mm (kandi-bracelet — shrunk from 25 after first print)
+TARGET_WIDTH  = 20.0           # mm (kandi-bracelet — shrunk further after v2 prints
+                               # were still too big). Floor of 17 mm leaves
+                               # ~3.5 mm horizontal margin around the 10 mm NFC
+                               # pocket — too tight for clean peg placement.
+                               # 20 mm keeps the layout printable.
 THICKNESS     = 5.0            # mm total (split 2.5 + 2.5) — recipe default; the 4 mm
                                # thinner profile didn't leave room for full-height pegs
 
 # String hole: along X axis, through the HAIR BAND. Scaled with TARGET_WIDTH.
-# Silhouette top ≈ y=+9.3 (with TARGET_WIDTH=22, h_mm=18.6, half=9.3).
-# y=6.6 leaves 9.3 − 6.6 − 1 (radius) = 1.7 mm wall above — load-bearing.
+# Silhouette top ≈ y=+8.46 (with TARGET_WIDTH=20, h_mm=16.92, half=8.46).
+# y=6.5 leaves 8.46 − 6.5 − 1 (radius) = 0.96 mm wall above — minimum acceptable.
 HOLE_DIA      = 2.0
-HOLE_Y        = 6.6            # mm — through hair, ≥ 1.7 mm wall above
+HOLE_Y        = 6.5            # mm — through hair, ≥ 0.96 mm wall above
 
-# NFC pocket — face/snout area, below the eyes, well within head ellipse
+# NFC pocket — centered at origin so chin peg has clearance below the pocket.
+# At TARGET_WIDTH=20, NFC's 5 mm radius leaves 1.5 mm to silhouette y-min and
+# 1.5 mm to the hair-band start (y=+5..+8.46).
 NFC_DIAMETER  = 10.0
 NFC_DEPTH     = 0.8
-NFC_POS       = (0.0, -1.0)    # mm — shifted UP at TARGET_WIDTH=22 so the
-                               # chin peg can sit at y=-8 (≥ 0.3 mm inside the
-                               # silhouette y-min). With no central forehead
-                               # peg in this layout, NFC's top edge has plenty
-                               # of clear space upward.
+NFC_POS       = (0.0,  0.0)    # mm — centered: equal margin top/bottom around
+                               # the pocket; allows chin peg at y=-7 to clear
+                               # NFC by 1.0 mm and the silhouette edge by ≥ 0.4 mm.
 
 # Peg friction-fit
 PEG_DIAMETER  = 2.0
@@ -48,13 +52,14 @@ PEG_HEIGHT    = 1.5            # mm — recipe default; first print at 1.0 mm
                                # didn't grip. With THICKNESS=5 (halves 2.5),
                                # sockets at 1.8 mm leave 0.7 mm wall — fine.
 PEG_CLEARANCE = 0.1
-# Triangulated. At TARGET_WIDTH=22 with NFC at (0,-1), pegs flank the
-# head's widest band at y≈0 and a chin peg sits at y=-8 (silhouette
-# y_min=-9.3, peg edge inside by 0.3 mm).
+# Triangulated. At TARGET_WIDTH=20 the silhouette is ±10 wide × ±8.46 tall.
+# Side pegs pulled in to ±7 (was ±8) so peg edges stay 1+ mm inside the
+# silhouette boundary. Chin peg at y=-7 has 1.0 mm NFC clearance and
+# 0.46 mm to silhouette y-min.
 PEG_CANDIDATES = [
-    ( 8.0,  0.0),    # right side, mid-head
-    (-8.0,  0.0),    # left side, mid-head
-    ( 0.0, -8.0),    # chin / lower face
+    ( 7.0,  0.0),    # right side, mid-head
+    (-7.0,  0.0),    # left side, mid-head
+    ( 0.0, -7.0),    # chin / lower face
 ]
 
 # Peg ↔ socket assignment. Recipe default puts pegs on Bottom + sockets on
