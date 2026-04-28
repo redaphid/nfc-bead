@@ -50,6 +50,9 @@ nfc-anim-switch    = "tools.anim_switch:main"
 # Pre-flight printability checks (wall above hole, cantilever, peg edges,
 # bed contact). Run after STL export, before slicer.
 nfc-printability-check = "tools.printability_check:main"
+# Extract a bead silhouette SVG from a raster image — laser-cube-driver
+# pipeline + optional eye/hair detection.
+nfc-image-to-silhouette = "tools.image_to_silhouette:main"
 
 [build-system]
 requires = ["hatchling"]
