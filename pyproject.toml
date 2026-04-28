@@ -53,6 +53,9 @@ nfc-printability-check = "tools.printability_check:main"
 # Extract a bead silhouette SVG from a raster image — laser-cube-driver
 # pipeline + optional eye/hair detection.
 nfc-image-to-silhouette = "tools.image_to_silhouette:main"
+# One-shot orchestration: rebuild via Blender MCP -> export -> verify ->
+# printability check -> 3MF -> copy to beads/<charm>/print/.
+nfc-bead-build = "tools.bead_build:main"
 
 [build-system]
 requires = ["hatchling"]
