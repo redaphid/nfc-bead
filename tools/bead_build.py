@@ -108,7 +108,7 @@ def main() -> int:
         import bpy
         # Wipe FullBead* and the canonical names so the build starts clean
         for n in list(bpy.data.objects.keys()):
-            if n.startswith('FullBead') or n in ('Bottom','Top','Hair','Decoration','HairBack','DecorationBack'):
+            if n.startswith('FullBead') or n in ('Bottom','Top','Hair','Decoration'):
                 try: bpy.data.objects.remove(bpy.data.objects[n], do_unlink=True)
                 except Exception: pass
         script = open(r'{build_py}', encoding='utf-8').read()

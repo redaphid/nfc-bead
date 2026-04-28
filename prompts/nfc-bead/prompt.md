@@ -200,17 +200,7 @@ for n in list(bpy.data.objects.keys()):
 
 or wipe the whole scene at the start of the build (but mind gotcha #17 — don't `read_factory_settings`).
 
-### 21. Symmetric back-decoration + pegs is unprintable without supports
-A "portrait visible from both sides" charm puts raised hair + eyes on Bottom's silhouette face (the back of the assembled bead). For these features to print raised UP, Bottom has to flip silhouette-UP — which forces the pegs to hang DOWN to the build plate. The slicer flags the body as cantilevered (suspended on three thin pegs touching the plate); without supports it won't slice cleanly.
-
-Three workable strategies:
-1. **Print with supports** under the pegs (PVA / soluble for clean release; PLA leaves marks on the silhouette face).
-2. **Engrave the back** instead of raising it — recessed hair/eyes prints fine in canonical orientation, single body color on the back.
-3. **Three-piece bead** — both halves get sockets only, three separate peg cylinders printed flat. More assembly, but each piece prints with no overhangs.
-
-Codify the choice via a `SYMMETRIC_BACK` flag in the build script and ship it OFF by default. Turning it on without one of the three strategies above produces an STL the slicer rejects (this was the redaphid v2 print failure).
-
-### 22. `verify_pegs` only checks peg CENTERS, not peg EDGES
+### 21. `verify_pegs` only checks peg CENTERS, not peg EDGES
 The build-time peg verification raycasts straight DOWN from each peg's center to confirm the silhouette is solid at that XY. It does NOT check that the peg's full cylindrical FOOTPRINT is inside the silhouette boundary — a peg whose center is 0.3 mm inside silhouette y-min still has 0.7 mm of its 1 mm-radius edge poking past the boundary, producing visible bumps on the silhouette outline AND a thin material backing where the peg meets the bead body.
 
 Two layered guards:
@@ -219,7 +209,7 @@ Two layered guards:
 
 A peg edge protruding by ≤ 0.5 mm is usually cosmetic; protrusion by ≥ 1 mm means the peg has thin material around it and may break under press-fit pressure.
 
-### 23. Re-export after every Blender edit before slicing
+### 22. Re-export after every Blender edit before slicing
 The exported STLs and 3MF live separate from the .blend. When you make a tweak in Blender (move a peg, retune hair, fix a non-manifold) and save the .blend, the print bundle is **stale until you re-run `bead-stl-export`**. Importing the old 3MF into the slicer "to check the change" silently loads the un-tweaked bead — you debug the wrong artifact for half an hour before realizing.
 
 The forward-only protocol: every Blender edit ends with `exec(...)` of the export skill. Build → export → make-3mf is a chain; running only one link leaves a stale tail.

@@ -33,10 +33,6 @@ EXPECTED_OBJECTS = [
     "Top",
     "Hair",
     "Decoration",
-    # Optional symmetric-back accents — for charms with the portrait
-    # visible from both sides. Skipped silently when not present.
-    "HairBack",
-    "DecorationBack",
 ]
 
 # Parts that should share another part's bed-flatten shift instead of computing
@@ -46,12 +42,8 @@ EXPECTED_OBJECTS = [
 # bbox centers at origin, and the merge would overlap the decoration inside
 # the body instead of stacking it on the outer face.
 EXPORT_SHARE_SHIFT_WITH = {
-    "Hair":           "Top",
-    "Decoration":     "Top",
-    # Back accents share Bottom's bed-flatten shift so they stay attached
-    # to Bottom's silhouette face when the user merges them in the slicer.
-    "HairBack":       "Bottom",
-    "DecorationBack": "Bottom",
+    "Hair":       "Top",
+    "Decoration": "Top",
 }
 
 OUT_DIR = None     # default: tmp/stl_export_<timestamp>/ in repo root

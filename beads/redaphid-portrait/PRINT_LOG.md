@@ -8,25 +8,19 @@ This sits next to `README.md` (which captures *why this charm exists*); the log 
 
 ## v3 — 2026-04-28 — printable
 
-Geometry: TARGET_WIDTH=20, THICKNESS=5, PEG_HEIGHT=1.5, HOLE_DIA=1.5, HOLE_Y=5.5, NFC_POS=(0,-1), pegs at (±8,0) + (0,-8). SYMMETRIC_BACK=False. Wall above hole = 2.21 mm.
+Geometry: TARGET_WIDTH=20, THICKNESS=5, PEG_HEIGHT=1.5, HOLE_DIA=1.5, HOLE_Y=5.5, NFC_POS=(0,-1), pegs at (±8,0) + (0,-8). Wall above hole = 2.21 mm.
 
 **Printed**: yes. Pegs grip; string hole holds the cord without snapping.
 
-**Lessons captured**:
-- `SYMMETRIC_BACK` forces a Bottom flip → pegs cantilever → slicer rejects unless supports are added. Default OFF; opt-in for symmetric-back charms understanding the cost.
-- Sub-1 mm wall above the string hole snaps under cord load. The printability-check skill now warns; the recipe gotcha #13 documents the placement rule.
+**Lesson captured**: sub-1 mm wall above the string hole snaps under cord load. The printability-check skill now warns; the recipe gotcha #13 documents the placement rule.
 
 ---
 
 ## v2 — 2026-04-27 — couldn't print
 
-Geometry: TARGET_WIDTH=22, THICKNESS=5, PEG_HEIGHT=1.5, HOLE_DIA=2.0, HOLE_Y=6.6. **SYMMETRIC_BACK=True** (Bottom + HairBack + DecorationBack flipped to print silhouette-up). Pegs cantilevered hanging from Bottom's inner face.
+An attempt at a symmetric front/back portrait (raised decoration on both faces) created cantilever geometry the slicer rejected. Approach abandoned; the path-not-taken was removed from the build script in v3.
 
-**Failure**: Slicer flagged the entire Bottom assembly as overhang. Pegs touching the build plate at z=0..1.5 with a 2.5 mm body hanging above on three thin pillars. Rejected without supports configured.
-
-**Fix in v3**: Disable SYMMETRIC_BACK by default. Bottom returns to canonical orientation (silhouette face DOWN to plate, pegs UP) — no cantilever.
-
-**Lesson**: Raised back-decoration is fundamentally incompatible with peg-on-Bottom + no-supports printing. Three workable strategies if you want symmetric back: (a) print with supports, (b) engrave the back instead of raise it, (c) move to a 3-piece bead with separate peg cylinders. Documented as gotcha #14 in `prompts/nfc-bead/prompt.md`.
+**Fix in v3**: drop the symmetric-back attempt. Bottom prints in canonical orientation (silhouette face DOWN to plate, pegs UP) — no cantilever, no supports needed.
 
 ---
 
