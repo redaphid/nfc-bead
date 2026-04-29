@@ -25,6 +25,14 @@ THICKNESS = 5.0           # mm — total (split into 2 x 2.5mm halves)
 # String hole
 HOLE_DIAMETER = 2.0       # mm
 HOLE_Y = 7.09             # mm — Y position through head (along X axis)
+HOLE_Z_OFFSET = 0.0       # mm — offset of hole center from the bead's Z midplane.
+                          # 0 (default) puts the hole *on* the split plane → each
+                          # half hosts an open half-circle groove on its inner face.
+                          # Setting this to (THICKNESS/4) shifts the hole entirely
+                          # into one half so the inner face is solid at y=HOLE_Y
+                          # (better first-layer adhesion) and the tube becomes a
+                          # small interior cavity bridged twice by the slicer.
+                          # Sign: positive → into Top, negative → into Bottom.
 # Picking HOLE_Y: see prompts/nfc-bead/prompt.md "String-hole placement rules".
 # Need ≥ 2.5 mm of solid silhouette above the hole, on a *wide* band — not on
 # a narrow ear-flap, hair-ridge, or tip. Drop into the forehead/head body if
@@ -192,10 +200,16 @@ dims = mesh_obj.dimensions
 print(f"Extruded: {dims.x:.2f} x {dims.y:.2f} x {dims.z:.2f} mm")
 
 # ── Step 5: String hole ──────────────────────────────────
-print(f"String hole: {HOLE_DIAMETER}mm at Y={HOLE_Y}...")
+# Drill at the mesh's actual Z midpoint, then shift by HOLE_Z_OFFSET. Computing
+# z_mid from the live mesh (not from THICKNESS/2) is important because earlier
+# pipeline steps may have left the mesh non-centered on z=0.
+zs = [v.co.z for v in mesh_obj.data.vertices]
+z_mid_live = (min(zs) + max(zs)) / 2.0
+z_hole = z_mid_live + HOLE_Z_OFFSET
+print(f"String hole: {HOLE_DIAMETER}mm at Y={HOLE_Y}, z={z_hole:.2f} (offset={HOLE_Z_OFFSET:+.2f})...")
 bpy.ops.mesh.primitive_cylinder_add(
     vertices=48, radius=HOLE_DIAMETER / 2.0,
-    depth=dims.x * 4, location=(0, HOLE_Y, 0),
+    depth=dims.x * 4, location=(0, HOLE_Y, z_hole),
     rotation=(0, math.radians(90), 0),
 )
 boolean_op(mesh_obj, bpy.context.active_object, 'DIFFERENCE', "Hole")
@@ -211,22 +225,43 @@ z_mid = (z_min + z_max) / 2.0
 print(f"Z: {z_min:.2f} to {z_max:.2f}, mid={z_mid:.2f}")
 
 # ── Step 6: Verify peg positions ──────────────────────────
+# Raycasts the peg CENTER plus 8 perimeter points to catch a peg whose center
+# is inside the silhouette but whose edge pokes through the boundary (gotcha
+# #21 in prompts/nfc-bead/prompt.md). Center-only checks miss this — the
+# original recipe shipped with that bug for many revisions before it was
+# caught visually on a printed bead.
 print("\nPeg position check:")
 depsgraph = bpy.context.evaluated_depsgraph_get()
 eval_full = mesh_obj.evaluated_get(depsgraph)
 nfc_r = NFC_DIAMETER / 2.0
 peg_r = PEG_DIAMETER / 2.0
-
+perim_offsets = [(peg_r * math.cos(k * math.pi / 4.0),
+                  peg_r * math.sin(k * math.pi / 4.0)) for k in range(8)]
+any_warn = False
 for i, (px, py) in enumerate(PEGS):
-    hit = eval_full.ray_cast(Vector((px, py, z_max+5)), Vector((0,0,-1)))[0]
+    center_hit = eval_full.ray_cast(Vector((px, py, z_max+5)), Vector((0,0,-1)))[0]
+    edge_misses = sum(1 for ox, oy in perim_offsets
+                      if not eval_full.ray_cast(
+                          Vector((px + ox, py + oy, z_max+5)),
+                          Vector((0,0,-1)))[0])
     nfc_dist = math.sqrt((px - NFC_POS[0])**2 + (py - NFC_POS[1])**2)
     nfc_clear = nfc_dist - nfc_r - peg_r
     hole_dist = abs(py - HOLE_Y)
-    print(f"  Peg {i} ({px:+.1f}, {py:+.1f}): solid={hit}, NFC clearance={nfc_clear:.1f}mm, hole dist={hole_dist:.1f}mm")
-    if not hit:
-        print(f"    WARNING: Peg {i} is outside the silhouette!")
+    edge_note = "" if edge_misses == 0 else f", EDGES_CLIPPING={edge_misses}/8"
+    print(f"  Peg {i} ({px:+.1f}, {py:+.1f}): solid={center_hit}, "
+          f"NFC clearance={nfc_clear:.1f}mm, hole dist={hole_dist:.1f}mm{edge_note}")
+    if not center_hit:
+        any_warn = True
+        print(f"    WARNING: Peg {i} center is outside the silhouette!")
+    if edge_misses > 0:
+        any_warn = True
+        print(f"    WARNING: Peg {i} edge pokes past the silhouette boundary "
+              f"({edge_misses} of 8 perimeter points outside)")
     if nfc_clear < 0:
+        any_warn = True
         print(f"    WARNING: Peg {i} overlaps NFC cavity!")
+if any_warn:
+    print("  → fix PEGS in CONFIG so every peg's center+perimeter sits inside the silhouette and clears NFC")
 
 # ── Step 7: Split into halves ─────────────────────────────
 box_size = 200

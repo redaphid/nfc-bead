@@ -200,19 +200,28 @@ for n in list(bpy.data.objects.keys()):
 
 or wipe the whole scene at the start of the build (but mind gotcha #17 — don't `read_factory_settings`).
 
-### 21. `verify_pegs` only checks peg CENTERS, not peg EDGES
-The build-time peg verification raycasts straight DOWN from each peg's center to confirm the silhouette is solid at that XY. It does NOT check that the peg's full cylindrical FOOTPRINT is inside the silhouette boundary — a peg whose center is 0.3 mm inside silhouette y-min still has 0.7 mm of its 1 mm-radius edge poking past the boundary, producing visible bumps on the silhouette outline AND a thin material backing where the peg meets the bead body.
+### 21. `verify_pegs` must raycast the peg PERIMETER, not just the center
+A center-only raycast confirms the silhouette is solid at the peg's XY but does NOT confirm that the peg's full cylindrical footprint is inside the silhouette boundary — a peg whose center is 0.3 mm inside silhouette y-min still has 0.7 mm of its 1 mm-radius edge poking past the boundary, producing visible bumps on the silhouette outline AND a thin material backing where the peg meets the bead body. The recipe shipped with this bug for several charm revisions before it was caught visually on a printed bead.
+
+The fix (implemented in `build_charm.py.example`): raycast the center plus 8 evenly-spaced perimeter points (`k * π / 4` for k in 0..7) at the peg radius. Any miss → reject the peg position. The build now refuses to proceed if any configured peg has perimeter clipping; tighten `PEG_CANDIDATES` until every peg passes.
 
 Two layered guards:
-- **Build-time**: tighten `verify_pegs` so the peg center clearance from the silhouette boundary is `peg_radius + 0.5 mm` (not just the silhouette being solid at the point).
-- **Post-export**: `bead-printability-check` skill's "peg edges inside silhouette" check inspects the actual peg cross-section vs the silhouette polygon and warns when any peg protrudes.
+- **Build-time**: the perimeter raycast above; rejects bad peg positions before any boolean is applied.
+- **Post-export**: `bead-printability-check` skill's "peg edges inside silhouette" check re-validates against the final STL.
 
 A peg edge protruding by ≤ 0.5 mm is usually cosmetic; protrusion by ≥ 1 mm means the peg has thin material around it and may break under press-fit pressure.
+
+**Corollary**: don't assume `silhouette_y_min == -THICKNESS/2 == -h/2`. A portrait silhouette can be height 16.92 mm but extend asymmetrically (e.g. y ∈ [-8.44, +8.46]) once it's centered by the pipeline. *Measure* the silhouette extent against the live mesh when picking peg positions, don't compute from the silhouette dimensions alone.
 
 ### 22. Re-export after every Blender edit before slicing
 The exported STLs and 3MF live separate from the .blend. When you make a tweak in Blender (move a peg, retune hair, fix a non-manifold) and save the .blend, the print bundle is **stale until you re-run `bead-stl-export`**. Importing the old 3MF into the slicer "to check the change" silently loads the un-tweaked bead — you debug the wrong artifact for half an hour before realizing.
 
 The forward-only protocol: every Blender edit ends with `exec(...)` of the export skill. Build → export → make-3mf is a chain; running only one link leaves a stale tail.
+
+### 23. Splitting the string hole across the seam costs first-layer adhesion
+The recipe-default places the string hole on the Z midplane, so each half hosts an open half-circular groove on its inner face. When the half is printed inner-face-down (Top is printed face-up → inner face on bed; Bottom flipped silhouette-down → inner face is the *top* of the print), that 1.5–2 mm gap in the silhouette outline at `y=HOLE_Y` is right where the bed meets the part. Bed-contact area drops; mid-print the part can lift slightly at the hair band; multi-color swap purges that land near that region peel and the head drags them.
+
+The fix is structural: set `HOLE_Z_OFFSET` to ~`THICKNESS/4` so the entire hole sits inside one half, with the inner face fully solid silhouette at `y=HOLE_Y`. The hole becomes a small interior tube that the slicer bridges twice (floor + ceiling, ~1.5 mm spans, easy bridges). Cost: tube wall thickness above + below shrinks to `(half_thickness - hole_dia) / 2` ≈ 0.5 mm at THICKNESS=5 — printable on a tuned printer, marginal on others. If the print still fails, bump `THICKNESS` rather than reverting to the split-plane hole.
 
 ---
 

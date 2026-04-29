@@ -89,78 +89,104 @@ def _translate_transform(lib3mf, dx: float, dy: float, dz: float):
 
 
 # ─── Driver ─────────────────────────────────────────────────────────────
-def make_3mf(stl_dir: str, out_path: str) -> int:
+def make_3mf(stl_dir: str, out_path: str, half: str = "both") -> int:
+    """Emit a 3MF for the requested half-set.
+
+    half="both"   → Bottom + (Top + Hair + Decoration) on one plate
+    half="top"    → only the (Top + Hair + Decoration) assembly, plate-centered
+    half="bottom" → only Bottom, plate-centered
+    """
+    if half not in ("both", "top", "bottom"):
+        print(f"invalid --half: {half}", file=sys.stderr)
+        return 2
     lib3mf = _import_lib3mf()
 
     bottom_path = os.path.join(stl_dir, "Bottom.stl")
     top_path    = os.path.join(stl_dir, "Top.stl")
     deco_path   = os.path.join(stl_dir, "Decoration.stl")
     hair_path   = os.path.join(stl_dir, "Hair.stl")           # optional
-    for p in (bottom_path, top_path, deco_path):
+    needed = []
+    if half in ("both", "bottom"):
+        needed.append(bottom_path)
+    if half in ("both", "top"):
+        needed.extend([top_path, deco_path])
+    for p in needed:
         if not os.path.isfile(p):
             print(f"missing: {p}", file=sys.stderr)
             return 1
-    has_hair = os.path.isfile(hair_path)
+    want_top = half in ("both", "top")
+    want_bottom = half in ("both", "bottom")
+    has_hair = want_top and os.path.isfile(hair_path)
 
-    bottom = _load_stl(bottom_path)
-    top    = _load_stl(top_path)
-    deco   = _load_stl(deco_path)
-    hair   = _load_stl(hair_path) if has_hair else None
+    bottom = _load_stl(bottom_path) if want_bottom else None
+    top    = _load_stl(top_path)    if want_top    else None
+    deco   = _load_stl(deco_path)   if want_top    else None
+    hair   = _load_stl(hair_path)   if has_hair    else None
 
     wrapper = lib3mf.Wrapper()
     model = wrapper.CreateModel()
     model.SetUnit(lib3mf.ModelUnit.MilliMeter)
 
-    # Add meshes as separate MeshObjects.
-    # NOTE: Hair + Decoration coords are already in Top's frame (Z offset
-    # above Top's outer face). Adding them as components of the same
-    # ComponentsObject preserves those relative positions when the slicer
-    # imports the bundle.
-    bottom_obj = _add_mesh(model, lib3mf, "Bottom", bottom)
-    top_obj    = _add_mesh(model, lib3mf, "Top", top)
-    deco_obj   = _add_mesh(model, lib3mf, "Decoration", deco)
-    hair_obj   = _add_mesh(model, lib3mf, "Hair", hair) if has_hair else None
+    bottom_obj = _add_mesh(model, lib3mf, "Bottom", bottom) if bottom is not None else None
+    top_obj    = _add_mesh(model, lib3mf, "Top", top)       if top    is not None else None
+    deco_obj   = _add_mesh(model, lib3mf, "Decoration", deco) if deco is not None else None
+    hair_obj   = _add_mesh(model, lib3mf, "Hair", hair)       if hair is not None else None
 
-    # Bundle Top + Hair + Decoration as a single ComponentsObject so the
-    # slicer treats them as ONE OBJECT WITH PARTS.
-    asm = model.AddComponentsObject()
-    asm.SetName("Top_with_Decoration" + ("_and_Hair" if has_hair else ""))
-    asm.AddComponent(top_obj,  _identity_transform(lib3mf))
-    if hair_obj is not None:
-        asm.AddComponent(hair_obj, _identity_transform(lib3mf))
-    asm.AddComponent(deco_obj, _identity_transform(lib3mf))
+    asm = None
+    if want_top:
+        # Bundle Top + Hair + Decoration as a single ComponentsObject so the
+        # slicer treats them as ONE OBJECT WITH PARTS. Hair + Decoration
+        # coords are already in Top's frame (Z above Top's outer face).
+        asm = model.AddComponentsObject()
+        asm.SetName("Top_with_Decoration" + ("_and_Hair" if has_hair else ""))
+        asm.AddComponent(top_obj,  _identity_transform(lib3mf))
+        if hair_obj is not None:
+            asm.AddComponent(hair_obj, _identity_transform(lib3mf))
+        asm.AddComponent(deco_obj, _identity_transform(lib3mf))
 
-    # Place build items on the plate.
-    model.AddBuildItem(
-        bottom_obj,
-        _translate_transform(lib3mf, *PLATE_BOTTOM_OFFSET),
-    )
-    model.AddBuildItem(
-        asm,
-        _translate_transform(lib3mf, *PLATE_TOPASM_OFFSET),
-    )
+    # Place build items on the plate. Single-half exports park at origin so
+    # the slicer's auto-arrange doesn't fight the offset.
+    if half == "both":
+        model.AddBuildItem(bottom_obj, _translate_transform(lib3mf, *PLATE_BOTTOM_OFFSET))
+        model.AddBuildItem(asm,        _translate_transform(lib3mf, *PLATE_TOPASM_OFFSET))
+    elif half == "top":
+        model.AddBuildItem(asm, _identity_transform(lib3mf))
+    else:  # "bottom"
+        model.AddBuildItem(bottom_obj, _identity_transform(lib3mf))
 
     # Metadata
+    titles = {
+        "both":   "NFC bead — print bundle",
+        "top":    "NFC bead — top half (with hair + decoration)",
+        "bottom": "NFC bead — bottom half",
+    }
+    descs = {
+        "both":   "Bottom + (Top with Decoration) on a single plate; spiral pre-merged onto top body",
+        "top":    "Top + Hair + Decoration merged as one object with parts",
+        "bottom": "Bottom only — print and pair with the matching top-half 3MF",
+    }
     md = model.GetMetaDataGroup()
-    md.AddMetaData("", "Title",       "NFC bead — print bundle", "string", True)
-    md.AddMetaData("", "Designer",    "nfc-bead pipeline",       "string", True)
-    md.AddMetaData("", "Description",
-                   "Bottom + (Top with Decoration) on a single plate; spiral pre-merged onto top body",
-                   "string", True)
+    md.AddMetaData("", "Title",       titles[half],            "string", True)
+    md.AddMetaData("", "Designer",    "nfc-bead pipeline",     "string", True)
+    md.AddMetaData("", "Description", descs[half],             "string", True)
 
     # Write
     writer = model.QueryWriter("3mf")
     writer.WriteToFile(out_path)
     size = os.path.getsize(out_path) if os.path.isfile(out_path) else 0
-    print(f"wrote {out_path} ({size} bytes)")
-    print(f"  Bottom: {len(bottom.vertices)} verts / {len(bottom.faces)} faces  -> placed at {PLATE_BOTTOM_OFFSET}")
-    label = "Top + Hair + Decoration" if has_hair else "Top + Decoration"
-    print(f"  {label} (merged components):")
-    print(f"    Top:        {len(top.vertices)} verts / {len(top.faces)} faces")
-    if has_hair:
-        print(f"    Hair:       {len(hair.vertices)} verts / {len(hair.faces)} faces")
-    print(f"    Decoration: {len(deco.vertices)} verts / {len(deco.faces)} faces")
-    print(f"    -> placed at {PLATE_TOPASM_OFFSET}")
+    print(f"wrote {out_path} ({size} bytes)  [half={half}]")
+    if want_bottom:
+        place = PLATE_BOTTOM_OFFSET if half == "both" else (0.0, 0.0, 0.0)
+        print(f"  Bottom: {len(bottom.vertices)} verts / {len(bottom.faces)} faces  -> placed at {place}")
+    if want_top:
+        place = PLATE_TOPASM_OFFSET if half == "both" else (0.0, 0.0, 0.0)
+        label = "Top + Hair + Decoration" if has_hair else "Top + Decoration"
+        print(f"  {label} (merged components):")
+        print(f"    Top:        {len(top.vertices)} verts / {len(top.faces)} faces")
+        if has_hair:
+            print(f"    Hair:       {len(hair.vertices)} verts / {len(hair.faces)} faces")
+        print(f"    Decoration: {len(deco.vertices)} verts / {len(deco.faces)} faces")
+        print(f"    -> placed at {place}")
     return 0
 
 
@@ -169,7 +195,11 @@ def main() -> int:
     p.add_argument("--dir", default=None,
                    help="STL source directory (default: tmp/latest/ at repo root)")
     p.add_argument("--out", default=None,
-                   help="Output 3MF path (default: <dir>/<basename>.3mf)")
+                   help="Output 3MF path (default: <dir>/{bead,top,bottom}.3mf based on --half)")
+    p.add_argument("--half", default="both", choices=("both", "top", "bottom"),
+                   help="Which half to bundle. 'both' (default) emits the two-piece plate; "
+                        "'top' emits only the Top + Hair + Decoration assembly; "
+                        "'bottom' emits only Bottom.")
     args = p.parse_args()
 
     if args.dir:
@@ -185,8 +215,9 @@ def main() -> int:
         else:
             stl_dir = os.path.join(os.getcwd(), "tmp", "latest")
 
-    out_path = args.out or os.path.join(stl_dir, "bead.3mf")
-    return make_3mf(stl_dir, out_path)
+    default_name = {"both": "bead.3mf", "top": "top.3mf", "bottom": "bottom.3mf"}[args.half]
+    out_path = args.out or os.path.join(stl_dir, default_name)
+    return make_3mf(stl_dir, out_path, half=args.half)
 
 
 if __name__ == "__main__":
