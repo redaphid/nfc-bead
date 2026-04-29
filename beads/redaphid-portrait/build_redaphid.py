@@ -24,8 +24,10 @@ REPO_DIR      = r"D:\Projects\nfc-bead"
 BEAD_DIR      = os.path.join(REPO_DIR, "beads", "redaphid-portrait")
 
 TARGET_WIDTH  = 20.0           # mm (kandi-bracelet — shrunk again after second print)
-THICKNESS     = 5.0            # mm total (split 2.5 + 2.5) — recipe default; the 4 mm
-                               # thinner profile didn't leave room for full-height pegs
+THICKNESS     = 5.0            # mm total (split 2.5 + 2.5). v5 returns to v3 thickness
+                               # because v5 also moves the entire string hole into Top
+                               # (HOLE_Z_OFFSET below): tube walls of 0.5 mm above + below
+                               # only fit cleanly when the host half is ≥ 2.5 mm thick.
 
 # String hole: along X axis, through the HAIR BAND. Scaled with TARGET_WIDTH.
 # Silhouette top ≈ y=+8.46 (TARGET_WIDTH=20, h_mm=16.92, half=8.46).
@@ -34,29 +36,50 @@ THICKNESS     = 5.0            # mm total (split 2.5 + 2.5) — recipe default; 
 # y=5.5 + 0.75 (radius) leaves 8.46 − 5.5 − 0.75 = 2.21 mm solid wall.
 HOLE_DIA      = 1.5
 HOLE_Y        = 5.5            # mm — through hair, ≥ 2.2 mm wall above
+# Z offset of the string-hole center from the bead's Z midplane. 0 (recipe
+# default) puts the hole *on* the split plane → each half hosts an open
+# half-circle groove on its inner face. Non-zero shifts the hole entirely
+# into one half so the inner face is solid at y=HOLE_Y (better first-layer
+# adhesion) and the tube becomes a small interior cavity bridged twice by
+# the slicer. Sign: positive → into Top, negative → into Bottom.
+# At THICKNESS=5.0 the Top half spans z=[0,+2.5]; +1.25 centers the tube
+# in Top (z=[+0.50, +2.00]), giving 0.50 mm wall above + below the tube.
+HOLE_Z_OFFSET = 1.25
 
 # NFC pocket — face/snout area, below the eyes, well within head ellipse
 NFC_DIAMETER  = 10.0
 NFC_DEPTH     = 0.8
-NFC_POS       = (0.0, -1.0)    # mm — shifted UP at TARGET_WIDTH=22 so the
-                               # chin peg can sit at y=-8 (≥ 0.3 mm inside the
-                               # silhouette y-min). With no central forehead
-                               # peg in this layout, NFC's top edge has plenty
-                               # of clear space upward.
+NFC_POS       = (0.0, -1.0)    # mm — kept where it was even after dropping the
+                               # chin peg in v4; the offset still keeps the NFC
+                               # pocket clear of the eye decorations and the
+                               # string hole channel above.
 
 # Peg friction-fit
-PEG_DIAMETER  = 2.0
+PEG_DIAMETER  = 2.6            # mm — v5 bumped from 2.0 (recipe default) for
+                               # better friction grip on the assembled bead.
+                               # Thicker pegs cost silhouette-clearance margin,
+                               # so PEG_CANDIDATES below pulls each peg inward.
 PEG_HEIGHT    = 1.5            # mm — recipe default; first print at 1.0 mm
                                # didn't grip. With THICKNESS=5 (halves 2.5),
                                # sockets at 1.8 mm leave 0.7 mm wall — fine.
 PEG_CLEARANCE = 0.1
-# Triangulated. At TARGET_WIDTH=22 with NFC at (0,-1), pegs flank the
-# head's widest band at y≈0 and a chin peg sits at y=-8 (silhouette
-# y_min=-9.3, peg edge inside by 0.3 mm).
+# Four pegs in a quadrilateral. The original v3/v4 used a centered chin
+# peg at (0, -8), but with PEG_DIAMETER=2.6 there is NO valid y position
+# for a peg on x=0 in the chin region — the NFC bottom edge (y=-6, plus
+# 0.5 mm clearance + 1.3 mm peg radius = y < -7.8) and the silhouette
+# y_min near x=0 (≈ -8.44, plus 1.3 mm peg radius = y > -7.04) exclude
+# each other. The off-axis pair (±4.5, -7) sits in the wider lower-face
+# silhouette and clears NFC by ~1.2 mm. Bonus: 4 anchors hold the halves
+# more rigidly than a triangulated 3, especially with thicker pegs.
 PEG_CANDIDATES = [
-    ( 8.0,  0.0),    # right side, mid-head
-    (-8.0,  0.0),    # left side, mid-head
-    ( 0.0, -8.0),    # chin / lower face
+    ( 7.0,  0.0),    # right ear / mid-head
+    (-7.0,  0.0),    # left ear / mid-head
+    ( 4.3, -7.1),    # right jaw  (silhouette is slightly asymmetric in
+    (-4.3, -7.1),    # left jaw    the jaw region — these are the widest
+                     #             symmetric pair where BOTH sides pass the
+                     #             perimeter check at peg_r=1.3, found by
+                     #             scanning candidates inside the FullBead
+                     #             before split).
 ]
 
 # Peg ↔ socket assignment. Recipe default puts pegs on Bottom + sockets on
@@ -321,18 +344,19 @@ def drill_string_hole(mesh):
     # Drill at the mesh's actual Z midpoint, NOT THICKNESS/2 — extrude_to_thickness
     # leaves verts spanning z=−THICKNESS/2..+THICKNESS/2 (centered), so a
     # hard-coded THICKNESS/2 put the hole at the TOP face instead of the middle.
-    # The hole would end up entirely in the Top half after splitting → Bottom
-    # had no opening, you couldn't thread a cord through. Compute z_mid live.
+    # Compute z_mid live, then offset by HOLE_Z_OFFSET (positive → into Top,
+    # negative → into Bottom; 0 keeps the recipe-default split-plane hole).
     zs = [v.co.z for v in mesh.data.vertices]
     z_mid = (min(zs) + max(zs)) / 2.0
+    z_hole = z_mid + HOLE_Z_OFFSET
     bpy.ops.mesh.primitive_cylinder_add(
         vertices=48, radius=HOLE_DIA / 2.0, depth=d.x * 4,
-        location=(0, HOLE_Y, z_mid),
+        location=(0, HOLE_Y, z_hole),
         rotation=(0, math.radians(90), 0))
     boolean_op(mesh, bpy.context.active_object, 'DIFFERENCE', "Hole")
     clean_mesh(mesh)
     mesh.name = "FullBead"
-    print(f"[redaphid] string hole drilled @ y={HOLE_Y}, z_mid={z_mid:.2f}")
+    print(f"[redaphid] string hole drilled @ y={HOLE_Y}, z_hole={z_hole:.2f} (offset={HOLE_Z_OFFSET:+.2f})")
 
 
 def split_halves(mesh):
@@ -383,19 +407,34 @@ def verify_pegs(mesh, candidates):
     nfc_r = NFC_DIAMETER / 2.0
     peg_r = PEG_DIAMETER / 2.0
     valid = []
+    # Raycast the peg center plus 8 perimeter points so we catch a peg whose
+    # CENTER is inside the silhouette but whose EDGE pokes through the
+    # silhouette boundary (the failure mode from earlier prints).
+    perim_offsets = [(peg_r * math.cos(k * math.pi / 4.0),
+                      peg_r * math.sin(k * math.pi / 4.0)) for k in range(8)]
     for px, py in candidates:
-        hit = eval_full.ray_cast(
+        center_hit = eval_full.ray_cast(
             Vector((px, py, 10)), Vector((0, 0, -1)))[0]
+        edge_misses = [(ox, oy) for ox, oy in perim_offsets
+                       if not eval_full.ray_cast(
+                           Vector((px + ox, py + oy, 10)),
+                           Vector((0, 0, -1)))[0]]
+        in_silhouette = center_hit and not edge_misses
         nfc_dist = math.sqrt((px - NFC_POS[0]) ** 2 + (py - NFC_POS[1]) ** 2)
         nfc_clear = nfc_dist - nfc_r - peg_r
         hole_dist = abs(py - HOLE_Y)
-        ok = hit and nfc_clear > 0.5 and hole_dist > peg_r + 1.0
-        print(f"  peg ({px:+.1f},{py:+.1f}): solid={hit}  nfc_clear={nfc_clear:+.2f}  hole_d={hole_dist:.2f}  -> {'OK' if ok else 'REJECTED'}")
+        ok = in_silhouette and nfc_clear > 0.5 and hole_dist > peg_r + 1.0
+        edge_note = "" if not edge_misses else f"  edges_clipping={len(edge_misses)}/8"
+        print(f"  peg ({px:+.1f},{py:+.1f}): solid={center_hit}  "
+              f"nfc_clear={nfc_clear:+.2f}  hole_d={hole_dist:.2f}{edge_note}  "
+              f"-> {'OK' if ok else 'REJECTED'}")
         if ok:
             valid.append((px, py))
-    if len(valid) < 3:
-        raise RuntimeError(f"Only {len(valid)} valid peg position(s); refine PEG_CANDIDATES")
-    return valid[:3]
+    if len(valid) < len(candidates):
+        raise RuntimeError(
+            f"Only {len(valid)} of {len(candidates)} configured peg(s) validated; "
+            "refine PEG_CANDIDATES so every entry passes the silhouette/NFC/hole checks")
+    return valid
 
 
 def add_nfc_pocket(bottom):
