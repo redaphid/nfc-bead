@@ -71,15 +71,22 @@ PEG_CLEARANCE = 0.1
 # each other. The off-axis pair (±4.5, -7) sits in the wider lower-face
 # silhouette and clears NFC by ~1.2 mm. Bonus: 4 anchors hold the halves
 # more rigidly than a triangulated 3, especially with thicker pegs.
+# Each entry is either (x, y) — uses the global PEG_DIAMETER — or
+# (x, y, dia) which overrides the diameter for that one peg only. This
+# lets the centerline chin peg use a thinner profile that actually fits
+# between NFC and the silhouette boundary, while keeping the side pegs
+# at full thickness for friction. After a real print, the v5b 4-peg
+# layout had jaw pegs at (±4.3, -7.1) whose sockets visibly poked through
+# the neck of the silhouette — even though the verifier passed them,
+# wall-thickness around the socket was paper-thin in places. Going back
+# to a 3-peg triangle with one centered chin peg is the correct topology;
+# the trick is that the chin peg has to be smaller (1.4 mm) because the
+# centerline at this y simply cannot host a 2.6 mm peg + NFC + silhouette
+# clearance — the inequality has no solution (proved analytically).
 PEG_CANDIDATES = [
-    ( 7.0,  0.0),    # right ear / mid-head
-    (-7.0,  0.0),    # left ear / mid-head
-    ( 4.3, -7.1),    # right jaw  (silhouette is slightly asymmetric in
-    (-4.3, -7.1),    # left jaw    the jaw region — these are the widest
-                     #             symmetric pair where BOTH sides pass the
-                     #             perimeter check at peg_r=1.3, found by
-                     #             scanning candidates inside the FullBead
-                     #             before split).
+    ( 7.0,  0.0),         # right ear / mid-head — default 2.6 mm
+    (-7.0,  0.0),         # left ear / mid-head — default 2.6 mm
+    ( 0.0, -7.3, 1.4),    # centered chin — thinner so it fits the neck
 ]
 
 # Peg ↔ socket assignment. Recipe default puts pegs on Bottom + sockets on
@@ -401,18 +408,28 @@ def split_halves(mesh):
     return bottom, top
 
 
+def _peg_dia(entry):
+    """Per-peg diameter: PEG_CANDIDATES entries are (x,y) for the default
+    PEG_DIAMETER, or (x,y,dia) to override on that peg only."""
+    return entry[2] if len(entry) >= 3 else PEG_DIAMETER
+
+
 def verify_pegs(mesh, candidates):
     depsgraph = bpy.context.evaluated_depsgraph_get()
     eval_full = mesh.evaluated_get(depsgraph)
     nfc_r = NFC_DIAMETER / 2.0
-    peg_r = PEG_DIAMETER / 2.0
     valid = []
-    # Raycast the peg center plus 8 perimeter points so we catch a peg whose
-    # CENTER is inside the silhouette but whose EDGE pokes through the
-    # silhouette boundary (the failure mode from earlier prints).
-    perim_offsets = [(peg_r * math.cos(k * math.pi / 4.0),
-                      peg_r * math.sin(k * math.pi / 4.0)) for k in range(8)]
-    for px, py in candidates:
+    for entry in candidates:
+        px, py = entry[0], entry[1]
+        peg_d = _peg_dia(entry)
+        peg_r = peg_d / 2.0
+        # Check at the SOCKET radius — wider than the peg by PEG_CLEARANCE on
+        # each side. The socket is what carves through the half-shell via
+        # boolean DIFFERENCE; if its perimeter pokes past the silhouette, the
+        # printed bead shows a malformed open hole instead of a clean socket.
+        socket_r = peg_r + PEG_CLEARANCE
+        perim_offsets = [(socket_r * math.cos(k * math.pi / 4.0),
+                          socket_r * math.sin(k * math.pi / 4.0)) for k in range(8)]
         center_hit = eval_full.ray_cast(
             Vector((px, py, 10)), Vector((0, 0, -1)))[0]
         edge_misses = [(ox, oy) for ox, oy in perim_offsets
@@ -425,11 +442,11 @@ def verify_pegs(mesh, candidates):
         hole_dist = abs(py - HOLE_Y)
         ok = in_silhouette and nfc_clear > 0.5 and hole_dist > peg_r + 1.0
         edge_note = "" if not edge_misses else f"  edges_clipping={len(edge_misses)}/8"
-        print(f"  peg ({px:+.1f},{py:+.1f}): solid={center_hit}  "
+        print(f"  peg ({px:+.2f},{py:+.2f}) d={peg_d:.1f}: solid={center_hit}  "
               f"nfc_clear={nfc_clear:+.2f}  hole_d={hole_dist:.2f}{edge_note}  "
               f"-> {'OK' if ok else 'REJECTED'}")
         if ok:
-            valid.append((px, py))
+            valid.append(entry)
     if len(valid) < len(candidates):
         raise RuntimeError(
             f"Only {len(valid)} of {len(candidates)} configured peg(s) validated; "
@@ -456,7 +473,6 @@ def add_peg_sockets(half, pegs, mode):
                          (floor sockets — pegs come from above, hanging
                          off the top half's inner face).
     """
-    hole_r = (PEG_DIAMETER + PEG_CLEARANCE * 2) / 2.0
     if mode == 'into_top':
         z_face = min((half.matrix_world @ v.co).z for v in half.data.vertices)
         cb = z_face - 1.0                            # 1 mm below face — through-going cutter
@@ -467,7 +483,10 @@ def add_peg_sockets(half, pegs, mode):
         ct = z_face + 1.0                            # 1 mm above face
     else:
         raise ValueError(f"unknown socket mode: {mode}")
-    for i, (px, py) in enumerate(pegs):
+    for i, entry in enumerate(pegs):
+        px, py = entry[0], entry[1]
+        peg_d = _peg_dia(entry)
+        hole_r = (peg_d + PEG_CLEARANCE * 2) / 2.0
         bpy.ops.mesh.primitive_cylinder_add(
             vertices=32, radius=hole_r, depth=ct - cb,
             location=(px, py, (cb + ct) / 2.0))
@@ -489,9 +508,11 @@ def add_pegs(half, pegs, mode):
         cz = z_face - PEG_HEIGHT / 2.0
     else:
         raise ValueError(f"unknown peg mode: {mode}")
-    for i, (px, py) in enumerate(pegs):
+    for i, entry in enumerate(pegs):
+        px, py = entry[0], entry[1]
+        peg_d = _peg_dia(entry)
         bpy.ops.mesh.primitive_cylinder_add(
-            vertices=32, radius=PEG_DIAMETER / 2.0, depth=PEG_HEIGHT,
+            vertices=32, radius=peg_d / 2.0, depth=PEG_HEIGHT,
             location=(px, py, cz))
         boolean_op(half, bpy.context.active_object, 'UNION', f"Peg{i}")
     clean_mesh(half)
