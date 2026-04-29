@@ -6,6 +6,35 @@ This sits next to `README.md` (which captures *why this charm exists*); the log 
 
 ---
 
+## v5c — 2026-04-29 — printable (after slicer Z-seam fix)
+
+Geometry: TARGET_WIDTH=20, THICKNESS=5, **hole moved entirely into Top** via `HOLE_Z_OFFSET=+1.25` (string-hole tube z=[+0.50, +2.00] inside Top's [0, +2.5] half — solid material above and below, no half-circle groove on either inner face). Three pegs: side ear pegs at (±7, 0) at PEG_DIAMETER=**2.6** mm, single centered chin peg at (0, -7.3) at PEG_DIAMETER=**1.4** mm via per-peg diameter override.
+
+**Printed**: yes — but only after switching Z-seam to Random.
+
+**First attempt (Z-seam = Aligned, slicer default)**: right-ear region of the printed Top half accumulated dragged/oozed plastic into a visible stringy mass localized to that one socket. Left ear printed clean, despite essentially symmetric geometry. Photo evidence ruled out the wall-thickness theory (left wall 0.95 mm and right wall 0.65 mm both within recipe tolerance). Diagnosed as the slicer placing the Z-seam on the right edge each layer, compounding tiny seam artifacts over ~20 layers × 3+ color swaps per layer into one visible blob.
+
+**Fix that worked**: Quality → Layers → Z-seam position = **Random**. The seam artifacts are now spread evenly around the perimeter; no single XY accumulates damage. Same multi-filament setup, same prime-tower position — only Z-seam changed.
+
+**Lessons captured**:
+- Small multi-color charms (≤25 mm) are highly sensitive to Z-seam placement. **Default Z-seam to Random for any multi-filament bead.** Documented in `print/FILAMENTS.md`.
+- The original `verify_pegs` checked only the peg center via raycast; this missed cases where the peg's *perimeter* poked outside the silhouette. Replaced with an 8-point socket-radius perimeter check in v5b. Still an open improvement: add an explicit wall-thickness margin (≥0.5 mm clear between socket edge and silhouette boundary) so geometry that "barely fits" doesn't make it through.
+- Centerline chin pegs at PEG_DIAMETER ≥ 1.84 are mathematically infeasible on this silhouette — NFC bottom (y=-6) and silhouette y_min near x=0 (-8.44) inequalities have no overlap once the peg radius is added. Thinner peg only on that one position, via per-peg diameter override, was the correct fix. Adding `(x, y, dia)` 3-tuples to PEG_CANDIDATES is now part of the build script.
+
+---
+
+## v5b — 2026-04-28 — printable but jaw pegs poked through silhouette
+
+Geometry: as v5c except **4 pegs** in a quadrilateral at (±7, 0) + (±4.3, -7.1), all at uniform PEG_DIAMETER=**2.6** mm.
+
+**Printed**: yes, but the two jaw pegs at (±4.3, -7.1) had their sockets visibly carved through the silhouette boundary on the printed Top half. The 8-point perimeter check passed at build time — but the wall thickness from socket edge to silhouette was paper-thin in places, and FDM layer-by-layer printing exposed the failure.
+
+**Fix in v5c**: dropped the jaw pair, restored a single centered chin peg at (0, -7.3) at smaller PEG_DIAMETER=1.4 (centerline at 2.6 mm is mathematically infeasible — see v5c lesson). Added per-peg diameter override to PEG_CANDIDATES.
+
+**Lesson captured**: an 8-point perimeter raycast against the silhouette is necessary but not sufficient. A peg can pass the check while still leaving a wall thinner than one perimeter width, which prints as voids or stringing around the socket. Future verifier upgrade: enforce a wall-thickness margin (e.g., socket edge to silhouette boundary ≥ 0.5 mm at all 8 perimeter points), not just "socket inside silhouette."
+
+---
+
 ## v3 — 2026-04-28 — printable
 
 Geometry: TARGET_WIDTH=20, THICKNESS=5, PEG_HEIGHT=1.5, HOLE_DIA=1.5, HOLE_Y=5.5, NFC_POS=(0,-1), pegs at (±8,0) + (0,-8). Wall above hole = 2.21 mm.

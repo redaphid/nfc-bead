@@ -29,6 +29,7 @@ These are the keys that actually control where swap purge goes, with the values 
 | `flush_into_support`  | **1** (on)  | This charm has no supports → no-op, harmless. |
 | `purge_in_prime_tower`| **0**       | Likely a deprecated key in this slicer version; the actual purge routing is the `flush_into_*` set above, all of which correctly send purge to the prime tower. Don't change it; it isn't the problem. |
 | Z-hop on travel       | **≥ 0.4 mm** (recommended) | Defense in depth so a peeled corner can't be caught by a travel move. Verify in Quality → Travel. |
+| **Z-seam position**   | **Random** (REQUIRED) | Default "Aligned" puts the per-layer seam at the same XY each layer. On a small multi-color charm (≤25 mm) with frequent color-swap travels, those seams compound into a localized blob of stringy plastic — see PRINT_LOG.md v5c first attempt. Random spreads the seams around the perimeter so no single spot accumulates damage. Quality → Layers → Z-seam position. |
 | Filament 4 (blue) initial temp | optional **+5 °C** | Worth trying if peeling persists; first deposit after a swap is on a cooled substrate from a nozzle that dipped during cut/load/purge. |
 
 ## Flush volumes (mm³ purged on color swap)
