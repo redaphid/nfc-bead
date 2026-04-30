@@ -6,6 +6,19 @@ This sits next to `README.md` (which captures *why this charm exists*); the log 
 
 ---
 
+## v6 — 2026-04-29 — printable AND assembles with proper snap-fit
+
+Geometry: as v5c except `PEG_CLEARANCE=0.1 → 0.05` mm. Halves radial gap is now 0.05 mm per side (0.1 mm diametric) instead of 0.1 mm per side (0.2 mm diametric). Only Top STL changes — sockets are in Top; Bottom (with pegs) is unchanged.
+
+**Printed**: yes — and the halves snap together with friction grip for the first time across all six print iterations on this charm. Prior versions all assembled but the halves slid apart easily, which we'd been calling "printable" without checking the snap-fit.
+
+**Lesson captured**: the recipe default `PEG_CLEARANCE=0.1` is conservative for a Centauri Carbon 2. On a well-calibrated FDM printer, that's enough slop for the peg to slide in with no friction at all. **0.05 mm radial / 0.1 mm diametric is a better default** for the CC2 specifically; the recipe-level value is worth revisiting once another charm prints on a different printer to confirm.
+
+Open follow-ups (not blocking):
+- v6b: chin peg diameter bumped 1.4 → 1.7 mm (the math limit at this position) for additional grip on the centerline. STLs and `top-v6b.3mf` queued in `print/` but not yet printed. Skip unless v6 grip is insufficient over time.
+
+---
+
 ## v5c — 2026-04-29 — printable (after slicer Z-seam fix)
 
 Geometry: TARGET_WIDTH=20, THICKNESS=5, **hole moved entirely into Top** via `HOLE_Z_OFFSET=+1.25` (string-hole tube z=[+0.50, +2.00] inside Top's [0, +2.5] half — solid material above and below, no half-circle groove on either inner face). Three pegs: side ear pegs at (±7, 0) at PEG_DIAMETER=**2.6** mm, single centered chin peg at (0, -7.3) at PEG_DIAMETER=**1.4** mm via per-peg diameter override.

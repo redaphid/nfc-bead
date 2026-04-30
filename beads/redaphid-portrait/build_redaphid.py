@@ -62,7 +62,10 @@ PEG_DIAMETER  = 2.6            # mm — v5 bumped from 2.0 (recipe default) for
 PEG_HEIGHT    = 1.5            # mm — recipe default; first print at 1.0 mm
                                # didn't grip. With THICKNESS=5 (halves 2.5),
                                # sockets at 1.8 mm leave 0.7 mm wall — fine.
-PEG_CLEARANCE = 0.1
+PEG_CLEARANCE = 0.05         # mm radial — recipe default 0.1 was too generous
+                              # for the Centauri Carbon 2; v5c assembled but had
+                              # no snap. Halved for v6 (only Top changes — sockets
+                              # are in Top; pegs in Bottom keep their dimensions).
 # Four pegs in a quadrilateral. The original v3/v4 used a centered chin
 # peg at (0, -8), but with PEG_DIAMETER=2.6 there is NO valid y position
 # for a peg on x=0 in the chin region — the NFC bottom edge (y=-6, plus
@@ -86,7 +89,11 @@ PEG_CLEARANCE = 0.1
 PEG_CANDIDATES = [
     ( 7.0,  0.0),         # right ear / mid-head — default 2.6 mm
     (-7.0,  0.0),         # left ear / mid-head — default 2.6 mm
-    ( 0.0, -7.3, 1.4),    # centered chin — thinner so it fits the neck
+    ( 0.0, -7.4, 1.7),    # centered chin — bumped from 1.4 mm in v6 because
+                          # the assembled bead had no friction. 1.7 mm is at
+                          # the math limit of what fits between NFC bottom
+                          # (y=-6) and the silhouette y_min near x=0 (≈-8.44)
+                          # once peg radius + socket clearance are added.
 ]
 
 # Peg ↔ socket assignment. Recipe default puts pegs on Bottom + sockets on
