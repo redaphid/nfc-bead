@@ -223,6 +223,39 @@ The recipe-default places the string hole on the Z midplane, so each half hosts 
 
 The fix is structural: set `HOLE_Z_OFFSET` to ~`THICKNESS/4` so the entire hole sits inside one half, with the inner face fully solid silhouette at `y=HOLE_Y`. The hole becomes a small interior tube that the slicer bridges twice (floor + ceiling, ~1.5 mm spans, easy bridges). Cost: tube wall thickness above + below shrinks to `(half_thickness - hole_dia) / 2` ≈ 0.5 mm at THICKNESS=5 — printable on a tuned printer, marginal on others. If the print still fails, bump `THICKNESS` rather than reverting to the split-plane hole.
 
+### 24. NFC pocket needs the same perimeter raycast as pegs
+Mirrors gotcha #21 but for the NFC pocket. Center-only validation passes if the pocket center is inside the silhouette, but a 5.25 mm-radius pocket centered 4 mm from the silhouette boundary clips past it on one side — leaving a paper-thin or open wall along that arc. The first time this happened the user had to look at the slicer's 3D view to spot it; the build script declared success.
+
+The fix (implemented in `build_charm.py.example`): 16-point raycast (`k * π / 8` for k in 0..15) at the NFC radius. Any miss → reject the position; print the per-vertex misses so the user can pick a better `NFC_POS` or shrink `NFC_DIAMETER`. More samples than the peg check (16 vs 8) because the NFC radius is much larger and a single missed sample represents a wider arc.
+
+### 25. Multi-region SVG round-trip silently breaks alignment between regions
+For a multi-color charm with N region SVGs (filling, shell, outline, interior detail), Blender's `import_curve.svg` sizes each imported curve from the **path bbox**, not the SVG `viewBox`. Auto-fit-to-target-width then scales each region by its own path extent — so a region whose path covers 95% of the viewBox lands at scale ≈ 1.05× what a region covering 40% of the viewBox lands at. The two regions end up at different scales AND different positions even though their viewBoxes are identical.
+
+You won't notice on the body silhouette (its path always covers the full viewBox). You will notice when an interior-detail SVG with fragments clustered in one corner gets auto-fit to 25 mm wide and stretches the fragments to fill that width — they end up at the wrong positions and the wrong size relative to silhouette + filling.
+
+Two fixes, in order of cleanliness:
+1. **Polygon manifest pipeline** (preferred for multi-region charms): emit each region's polygon vertices in shared mm coordinates to a single `regions.json`, then build Blender meshes via `bmesh.from_pydata`. No SVG round-trip. See `beads/filibertos-taco/extract_regions.py` for the reference.
+2. **Bbox-anchor markers in SVG** (lighter touch): in your SVG writer, always emit two 1-pixel `<rect>` markers at the silhouette's bbox corners. Forces every SVG's path bbox to match the silhouette's, so per-SVG auto-fit gives consistent scale.
+
+### 26. Decoration cropper must be a fresh silhouette extrusion, never a duplicate of Top
+When you crop a decoration (e.g. multi-color slab) to the silhouette outer boundary via boolean INTERSECT, the natural reflex is to duplicate Top, raise its show-face vertices, and use that as the cropper. **This punches the peg-socket holes through the decoration**: Top has the peg sockets cut into its inner face, those holes become open through-tubes when the show face is raised, and the INTERSECT cuts matching holes in the decoration above each peg position. You see 3 visible bare-show-face circles on the decoration in the slicer.
+
+Fix: build the cropper from a fresh re-import of `silhouette.svg` extruded tall — no peg sockets, no NFC pocket, no string hole. `build_charm.py.example` provides `_build_silhouette_cropper()` for exactly this. **Do this for every multi-color charm** — the bug is invisible until you slice.
+
+### 27. Multi-color decoration layers need ≥0.16 mm Z-step or the slicer will Z-fight
+When you stack multiple raised decoration objects on the show face — base color slab, accent color, outline ring — they need clear Z separation. A z-step less than the slicer's typical layer height (0.16 mm) leaves the slicer ambiguous about which filament wins on a given layer; the imported model looks like one decoration is missing or showing through the wrong one.
+
+Recipe-default `DECO_LAYER_STEP = 0.10 mm` is below typical layer height for tightness BUT only safe when no two decorations overlap in XY. If they DO overlap (filling under a separator curve, separator under outline ring), bump to `0.20 mm` so each is unambiguously its own slice. The decoration relief is 0.4 mm tall, so 0.2 mm × 4 layers = 0.8 mm total height stack — still well within the bead's 5 mm thickness.
+
+Stack order in the build's `BLOCK_GROUPS` dict matters: things at higher layer_idx get higher Z and OCCLUDE things below them in the slicer's view. Put the visually-dominant decoration last so it's never occluded.
+
+### 28. Multi-decoration 3MF: bundle as a `ComponentsObject` with one build item
+The 3MF you ship to the slicer for a multi-color charm should have ONE `<components>` object with all Top-frame meshes (Top + every Decoration*) referenced as components, and ONE `<build>` `<item>` placing that assembly on the plate. Adding each mesh as its own top-level `<object>` with its own `<item>` (5+ build items at the same XY) confuses every slicer we've tried — Bambu Studio reports "model is too small" and offers to scale 25×, Elegoo Slicer flips one half upside-down. The ComponentsObject keeps everything anchored together.
+
+Trade-off: the slicer renames component children with a numeric suffix (`top_with_decorations_1` etc.). That's cosmetic — the user can rename in the slicer. The "fix" of removing the ComponentsObject for cleaner names breaks the 3MF.
+
+`tools/make_3mf.py` already follows this pattern for the canonical Bottom + Top + Decoration + Hair set. For charms with more decoration layers, write a per-charm `bundle_3mf.py` (mirror of `make_3mf.py`'s structure but with the charm's full decoration list) — see `beads/filibertos-taco/bundle_3mf.py` for the reference.
+
 ---
 
 ## Print orientation

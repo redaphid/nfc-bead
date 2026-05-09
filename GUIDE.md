@@ -164,6 +164,41 @@ else:
 | `if __name__ == "__main__"` block doesn't run | `exec(open(...).read())` keeps the calling module's `__name__` | Pass `ns = {"__name__": "__main__"}` to `exec(script, ns)`, or call `main()` directly. See gotcha #18 |
 | Color extraction loses saturation under blur | `gaussian_filter(rgb, sigma=4)` blurs the channel axis too, collapsing chrominance | Use `sigma=(blur, blur, 0)` to leave channels untouched. See gotcha #19 |
 | `FullBead.001..N` accumulating across rebuilds | Re-running the build doesn't clean intermediate objects | Wipe `FullBead*` at the top of the build, or `bpy.data.objects.remove` explicitly. See gotcha #20 |
+| NFC pocket clips past silhouette boundary on one side | No perimeter check on the NFC — only its center was validated | Add 16-point raycast around the pocket boundary. See gotcha #24 |
+| Multi-region SVGs land at different scales/positions | Each SVG auto-fit to its own path bbox; bboxes differ between regions | Use the polygon-manifest pipeline (`regions.json` + `polygons_to_mesh()`). See gotcha #25 |
+| Decoration shows visible peg-socket circles | Cropper was made from a duplicate of Top; peg sockets propagate as holes through the decoration | Build cropper from a fresh `silhouette.svg` extrusion via `build_silhouette_cropper()`. See gotcha #26 |
+| Multi-color decoration layer disappears or shows wrong filament in slicer | Z-step between decoration layers below slicer layer height (0.16mm); slicer can't disambiguate | Set `DECO_LAYER_STEP ≥ 0.16mm` (0.20mm for safety). See gotcha #27 |
+| 3MF imports as "too small" / one half upside-down | Each part added as a separate top-level `<object>` with own `<item>` confuses the slicer | Wrap Top + decorations in a single `ComponentsObject` with one build item. See gotcha #28 |
+
+## Multi-color decoration workflow
+
+For charms with several colored regions on the show face (cartoon illustrations, logos, multi-filament block prints), follow this pipeline. It avoids the SVG-round-trip pitfalls and produces consistent inter-region alignment. Reference: `beads/filibertos-taco/`.
+
+### 1. Source-image extraction (k-means clustering)
+
+If your input is a colored bitmap (JPG/PNG illustration), use k-means on FG pixels to identify color clusters, then map clusters to named regions via predicate functions. See `beads/filibertos-taco/extract_regions.py`.
+
+### 2. Polygon manifest (`regions.json`)
+
+Emit each region's polygon vertices in **shared mm coordinates** (origin = silhouette bbox center, +Y up). Use the dict shape `{outer: [(x,y),...], holes: [[(x,y),...], ...]}` so ring polygons (e.g. silhouette outline) carry both the outer and inner contours.
+
+For ring polygons specifically: build the outer + inner contours with **shapely's `.buffer(-N)`** of the silhouette polygon. This guarantees the outer edge of the ring matches the silhouette.svg used for the bead body.
+
+### 3. Build → `polygons_to_mesh()`
+
+Consume the manifest and call `polygons_to_mesh(polygons, name, z=...)` (provided in `build_charm.py.example`). It handles simple polygons, ring polygons (via `bridge_loops`), and multi-hole polygons (via `triangle_fill`).
+
+### 4. Crop with `build_silhouette_cropper()`
+
+Always build the decoration cropper from a fresh `silhouette.svg` import — not a duplicate of Top, which propagates peg-socket holes through the decoration. Helper in `build_charm.py.example`.
+
+### 5. Z-stack with ≥0.16mm step
+
+Each decoration layer needs `DECO_LAYER_STEP ≥ slicer layer height` so the slicer assigns each unambiguously to its own filament. Order matters in the build's iteration: things at higher Z OCCLUDE things below — put the visually dominant decoration last.
+
+### 6. 3MF bundling
+
+Wrap Top + every Decoration into a single `ComponentsObject` with **one build item**; Bottom on its own build item with a plate offset. See `tools/make_3mf.py` for the canonical Top + Hair + Decoration set; mirror its structure for charms with more decoration layers (e.g. `beads/filibertos-taco/bundle_3mf.py`).
 
 ## Dimensions Reference (Wooli Charm)
 

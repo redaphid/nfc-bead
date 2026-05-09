@@ -112,6 +112,133 @@ def verify_hole(obj, origin, direction, label=""):
     print(f"  {label}: {status}")
     return not result[0]
 
+def repair_manifold(obj):
+    """Recover a watertight mesh after EXACT boolean on thin/ring shapes.
+    The EXACT solver leaves tiny coplanar fragments + boundary holes that
+    `clean_mesh` doesn't catch. Run this after every boolean on decoration
+    rings or any boolean that intersects thin slabs.
+    Sequence: dissolve_degenerate (nuke zero-area features) → delete_loose
+    (drop orphan edges) → fill_holes (cap any open boundaries) →
+    remove_doubles → reconcile normals."""
+    obj.select_set(True); bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.dissolve_degenerate(threshold=0.001)
+    bpy.ops.mesh.delete_loose()
+    bpy.ops.mesh.select_all(action='DESELECT')
+    bpy.ops.mesh.select_non_manifold(extend=False, use_wire=True, use_boundary=True,
+                                      use_multi_face=False, use_non_contiguous=False, use_verts=False)
+    bpy.ops.mesh.fill_holes(sides=8)
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=0.005)
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
+def build_silhouette_cropper(svg_path, target_w_mm, z_lo, z_hi):
+    """Make a clean tall extrusion of the silhouette (no peg/NFC/string-hole
+    features) for cropping multi-color decoration meshes.
+
+    GOTCHA #26: never duplicate Top to make a decoration cropper. Top has
+    peg sockets cut into it; raising the show face to make the cropper
+    turns those into open through-tubes, and INTERSECT punches matching
+    holes through the decoration above each peg. Use a fresh import of
+    `silhouette.svg` instead — it has no interior features, so the cropper
+    is a clean solid silhouette volume.
+
+    Returns the cropper object. Caller is responsible for deleting it
+    after the boolean."""
+    pre_objs = {o.name for o in bpy.context.scene.objects}
+    bpy.ops.import_curve.svg(filepath=svg_path)
+    curves = [o for o in bpy.context.scene.objects
+              if o.type == 'CURVE' and o.name not in pre_objs]
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in curves: o.select_set(True)
+    bpy.context.view_layer.objects.active = curves[0]
+    if len(curves) > 1: bpy.ops.object.join()
+    cv = bpy.context.active_object
+    cv.data.dimensions = '2D'; cv.data.fill_mode = 'BOTH'; cv.data.resolution_u = 64
+    bpy.ops.object.convert(target='MESH')
+    m = bpy.context.active_object
+    sf = (target_w_mm / 1000.0) / m.dimensions.x
+    m.scale = (sf, sf, sf); bpy.ops.object.transform_apply(scale=True)
+    m.scale = (1000, 1000, 1000); bpy.ops.object.transform_apply(scale=True)
+    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+    m.location = (0, 0, z_lo)
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=0.005)
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.mesh.extrude_region_move(
+        TRANSFORM_OT_translate={"value": (0, 0, z_hi - z_lo)})
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=0.005)
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    return m
+
+
+def polygons_to_mesh(polygons, name, z=0.0):
+    """Build a flat Blender mesh from polygons in mm coordinates.
+
+    GOTCHA #25 alternative: instead of writing each region as an SVG and
+    importing through Blender's `import_curve.svg` (which auto-fits each
+    region to its OWN path bbox, breaking inter-region alignment), emit
+    every region's polygon vertices in shared mm coords and consume them
+    directly here.
+
+    `polygons` is a list of dicts: {'outer': [(x,y), ...], 'holes': [...]}.
+    Simple polygons (no holes) get a direct n-gon face. Ring polygons
+    (1 hole) get bridge_loops between outer + inner — clean quad topology
+    that's manifold by construction. See `beads/filibertos-taco/extract_regions.py`
+    for the polygon-manifest writer."""
+    if not polygons:
+        return None
+    me = bpy.data.meshes.new(name + 'Mesh')
+    bm = bmesh.new()
+    for poly in polygons:
+        outer = poly.get('outer') if isinstance(poly, dict) else poly
+        holes = poly.get('holes', []) if isinstance(poly, dict) else []
+        if not outer or len(outer) < 3:
+            continue
+        if not holes:
+            try:
+                verts = [bm.verts.new((float(x), float(y), float(z))) for x, y in outer]
+                bm.faces.new(verts)
+            except ValueError:
+                pass
+            continue
+        if len(holes) == 1:
+            outer_v = [bm.verts.new((float(x), float(y), float(z))) for x, y in outer]
+            inner_v = [bm.verts.new((float(x), float(y), float(z))) for x, y in holes[0]]
+            outer_e, inner_e = [], []
+            for i in range(len(outer_v)):
+                try: outer_e.append(bm.edges.new((outer_v[i], outer_v[(i+1) % len(outer_v)])))
+                except ValueError: pass
+            for i in range(len(inner_v)):
+                try: inner_e.append(bm.edges.new((inner_v[i], inner_v[(i+1) % len(inner_v)])))
+                except ValueError: pass
+            try: bmesh.ops.bridge_loops(bm, edges=outer_e + inner_e)
+            except Exception: pass
+            continue
+        # Multi-hole: triangle_fill with constrained Delaunay
+        loop_edges = []
+        for loop in [outer] + holes:
+            verts = [bm.verts.new((float(x), float(y), float(z))) for x, y in loop]
+            for i in range(len(verts)):
+                try: loop_edges.append(bm.edges.new((verts[i], verts[(i+1) % len(verts)])))
+                except ValueError: pass
+        if loop_edges:
+            try: bmesh.ops.triangle_fill(bm, edges=loop_edges, use_beauty=True)
+            except Exception: pass
+    bm.normal_update()
+    bm.to_mesh(me)
+    bm.free()
+    obj = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(obj)
+    return obj
+
+
 print("=" * 60)
 print("Wooli Charm Build")
 print("=" * 60)
@@ -224,20 +351,39 @@ z_max = max(v.co.z for v in mesh_obj.data.vertices)
 z_mid = (z_min + z_max) / 2.0
 print(f"Z: {z_min:.2f} to {z_max:.2f}, mid={z_mid:.2f}")
 
-# ── Step 6: Verify peg positions ──────────────────────────
+# ── Step 6: Verify peg + NFC perimeters ───────────────────
 # Raycasts the peg CENTER plus 8 perimeter points to catch a peg whose center
 # is inside the silhouette but whose edge pokes through the boundary (gotcha
 # #21 in prompts/nfc-bead/prompt.md). Center-only checks miss this — the
 # original recipe shipped with that bug for many revisions before it was
 # caught visually on a printed bead.
-print("\nPeg position check:")
+#
+# Same idea applied to the NFC pocket (gotcha #24): 16 points around the
+# 5.25mm-radius boundary; if any miss solid silhouette the pocket clips
+# past the bead edge, leaving a paper-thin or open wall on that side.
+print("\nPeg + NFC perimeter check:")
 depsgraph = bpy.context.evaluated_depsgraph_get()
 eval_full = mesh_obj.evaluated_get(depsgraph)
 nfc_r = NFC_DIAMETER / 2.0
 peg_r = PEG_DIAMETER / 2.0
 perim_offsets = [(peg_r * math.cos(k * math.pi / 4.0),
                   peg_r * math.sin(k * math.pi / 4.0)) for k in range(8)]
+nfc_perim = [(nfc_r * math.cos(k * math.pi / 8.0),
+              nfc_r * math.sin(k * math.pi / 8.0)) for k in range(16)]
 any_warn = False
+
+nfc_misses = sum(1 for ox, oy in nfc_perim
+                 if not eval_full.ray_cast(
+                     Vector((NFC_POS[0]+ox, NFC_POS[1]+oy, z_max+5)),
+                     Vector((0,0,-1)))[0])
+print(f"  NFC ({NFC_POS[0]:+.1f},{NFC_POS[1]:+.1f}) r={nfc_r}: "
+      f"perimeter inside silhouette = {16-nfc_misses}/16"
+      + (f"  CLIPPING {nfc_misses}/16!" if nfc_misses else ""))
+if nfc_misses > 0:
+    any_warn = True
+    print("    → NFC pocket clips past silhouette boundary; "
+          "adjust NFC_POS or shrink NFC_DIAMETER")
+
 for i, (px, py) in enumerate(PEGS):
     center_hit = eval_full.ray_cast(Vector((px, py, z_max+5)), Vector((0,0,-1)))[0]
     edge_misses = sum(1 for ox, oy in perim_offsets
@@ -261,7 +407,7 @@ for i, (px, py) in enumerate(PEGS):
         any_warn = True
         print(f"    WARNING: Peg {i} overlaps NFC cavity!")
 if any_warn:
-    print("  → fix PEGS in CONFIG so every peg's center+perimeter sits inside the silhouette and clears NFC")
+    print("  → fix PEGS / NFC_POS in CONFIG so every perimeter sits inside the silhouette")
 
 # ── Step 7: Split into halves ─────────────────────────────
 box_size = 200
@@ -384,6 +530,19 @@ for obj, color, name in [(bottom, (0.2, 0.6, 0.3, 1), "BottomMat"),
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.shade_flat()
+
+# ── Step 11.5: Set export-flip override (recipe gotcha #16) ───────────
+# This pipeline produces Bottom in PRINT orientation already (silhouette
+# face DOWN at z=z_min, pegs UP). The bead-stl-export skill's default
+# 180° X-flip on Bottom would un-orient it, leaving pegs on the build
+# plate cantilevered. Stash a per-charm override so the export skill
+# applies a 0° flip on Bottom for this pipeline.
+import json as _json
+bpy.context.scene["nfc_export_flip_override"] = _json.dumps({
+    "Bottom": 0.0,
+    "Top":    0.0,
+    # Add Decoration / Hair entries here if your charm has them.
+})
 
 # ── Step 12: Export ───────────────────────────────────────
 bpy.ops.object.select_all(action='DESELECT')
