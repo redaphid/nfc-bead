@@ -9942,7 +9942,12 @@
               ]
             ]
           ]
-        },
+        }
+      ],
+      "color_hex": "#a01a14"
+    },
+    "lettuce_separator": {
+      "polygons": [
         {
           "outer": [
             [

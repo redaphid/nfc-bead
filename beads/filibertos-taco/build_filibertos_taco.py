@@ -46,25 +46,26 @@ NEON_COLORS = {
 
 # Block-mode color palette.
 BLOCK_COLORS = {
-    "filling":          (0.30, 0.65, 0.20, 1),    # green lettuce slab
-    "shell":            (0.95, 0.72, 0.10, 1),    # yellow shell slab
-    "interior_detail":  (0.78, 0.13, 0.10, 1),    # red veins inside the lettuce
-    "shell_outline":    (0.63, 0.10, 0.08, 1),    # darker red outline border
+    "filling":            (0.30, 0.65, 0.20, 1),    # green lettuce slab
+    "shell":              (0.95, 0.72, 0.10, 1),    # yellow shell slab
+    "interior_detail":    (0.78, 0.13, 0.10, 1),    # red veins inside lettuce
+    "shell_outline":      (0.63, 0.10, 0.08, 1),    # red ring around silhouette
+    "lettuce_separator":  (0.78, 0.13, 0.10, 1),    # red curve between filling/shell
 }
 # Block-mode: each Decoration region is built by joining MULTIPLE source SVGs
 # under one name, so we get a single solid filling/shell slab even though the
 # extractor split each by brightness (light/dark green, light/dark yellow).
 BLOCK_GROUPS = {
     # Body (Bottom + Top) prints in shell yellow — it IS the shell.
-    # Decorations stack on the show face (lower layer_idx = closer to body):
-    #   shell_outline: red border tracing the bead silhouette + lettuce-
-    #     shell boundary curve. Prints first so other layers can override.
-    #   filling:       green lettuce blob.
-    #   interior_detail: red squiggles inside the lettuce.
-    # Four filaments: yellow body + red outline + green filling + red interior.
-    "shell_outline":   ("region_shell_outline.svg",),
-    "filling":         ("region_filling.svg",),
-    "interior_detail": ("region_interior_detail.svg",),
+    # Decorations stack on the show face (lower layer_idx = closer to body).
+    # Order matters: things lower in z get covered by things above. The
+    # lettuce_separator and interior_detail must sit ABOVE filling so the
+    # red details show; shell_outline ring sits below filling so the
+    # filling can cover its inner half (where filling extends past the ring).
+    "shell_outline":      ("region_shell_outline.svg",),       # z = lowest, ring around bead
+    "filling":            ("region_filling.svg",),             # z = +1 step, green lettuce
+    "lettuce_separator":  ("region_lettuce_separator.svg",),   # z = +2, red curve above filling
+    "interior_detail":    ("region_interior_detail.svg",),     # z = +3, red veins above filling
 }
 
 def _camel(name): return ''.join(p.capitalize() for p in name.split('_'))

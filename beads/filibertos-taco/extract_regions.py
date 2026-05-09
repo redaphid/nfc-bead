@@ -460,9 +460,15 @@ regions_data = {
             'polygons': mask_to_polygons_mm(interior_detail, smooth=False, min_area=INTERIOR_DETAIL_MIN_PX),
             'color_hex': '#921209',
         },
+        # Ring around the silhouette outer edge — sits BELOW filling in z stack
         'shell_outline': {
-            'polygons': (shell_outline_polys_mm or [])
-                        + mask_to_polygons_mm(separator, smooth=False, min_area=120),
+            'polygons': shell_outline_polys_mm or [],
+            'color_hex': '#a01a14',
+        },
+        # Dividing curve between lettuce and shell — sits ABOVE filling so
+        # the red curve is visible (otherwise filling would cover it).
+        'lettuce_separator': {
+            'polygons': mask_to_polygons_mm(separator, smooth=False, min_area=120),
             'color_hex': '#a01a14',
         },
     },
