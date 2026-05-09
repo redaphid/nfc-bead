@@ -288,7 +288,7 @@ print(f"  region_shell.svg <- silhouette - filling ({combined_shell.sum()} px)")
 # we don't include the wide outer outline in this. The cluster mask
 # still includes everything red, but ANDing with combined_filling
 # clips it to inside the lettuce.
-INTERIOR_DETAIL_COUNT = 7      # source has many veins; 7 reads as "stuff" not just dots
+INTERIOR_DETAIL_COUNT = 3      # ~3 red veins indicating lettuce contour
 INTERIOR_DETAIL_MIN_PX = 30
 
 # Build a k-means-derived red mask matching the strategy used in tmp/
