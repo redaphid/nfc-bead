@@ -39,8 +39,7 @@ REGION_COLORS = {
 # Neon-mode color palette.
 NEON_COLORS = {
     "silhouette":    (0.36, 0.84, 1.00, 1),    # primary light blue stroke
-    "lettuce_line":  (0.36, 0.84, 1.00, 1),    # second light blue stroke
-    "lettuce_veins": (0.90, 0.18, 0.25, 1),    # red accent (or swap for navy)
+    "filling_line":  (0.36, 0.84, 1.00, 1),    # the lettuce-shell dividing line
 }
 
 def _camel(name): return ''.join(p.capitalize() for p in name.split('_'))
@@ -92,6 +91,25 @@ def clean_mesh(obj, threshold=0.005):
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.remove_doubles(threshold=threshold)
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+def repair_manifold(obj):
+    """After EXACT boolean on thin extruded shapes, the EXACT solver
+    sometimes leaves coplanar fragments and unfilled boundary loops.
+    This pass dissolves zero-area features, deletes loose verts/edges,
+    and fills any open boundary loops to recover a watertight mesh."""
+    obj.select_set(True); bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.dissolve_degenerate(threshold=0.001)
+    bpy.ops.mesh.delete_loose()
+    bpy.ops.mesh.select_all(action='DESELECT')
+    bpy.ops.mesh.select_non_manifold(extend=False, use_wire=True, use_boundary=True,
+                                      use_multi_face=False, use_non_contiguous=False, use_verts=False)
+    bpy.ops.mesh.fill_holes(sides=8)
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=0.005)
     bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -335,9 +353,12 @@ def main():
         bpy.ops.object.mode_set(mode='OBJECT')
         boolean_op(d, cropper, 'INTERSECT', f'{name}Crop')
         clean_mesh(d)
+        repair_manifold(d)        # fixes ring-shape boolean artifacts
         assign_material(d, f"{name}Mat", color)
         decos.append(d)
-        print(f"  {name}: dims={d.dimensions.x:.2f}x{d.dimensions.y:.2f}x{d.dimensions.z:.2f}")
+        # report manifold so the build log surfaces issues immediately
+        nm = check_nonmanifold(d)
+        print(f"  {name}: dims={d.dimensions.x:.2f}x{d.dimensions.y:.2f}x{d.dimensions.z:.2f}  non-manifold={nm}")
 
     # ── Step 9: Hide FullBead, materials, save ─────────────────────────
     body.hide_set(True); body.hide_render = True

@@ -4,6 +4,36 @@ Append-only, newest at the top. Every physical print of this charm gets one entr
 
 ---
 
+## v4c-neon — 2026-05-08 — not yet printed (cleanest taco read)
+
+User feedback on v4b: "not 'obviously taco' enough, drop the bottom shell line".
+
+Two design changes:
+1. **Removed `DecorationShell`** — a ring around the lower half made the
+   silhouette look double-lined and busy.
+2. **Replaced `DecorationLettuce` (closed contour) with `DecorationFillingLine`**
+   — a single curve tracing only the BOTTOM EDGE of the lettuce blob (where
+   filling meets shell). Now the bead silhouette + this dividing line reads
+   as a textbook taco: cradle-shaped bun split by a horizontal filling line.
+
+Two manifold issues got fixed along the way:
+- **Mask-blur smoothing made things worse** (50+ non-manifold edges per
+  decoration). Cause: smoothing each contour independently diverged the
+  outer/inner ring offsets so they cross. Reverted to no smoothing on
+  ring-stroke contours.
+- **EXACT solver leaves coplanar fragments** at ring boundaries after
+  INTERSECT with the silhouette cropper. Added `repair_manifold()` to the
+  build pipeline: dissolve degenerate edges, delete loose, fill_holes(8),
+  remove doubles, reconcile normals. Now every decoration STL is
+  watertight (verified via trimesh: `is_watertight=True`, euler=0 for
+  ring shapes, euler=2 for solid).
+
+Filaments now reduced to 2: black body + light blue strokes.
+
+`build_filibertos_taco.py` `repair_manifold()` will help every future
+ring-stroke decoration in this charm — and is general enough to backport
+to the recipe if other charms hit the same EXACT-solver issue.
+
 ## v4b-neon — 2026-05-08 — not yet printed (continuous-stroke neon)
 
 Refined v4-neon. Original strokes used boundary-between-mask which produced

@@ -77,23 +77,38 @@ def boundary_stroke_between(a_mask, b_mask, half_w):
 
 silhouette_stroke = ring_stroke(silhouette, half)
 
-# Lettuce: aggressively close the mask first so all the leaf blobs merge
-# into ONE continuous shape, then ring-stroke its outer contour. Without
-# the strong close, you get one ring per leaf (fragmented).
-def merge_blobs(mask, dilate_iters=12):
+# Lettuce-shell DIVIDING LINE: a single curve across the bead width
+# tracing where the green filling sits on top of the yellow shell.
+# Combined with the silhouette outline, this reads as "taco" (the
+# silhouette is the half-circle bun, the line is the open-top split).
+#
+# Implementation: morph-close the lettuce blob to one shape, then take
+# only its BOTTOM-EDGE pixels (where the row below is NOT lettuce).
+# That's a thin polyline across the bead. Dilate it to stroke width.
+def merge_blobs(mask, dilate_iters=14):
     closed = ndimage.binary_dilation(mask, iterations=dilate_iters)
     closed = ndimage.binary_erosion(closed, iterations=dilate_iters)
     closed = ndimage.binary_fill_holes(closed)
-    # keep only the largest component
     labeled, n = ndimage.label(closed)
     if not n: return closed
     sizes = ndimage.sum(closed, labeled, range(1, n+1))
     return labeled == 1 + int(np.argmax(sizes))
 
 lettuce_blob = merge_blobs(lettuce_full, dilate_iters=14) & silhouette
-shell_blob   = merge_blobs(shell_m,      dilate_iters=14) & silhouette
-lettuce_outline = ring_stroke(lettuce_blob, half)
-shell_outline   = ring_stroke(shell_blob,   half)
+
+# Bottom edge of the lettuce blob: pixels in lettuce_blob whose pixel-down
+# is NOT lettuce_blob. (Image Y axis: row+1 is "down" in image coords,
+# which is "below" in original-image up-orientation. We're tracing the
+# topological lower edge of the lettuce in image space — which IS the
+# physical bottom of the lettuce on the printed bead since the source
+# JPG has the lettuce on top and shell below.)
+shifted_down = np.zeros_like(lettuce_blob)
+shifted_down[1:, :] = lettuce_blob[:-1, :]
+bottom_edge_pixels = lettuce_blob & ~shifted_down
+
+# Inflate the 1-pixel-thick edge into a stroke
+filling_line = ndimage.binary_dilation(bottom_edge_pixels, iterations=half)
+filling_line = filling_line & silhouette
 
 # Drop tiny disconnected fragments per stroke
 def keep_large(mask, min_px=80):
@@ -106,12 +121,10 @@ def keep_large(mask, min_px=80):
     return keep
 
 silhouette_stroke = keep_large(silhouette_stroke, 200)
-lettuce_outline   = keep_large(lettuce_outline,   200)
-shell_outline     = keep_large(shell_outline,     200)
+filling_line      = keep_large(filling_line,      200)
 
 print(f"silhouette_stroke: {silhouette_stroke.sum()} px")
-print(f"lettuce_outline:   {lettuce_outline.sum()} px")
-print(f"shell_outline:     {shell_outline.sum()} px")
+print(f"filling_line:      {filling_line.sum()} px")
 
 # ── Outer bbox (shared coord frame with silhouette.svg) ─────────────
 ys_o, xs_o = np.where(silhouette)
@@ -133,6 +146,10 @@ def downsample(c, n=300):
     return c[idx]
 
 def mask_to_paths(mask, smooth=True, harm=FOURIER_HARM, min_area=80):
+    """Trace contours of `mask`. NO Fourier smoothing — for ring strokes,
+    smoothing outer+inner edges independently makes them cross, producing
+    self-intersecting volumes after extrusion → non-manifold STLs.
+    Just downsample and use the raw stair-step pixel contours."""
     labeled, n = ndimage.label(mask)
     paths = []
     for k in range(1, n+1):
@@ -140,11 +157,8 @@ def mask_to_paths(mask, smooth=True, harm=FOURIER_HARM, min_area=80):
         if comp.sum() < min_area: continue
         contours = measure.find_contours(comp.astype(np.uint8), level=0.5)
         for c in contours:
-            if len(c) < 8: continue
+            if len(c) < 16: continue
             c = downsample(c, 300)
-            if smooth and len(c) > 10:
-                z = fourier_smooth(c, min(harm, len(c)//4))
-                c = np.column_stack((z.real, z.imag))
             paths.append(c)
     return paths
 
@@ -167,12 +181,12 @@ def write_svg(filename, paths, fill='#000'):
 
 # Each stroke is exported as its own SVG so the build script can pick
 # which ones to emboss as separate decoration objects (and assign filaments).
-write_svg(OUT/'stroke_silhouette.svg', mask_to_paths(silhouette_stroke, harm=FOURIER_HARM, min_area=200), '#5dd6ff')
-write_svg(OUT/'stroke_lettuce.svg',    mask_to_paths(lettuce_outline,   harm=14,           min_area=200), '#5dd6ff')
-write_svg(OUT/'stroke_shell.svg',      mask_to_paths(shell_outline,     harm=14,           min_area=200), '#e63946')
+write_svg(OUT/'stroke_silhouette.svg',   mask_to_paths(silhouette_stroke, harm=FOURIER_HARM, min_area=400), '#5dd6ff')
+write_svg(OUT/'stroke_filling_line.svg', mask_to_paths(filling_line,      harm=FOURIER_HARM, min_area=400), '#5dd6ff')
 
-# Drop the older fragmented strokes if they exist — name change
-for old in ('stroke_lettuce_line.svg', 'stroke_lettuce_veins.svg'):
+# Drop older strokes whose names changed across iterations
+for old in ('stroke_lettuce_line.svg', 'stroke_lettuce_veins.svg',
+            'stroke_lettuce.svg', 'stroke_shell.svg'):
     p = OUT / old
     if p.exists(): p.unlink()
 
@@ -181,8 +195,7 @@ overlay = img.astype(np.float32) * 0.25
 def tint(mask, col, alpha=0.85):
     overlay[mask] = (1-alpha) * overlay[mask] + alpha * np.array(col, dtype=np.float32)
 tint(silhouette_stroke, (93, 214, 255))
-tint(lettuce_outline,   (160, 230, 255))
-tint(shell_outline,     (230, 57, 70))
+tint(filling_line,      (160, 230, 255))
 np.clip(overlay, 0, 255, out=overlay)
 Image.fromarray(overlay.astype(np.uint8)).save(OUT/'stroke_debug.png')
 print(f"  wrote {OUT/'stroke_debug.png'}")
