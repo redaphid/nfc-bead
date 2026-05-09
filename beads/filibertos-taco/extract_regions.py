@@ -199,21 +199,30 @@ for name, hex_col, _ in REGIONS:
 # shell = shell_dark + light. Combined at MASK level (then morph-closed and
 # fill-holes) so the resulting SVG is one solid filled region per group —
 # no overlapping subpaths, clean boolean topology downstream.
-def combine_region(*names):
+def combine_region(*names, inset_iters=0):
+    """Combine color region masks: union → close → fill_holes → smooth →
+    optional inset. The `inset_iters` parameter erodes the result by N
+    pixels so the region pulls back from the silhouette boundary —
+    useful for the filling, where we want a thin shell-color rim
+    visible along the open-mouth edge of the taco."""
     m = np.zeros_like(outer)
     for n in names:
         m |= region_masks[n]
     # Heavier close (6) bridges narrow yellow gaps inside the lettuce
     # blob (the U-shape notch on the bottom-right of v6 came from a
-    # close=3 not bridging that wedge). A pre-blur helps fill_holes
+    # close=3 not bridging that wedge). A post-blur helps fill_holes
     # close concavities on the boundary as well.
     m = ndimage.binary_closing(m, iterations=6)
     m = ndimage.binary_fill_holes(m)
     blurred = ndimage.gaussian_filter(m.astype(np.float32), sigma=2.0)
     m = (blurred > 0.5) & outer
+    if inset_iters > 0:
+        m = ndimage.binary_erosion(m, iterations=inset_iters)
     return m
 
-combined_filling = combine_region('lettuce_dark', 'lettuce_light')
+# inset filling by ~5px (~0.35mm at 0.07 mm/px) so a thin yellow shell rim
+# shows along the open-mouth boundary on the right side of the bead
+combined_filling = combine_region('lettuce_dark', 'lettuce_light', inset_iters=5)
 # Shell = full silhouette MINUS the filling. Match the Filibertos logo's
 # shell-as-base proportion: in the source, the yellow shell forms the
 # entire taco shell shape (the "bun") with green lettuce sitting on top
