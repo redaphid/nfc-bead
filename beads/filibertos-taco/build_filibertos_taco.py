@@ -46,17 +46,20 @@ NEON_COLORS = {
 
 # Block-mode color palette.
 BLOCK_COLORS = {
-    "filling":  (0.30, 0.65, 0.20, 1),    # green lettuce slab
-    "shell":    (0.95, 0.72, 0.10, 1),    # yellow shell slab
+    "filling":          (0.30, 0.65, 0.20, 1),    # green lettuce slab
+    "shell":            (0.95, 0.72, 0.10, 1),    # yellow shell slab
+    "interior_detail":  (0.78, 0.13, 0.10, 1),    # red veins inside the lettuce
 }
 # Block-mode: each Decoration region is built by joining MULTIPLE source SVGs
 # under one name, so we get a single solid filling/shell slab even though the
 # extractor split each by brightness (light/dark green, light/dark yellow).
 BLOCK_GROUPS = {
-    # The body (Bottom + Top) is printed in shell yellow — it IS the shell.
-    # Only the filling needs its own decoration STL on top of the body.
-    # Two filaments: yellow body + green filling.
-    "filling": ("region_filling.svg",),
+    # Body (Bottom + Top) prints in shell yellow — it IS the shell.
+    # Filling on top. Interior detail (red squiggles inside lettuce) on
+    # top of filling. Three filaments: yellow body + green filling +
+    # red interior.
+    "filling":         ("region_filling.svg",),
+    "interior_detail": ("region_interior_detail.svg",),
 }
 
 def _camel(name): return ''.join(p.capitalize() for p in name.split('_'))
@@ -113,9 +116,12 @@ PEGS = [
     ( 7.5,  2.5),     # right upper, near filling
 ]
 
-# Multi-color raised relief on Top show face
+# Multi-color raised relief on Top show face. Decorations stack in the
+# order they're loaded — `interior_detail` should sit on TOP of `filling`,
+# so each decoration in the loop gets `i * DECO_LAYER_STEP` extra Z lift.
 DECO_RELIEF = 0.4              # mm — extruded above show face
 DECO_LIFT_EPS = 0.01           # mm — Z-fight buffer above show face
+DECO_LAYER_STEP = 0.02         # mm — additional Z lift per stacked decoration
 
 # ── BUILD HELPERS ──────────────────────────────────────────────────────
 def clean_mesh(obj, threshold=0.005):
@@ -169,7 +175,49 @@ def verify_hole(obj, origin, direction, label=''):
     print(f"  {label}: {'OPEN' if not r[0] else f'hit z={r[1].z:.3f}'}")
     return not r[0]
 
-def import_svg_to_mesh(path, name, target_width_mm):
+def polygons_to_mesh(polygons, name, z=0.0):
+    """Build a flat Blender mesh from a list of polygons (each = list of
+    (x_mm, y_mm) vertices). Each polygon becomes one n-gon face. Triangulate
+    afterwards so booleans behave. Coordinates are already in mm at the
+    bead's centered frame — no scaling/translation needed.
+
+    Replaces import_svg_to_mesh for decorations: avoids Blender's SVG
+    importer (which auto-fits per-SVG using path bbox, breaking alignment
+    between regions whose paths cover different fractions of their viewBox)."""
+    import bmesh
+    if not polygons:
+        return None
+    me = bpy.data.meshes.new(name + 'Mesh')
+    bm = bmesh.new()
+    for poly in polygons:
+        try:
+            verts = [bm.verts.new((float(x), float(y), float(z))) for x, y in poly]
+            if len(verts) >= 3:
+                bm.faces.new(verts)
+        except ValueError:
+            # duplicate verts within polygon — skip
+            pass
+    # triangulate so EXACT boolean is well-behaved
+    bmesh.ops.triangulate(bm, faces=bm.faces[:])
+    bm.normal_update()
+    bm.to_mesh(me)
+    bm.free()
+    obj = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(obj)
+    return obj
+
+def import_svg_to_mesh(path, name, target_width_mm, force_scale=None):
+    """Import an SVG and convert to mesh.
+
+    `target_width_mm` auto-fits the mesh's *own* X bbox to that width. ONLY
+    appropriate for the body silhouette — for decoration SVGs whose path
+    extent is a SUBSET of the viewBox (e.g. small interior detail fragments),
+    auto-fit stretches the fragments to fill 25mm and breaks alignment with
+    the silhouette frame.
+
+    `force_scale` (preferred for decorations) applies a fixed Blender-unit
+    scale instead, derived from the silhouette's import. Pass the silhouette's
+    `_silhouette_scale_factor` so all decorations share its coordinate frame."""
     pre_objs = {o.name for o in bpy.context.scene.objects}
     bpy.ops.import_curve.svg(filepath=path)
     curves = [o for o in bpy.context.scene.objects
@@ -184,10 +232,18 @@ def import_svg_to_mesh(path, name, target_width_mm):
     cv.data.dimensions = '2D'; cv.data.fill_mode = 'BOTH'; cv.data.resolution_u = 64
     bpy.ops.object.convert(target='MESH')
     m = bpy.context.active_object; m.name = name
-    if target_width_mm:
+    if force_scale is not None:
+        # Apply the silhouette's known scale uniformly. Two-step like target-
+        # width path: scale + apply, then x1000 + apply.
+        sf = force_scale
+        m.scale = (sf, sf, sf); bpy.ops.object.transform_apply(scale=True)
+        m.scale = (1000, 1000, 1000); bpy.ops.object.transform_apply(scale=True)
+    elif target_width_mm:
         sf = (target_width_mm/1000.0) / m.dimensions.x
         m.scale = (sf, sf, sf); bpy.ops.object.transform_apply(scale=True)
         m.scale = (1000, 1000, 1000); bpy.ops.object.transform_apply(scale=True)
+        # Stash the scale so subsequent decoration imports can reuse it
+        bpy.context.scene['_silhouette_scale_factor'] = sf
     return m
 
 def _build_silhouette_cropper(svg_path, target_w, z_lo, z_hi):
@@ -386,8 +442,61 @@ def main():
     deco_z_floor = t_z_max + DECO_LIFT_EPS
     print(f"\nDecorations at z={deco_z_floor:.3f}, relief={DECO_RELIEF}mm")
 
+    # Prefer the polygon manifest when available — guaranteed-consistent
+    # coordinate frame across regions. Falls back to per-SVG import if
+    # regions.json is missing.
+    regions_json = os.path.join(BEAD_DIR, 'regions.json')
+    polygon_data = None
+    if os.path.exists(regions_json) and STYLE in ('blocks',):
+        import json
+        polygon_data = json.load(open(regions_json, encoding='utf-8'))
+        print(f"  using regions.json polygon manifest "
+              f"({sum(len(r['polygons']) for r in polygon_data['regions'].values())} polygons)")
+
     decos = []
-    for name, svg, color in SVG_REGIONS:
+
+    # ── Polygon-manifest path (clean, consistent coordinate frame) ─────
+    if polygon_data is not None:
+        for layer_idx, (name, svg, color) in enumerate(SVG_REGIONS):
+            # Map decoration name back to the manifest key (camelCase → snake_case)
+            slug = ''.join('_' + c.lower() if c.isupper() else c
+                           for c in name[len('Decoration'):]).lstrip('_')
+            region = polygon_data['regions'].get(slug)
+            if not region or not region['polygons']:
+                print(f"  skip {name} (no polygons in regions.json for '{slug}')"); continue
+            d = polygons_to_mesh(region['polygons'], name,
+                                 z=deco_z_floor + layer_idx * DECO_LAYER_STEP)
+            if d is None:
+                print(f"  skip {name} (polygons→mesh empty)"); continue
+            # Extrude to relief
+            bpy.ops.object.select_all(action='DESELECT')
+            d.select_set(True); bpy.context.view_layer.objects.active = d
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.remove_doubles(threshold=0.005)
+            bpy.ops.mesh.normals_make_consistent(inside=False)
+            bpy.ops.mesh.extrude_region_move(
+                TRANSFORM_OT_translate={"value": (0, 0, DECO_RELIEF)})
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.remove_doubles(threshold=0.005)
+            bpy.ops.mesh.normals_make_consistent(inside=False)
+            bpy.ops.object.mode_set(mode='OBJECT')
+            # Crop to silhouette via fresh-silhouette cropper
+            cropper = _build_silhouette_cropper(SVG_BODY, TARGET_WIDTH,
+                                                z_lo=t_z_min,
+                                                z_hi=t_z_max + DECO_RELIEF + 0.5)
+            cropper.name = '_Cropper'
+            boolean_op(d, cropper, 'INTERSECT', f'{name}Crop')
+            clean_mesh(d)
+            repair_manifold(d)
+            assign_material(d, f"{name}Mat", color)
+            decos.append(d)
+            nm = check_nonmanifold(d)
+            print(f"  {name}: dims={d.dimensions.x:.2f}x{d.dimensions.y:.2f}x{d.dimensions.z:.2f}  non-manifold={nm}")
+        # Skip the SVG path below
+        SVG_REGIONS = []
+
+    for layer_idx, (name, svg, color) in enumerate(SVG_REGIONS):
         # `svg` may be either a single path str (painted/neon) or a tuple of
         # paths (blocks — multiple SVGs joined into one decoration object).
         svg_paths = (svg,) if isinstance(svg, str) else tuple(svg)
@@ -399,6 +508,10 @@ def main():
         imported = []
         for i, p in enumerate(existing_paths):
             sub_name = name if len(existing_paths) == 1 else f"{name}__part{i}"
+            # All region SVGs are written with corner markers anchoring
+            # their path bbox to the silhouette's bbox (extract_regions.py
+            # write_svg). So per-SVG auto-fit-to-25mm gives consistent
+            # scale + position across regions. No force_scale needed.
             d_part = import_svg_to_mesh(p, sub_name, TARGET_WIDTH)
             if d_part: imported.append(d_part)
         if not imported:
@@ -415,11 +528,12 @@ def main():
             d.name = name
         else:
             d = imported[0]
-        # bbox-center each decoration at the silhouette's center
+        # bbox-center each decoration at the silhouette's center; stack
+        # subsequent layers slightly above the previous one so order is stable.
         bpy.ops.object.select_all(action='DESELECT')
         d.select_set(True); bpy.context.view_layer.objects.active = d
         bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
-        d.location = (0, 0, deco_z_floor)
+        d.location = (0, 0, deco_z_floor + layer_idx * DECO_LAYER_STEP)
 
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')

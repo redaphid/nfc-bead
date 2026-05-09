@@ -161,7 +161,23 @@ ys_o, xs_o = np.where(outer)
 bx0, bx1 = xs_o.min(), xs_o.max(); by0, by1 = ys_o.min(), ys_o.max()
 SCALE_PX_TO_MM = TARGET_WIDTH_MM / (bx1 - bx0)
 
-def write_svg(filename, paths, fill='#000'):
+def write_svg(filename, paths, fill='#000', anchor=True):
+    """Write the paths to an SVG, optionally adding 1×1 px invisible corner
+    markers at the SILHOUETTE'S bbox corners.
+
+    Why: every SVG share the same viewBox here, but Blender's SVG importer
+    uses the PATH bbox (not the viewBox) when computing mesh dimensions.
+    Auto-fit-to-target-width then scales each region by its OWN path extent,
+    breaking alignment between region SVGs whose path bboxes differ.
+
+    Adding two 1-px black dots at the silhouette bbox corners forces every
+    SVG to have the same path bbox (= silhouette's). After Blender import +
+    auto-fit, all regions land in the same coordinate frame.
+
+    The dots are 1 viewBox unit = 0.01 mm — invisible in print and clipped
+    by the silhouette cropper if they land outside the silhouette curve.
+    Pass anchor=False to skip (used only for `silhouette.svg` itself,
+    which already defines the bbox)."""
     if not paths: print(f"  (skip {filename} — no paths)"); return False
     global Hmm
     Wmm = TARGET_WIDTH_MM
@@ -169,6 +185,14 @@ def write_svg(filename, paths, fill='#000'):
     svg_w = Wmm * 100; svg_h = Hmm * 100
     parts = ['<?xml version="1.0" encoding="UTF-8"?>',
              f'<svg xmlns="http://www.w3.org/2000/svg" width="{svg_w}" height="{svg_h}" viewBox="0 0 {svg_w} {svg_h}">']
+    if anchor:
+        # Corner markers at the silhouette path bbox corners. These pin
+        # every region's bbox to the silhouette's bbox so Blender's
+        # auto-fit-to-25mm works consistently across SVGs.
+        # Silhouette bbox in source pixels: x=[bx0,bx1], y=[by0,by1]; in
+        # SVG units (mm × 100): x=[0, svg_w], y=[0, svg_h] (zero-shifted).
+        parts.append(f'<rect x="0" y="0" width="1" height="1" fill="{fill}"/>')
+        parts.append(f'<rect x="{svg_w-1}" y="{svg_h-1}" width="1" height="1" fill="{fill}"/>')
     for c in paths:
         ys = c[:, 0]; xs = c[:, 1]
         x_mm = (xs - bx0) * SCALE_PX_TO_MM
@@ -179,11 +203,12 @@ def write_svg(filename, paths, fill='#000'):
     open(filename, 'w', encoding='utf-8').write('\n'.join(parts))
     return True
 
-# Outer silhouette: stronger smoothing for a cleaner taco-logo shape
+# Outer silhouette: stronger smoothing for a cleaner taco-logo shape.
+# anchor=False because the silhouette path itself defines the reference bbox.
 write_svg(OUT/'silhouette.svg',
           mask_to_paths(outer, smooth=True, harm=FOURIER_HARM_BODY,
                         min_area=2000, pre_blur_sigma=SILHOUETTE_BLUR_SIGMA),
-          '#000')
+          '#000', anchor=False)
 
 palette_lines = []
 for name, hex_col, _ in REGIONS:
@@ -250,11 +275,126 @@ combined_filling = combine_region('lettuce_dark', 'lettuce_light',
 # lettuce in the source image; reconstruct the full shell by subtracting.
 combined_shell = outer & ~combined_filling
 
-write_svg(OUT/'region_filling.svg', mask_to_paths(combined_filling, smooth=True, harm=FOURIER_HARM_REGION, min_area=300), '#3ea332')
+# Use raw mask boundary (no Fourier smoothing) for the filling contour
+# so the natural quantize-style edge is preserved instead of getting
+# the wavy Fourier-smoothed approximation. The mask is already smooth
+# from the morph-close + gaussian + binarize chain.
+write_svg(OUT/'region_filling.svg', mask_to_paths(combined_filling, smooth=False, min_area=300), '#3ea332')
 print(f"  region_filling.svg <- combined ({combined_filling.sum()} px)")
-write_svg(OUT/'region_shell.svg',   mask_to_paths(combined_shell,   smooth=True, harm=FOURIER_HARM_REGION, min_area=300), '#e6c41e')
+write_svg(OUT/'region_shell.svg',   mask_to_paths(combined_shell,   smooth=False, min_area=300), '#e6c41e')
 print(f"  region_shell.svg <- silhouette - filling ({combined_shell.sum()} px)")
 
+# ── Interior detail "stuff in the taco" — strategy v15b ──────────────
+# User-selected approach: raw red_inside fragments (no opening), top N
+# by size, anywhere in the lettuce. Preserves the natural squiggly vein
+# shape; picks the largest visible chunks so they read as decorative
+# stuff at 25mm scale instead of getting eroded into dots.
+#
+# Use the k-means red cluster (NOT the RGB-predicate outline mask) so
+# we don't include the wide outer outline in this. The cluster mask
+# still includes everything red, but ANDing with combined_filling
+# clips it to inside the lettuce.
+INTERIOR_DETAIL_COUNT = 4
+INTERIOR_DETAIL_MIN_PX = 30
+
+# Build a k-means-derived red mask matching the strategy used in tmp/
+# debug scripts. Run the same k=N_CLUSTERS clustering already done
+# above; then nearest-cluster-assign every FG pixel.
+fg_pixels_full = img[ys, xs].astype(np.float32)
+centers_full = km.cluster_centers_.astype(np.float32)
+dists_full = ((fg_pixels_full[:, None, :] - centers_full[None, :, :]) ** 2).sum(-1)
+labels_global = np.argmin(dists_full, axis=1)
+label_grid = -np.ones((H, W), dtype=np.int32)
+label_grid[ys, xs] = labels_global
+def _nearest(target_rgb):
+    return int(np.argmin([(c[0]-target_rgb[0])**2 + (c[1]-target_rgb[1])**2 + (c[2]-target_rgb[2])**2
+                          for c in km.cluster_centers_]))
+red_kcluster_idx = _nearest((140, 20, 9))
+red_kmask = label_grid == red_kcluster_idx
+
+red_inside = red_kmask & combined_filling
+labeled_ri, n_ri = ndimage.label(red_inside)
+interior_detail = np.zeros_like(red_inside)
+if n_ri:
+    sizes_ri = ndimage.sum(red_inside, labeled_ri, range(1, n_ri+1))
+    centroids_ri = ndimage.center_of_mass(red_inside, labeled_ri, range(1, n_ri+1))
+    cands = [(sz, i+1, centroids_ri[i]) for i, sz in enumerate(sizes_ri)
+             if sz >= INTERIOR_DETAIL_MIN_PX]
+    cands.sort(reverse=True)
+    chosen = cands[:INTERIOR_DETAIL_COUNT]
+    for sz, idx, ctr in chosen:
+        interior_detail |= labeled_ri == idx
+        print(f"    keep fragment idx={idx} size={int(sz)}px at {ctr}")
+
+write_svg(OUT/'region_interior_detail.svg',
+          mask_to_paths(interior_detail, smooth=False, min_area=INTERIOR_DETAIL_MIN_PX),
+          '#921209')
+print(f"  region_interior_detail.svg <- {INTERIOR_DETAIL_COUNT} largest fragments "
+      f"({interior_detail.sum()} px)")
+
 (OUT/'region_palette.txt').write_text('\n'.join(palette_lines) + '\n', encoding='utf-8')
+
+# ── Polygon-coords manifest (preferred over SVGs for build pipeline) ────
+# All regions emitted in a SHARED MM coordinate frame: origin at the
+# silhouette bbox center. The build script reads this JSON and constructs
+# Blender meshes directly via bmesh.from_pydata — no SVG round-trip,
+# guaranteed-consistent scale + position across every region.
+import json
+def mask_to_polygons_mm(mask, simplify_tol_px=0.0, smooth=False, harm=14, min_area=200):
+    """Return list of polygons, each as list of (x_mm, y_mm) vertices.
+    Polygon vertices are in mm relative to the silhouette bbox center
+    (i.e. origin = (0,0) at bead center, +X right, +Y up — note: SOURCE
+    image y-axis flipped so output y is already up-positive in mm)."""
+    px_to_mm = SCALE_PX_TO_MM
+    # silhouette bbox center in source pixels
+    silh_cx_px = (bx0 + bx1) / 2.0
+    silh_cy_px = (by0 + by1) / 2.0
+    polygons = []
+    labeled, n = ndimage.label(mask)
+    for k in range(1, n+1):
+        comp = labeled == k
+        if comp.sum() < min_area: continue
+        contours = measure.find_contours(comp.astype(np.uint8), level=0.5)
+        if not contours: continue
+        contours.sort(key=lambda c: -len(c))
+        c = contours[0]
+        c = downsample(c, 400)
+        if smooth and len(c) > 10:
+            z = fourier_smooth(c, harm)
+            c = np.column_stack((z.real, z.imag))
+        # c is (row=y, col=x) — convert to (x_mm, y_mm) at origin = bead center
+        # row→y: source-image y grows DOWN, but bead has +Y UP for up. Flip y.
+        ys = c[:, 0]; xs = c[:, 1]
+        x_mm = (xs - silh_cx_px) * px_to_mm
+        y_mm = -(ys - silh_cy_px) * px_to_mm
+        poly = list(zip(x_mm.tolist(), y_mm.tolist()))
+        polygons.append(poly)
+    return polygons
+
+regions_data = {
+    'scale_mm_per_px': float(SCALE_PX_TO_MM),
+    'silhouette_bbox_mm': {
+        'width': float(TARGET_WIDTH_MM),
+        'height': float((by1 - by0) * SCALE_PX_TO_MM),
+    },
+    'regions': {
+        'filling': {
+            'polygons': mask_to_polygons_mm(combined_filling, smooth=False, min_area=300),
+            'color_hex': '#3ea332',
+        },
+        'shell': {
+            'polygons': mask_to_polygons_mm(combined_shell, smooth=False, min_area=300),
+            'color_hex': '#e6c41e',
+        },
+        'interior_detail': {
+            'polygons': mask_to_polygons_mm(interior_detail, smooth=False, min_area=INTERIOR_DETAIL_MIN_PX),
+            'color_hex': '#921209',
+        },
+    },
+}
+(OUT/'regions.json').write_text(json.dumps(regions_data, indent=2), encoding='utf-8')
+total_polys = sum(len(r['polygons']) for r in regions_data['regions'].values())
+print(f"\nwrote regions.json ({total_polys} polygons across "
+      f"{len(regions_data['regions'])} regions)")
 print(f"\nwrote silhouette + {len(REGIONS)} region SVGs + palette.txt + extract_debug.png")
 print(f"scale: {SCALE_PX_TO_MM:.4f} mm/px (silhouette {TARGET_WIDTH_MM}mm × {Hmm:.2f}mm)")
