@@ -23,6 +23,8 @@ dependencies = [
     "imageio-ffmpeg>=0.6.0",
     "shapely>=2.1.2",
     "rtree>=1.4.1",
+    "scikit-learn>=1.8.0",
+    "mapbox-earcut>=2.0.0",
 ]
 
 [project.optional-dependencies]
