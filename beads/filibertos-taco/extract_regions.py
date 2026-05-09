@@ -199,31 +199,44 @@ for name, hex_col, _ in REGIONS:
 # shell = shell_dark + light. Combined at MASK level (then morph-closed and
 # fill-holes) so the resulting SVG is one solid filled region per group —
 # no overlapping subpaths, clean boolean topology downstream.
-def combine_region(*names, inset_iters=0):
+def combine_region(*names, inset_iters=0, trim_bottom_px=0):
     """Combine color region masks: union → close → fill_holes → smooth →
-    optional inset. The `inset_iters` parameter erodes the result by N
-    pixels so the region pulls back from the silhouette boundary —
-    useful for the filling, where we want a thin shell-color rim
-    visible along the open-mouth edge of the taco."""
+    optional inset → optional bottom-edge-only trim.
+
+    `inset_iters`: erode the result everywhere by N pixels (uniform).
+    `trim_bottom_px`: pull ONLY the bottom edge of the region UP by N
+        pixels. Preserves left / top / right contours; only the bottom
+        contour gets pulled inward. Use this when the filling has a
+        "tongue" extending toward the bottom-tip of the silhouette and
+        you need the shell to show through there."""
     m = np.zeros_like(outer)
     for n in names:
         m |= region_masks[n]
-    # Heavier close (6) bridges narrow yellow gaps inside the lettuce
-    # blob (the U-shape notch on the bottom-right of v6 came from a
-    # close=3 not bridging that wedge). A post-blur helps fill_holes
-    # close concavities on the boundary as well.
     m = ndimage.binary_closing(m, iterations=6)
     m = ndimage.binary_fill_holes(m)
     blurred = ndimage.gaussian_filter(m.astype(np.float32), sigma=2.0)
     m = (blurred > 0.5) & outer
     if inset_iters > 0:
         m = ndimage.binary_erosion(m, iterations=inset_iters)
+    if trim_bottom_px > 0:
+        # Keep pixel (y,x) True only if (y+1,x), (y+2,x), … (y+N,x) are
+        # also all True. Equivalent to a "trim from below" morphological
+        # erosion that leaves the top edge alone.
+        trimmed = m.copy()
+        for shift in range(1, trim_bottom_px + 1):
+            shifted = np.zeros_like(m)
+            shifted[:-shift, :] = m[shift:, :]
+            trimmed = trimmed & shifted
+        m = trimmed
     return m
 
-# inset filling by ~9px (~0.64mm at 0.07 mm/px) — bumped from 5px in v6.2
-# because the bottom-right rim was nearly invisible. 9px gives a clear
-# shell-color line all the way around the green/yellow boundary.
-combined_filling = combine_region('lettuce_dark', 'lettuce_light', inset_iters=9)
+# Filling: 9px uniform inset (thin shell rim around all sides) + 14px
+# bottom-only trim. The bottom trim kills the "tongue" extending toward
+# the bottom-right silhouette tip while preserving the natural curvy
+# top contour (lettuce frill) and the natural left + right contours
+# (where the filling tapers into the shell points).
+combined_filling = combine_region('lettuce_dark', 'lettuce_light',
+                                  inset_iters=9, trim_bottom_px=14)
 # Shell = full silhouette MINUS the filling. Match the Filibertos logo's
 # shell-as-base proportion: in the source, the yellow shell forms the
 # entire taco shell shape (the "bun") with green lettuce sitting on top
