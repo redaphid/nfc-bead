@@ -4,6 +4,48 @@ Append-only, newest at the top. Every physical print of this charm gets one entr
 
 ---
 
+## v5-blocks — 2026-05-08 — not yet printed (Filibertos block-color)
+
+Third stylistic variant: 3-color flat blocks like the actual Filibertos
+logo. Yellow shell forms the base; green filling sits on top with the
+open mouth pointing right (matches the source's 3/4 perspective);
+red body shows as a thin rim around the silhouette.
+
+Key extraction change: **shell = silhouette MINUS filling** (rather than
+shell = yellow color cluster). The source image's yellow shell is mostly
+hidden behind green lettuce; the visible-yellow color cluster only
+captures where shell PEEKS through, giving a thin sliver. By making shell
+= "everything in the silhouette that isn't filling", the shell takes on
+its full logo-correct proportion.
+
+Two engineering bugs caught and fixed during this iteration:
+
+1. **Decoration cropper inherited peg-socket holes from Top**.  My pipeline
+   was duplicating Top to make the decoration cropper. Top has peg
+   sockets cut INTO it. After moving the cropper's verts up, the socket
+   holes became open tubes through the cropper. INTERSECT with decoration
+   punched matching holes through the show face → 3 visible bare-show-face
+   circles at the peg XYs.
+
+   Fix: `_build_silhouette_cropper()` re-imports `silhouette.svg` directly
+   and extrudes a clean tall slab with no peg/NFC features. Use this as
+   the decoration cropper instead of duplicating Top.
+
+   This is a generic gotcha that applies to ANY multi-color charm — should
+   be backported to the recipe and `build_charm.py.example`.
+
+2. **Multi-SVG decorations fail when joined raw**. `BLOCK_GROUPS` originally
+   tried to load 2 SVGs per region (e.g. `lettuce_dark.svg` + `lettuce_light.svg`)
+   and `bpy.ops.object.join` them. The overlapping coplanar 2D regions
+   produced 359 non-manifold edges after extrude. Fix: combine the masks
+   at extraction-time into a single `region_filling.svg` / `region_shell.svg`
+   (morph-close + fill-holes + AND with silhouette). One clean SVG per
+   region downstream.
+
+Output: `print/blocks/filibertos-taco-blocks.3mf` (3 filaments —
+shell yellow, filling green, body red). All zero non-manifold edges
+in Blender; printability PASS.
+
 ## v4c-neon — 2026-05-08 — not yet printed (cleanest taco read)
 
 User feedback on v4b: "not 'obviously taco' enough, drop the bottom shell line".

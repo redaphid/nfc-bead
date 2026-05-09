@@ -19,9 +19,14 @@ from skimage import measure
 SRC = Path('beads/filibertos-taco/just-taco.jpg')
 OUT = Path('beads/filibertos-taco')
 TARGET_WIDTH_MM = 25.0
-N_CLUSTERS = 7      # over-cluster, then merge by named-region
-MIN_CLUSTER_PCT = 6 # discard clusters smaller than this (% of fg pixels)
-FOURIER_HARM = 18
+N_CLUSTERS = 7
+MIN_CLUSTER_PCT = 6
+# Lower harmonics + heavier mask blur = smoother taco-logo shape, less stair-step.
+# At 25mm bead width / 443px source, FOURIER_HARM=12 gives a logo-like profile;
+# 18 keeps the lettuce frill texture; 24 keeps every pixel artifact.
+FOURIER_HARM_BODY     = 12   # silhouette.svg outer outline
+FOURIER_HARM_REGION   = 14   # interior color regions
+SILHOUETTE_BLUR_SIGMA = 2.5  # gaussian on silhouette mask before contour
 
 # Named regions: (name, hex preview color, predicate)
 # Each predicate takes (R, G, B) of a cluster center and returns whether
@@ -128,7 +133,13 @@ def downsample(contour, n_target=400):
     idx = np.linspace(0, len(contour)-1, n_target).astype(int)
     return contour[idx]
 
-def mask_to_paths(mask, smooth=True, harm=FOURIER_HARM, min_area=200):
+def mask_to_paths(mask, smooth=True, harm=FOURIER_HARM_REGION, min_area=200,
+                  pre_blur_sigma=0.0):
+    """Trace closed contours of a binary mask, optionally pre-blurring
+    and post-Fourier-smoothing. Pre-blur smooths the boundary BEFORE
+    contour extraction (rounds stair-step pixel edges)."""
+    if pre_blur_sigma > 0:
+        mask = ndimage.gaussian_filter(mask.astype(np.float32), sigma=pre_blur_sigma) > 0.5
     labeled, n = ndimage.label(mask)
     paths = []
     for k in range(1, n+1):
@@ -168,17 +179,46 @@ def write_svg(filename, paths, fill='#000'):
     open(filename, 'w', encoding='utf-8').write('\n'.join(parts))
     return True
 
-# Outer silhouette (smoothed)
-write_svg(OUT/'silhouette.svg', mask_to_paths(outer, smooth=True, harm=24, min_area=2000), '#000')
+# Outer silhouette: stronger smoothing for a cleaner taco-logo shape
+write_svg(OUT/'silhouette.svg',
+          mask_to_paths(outer, smooth=True, harm=FOURIER_HARM_BODY,
+                        min_area=2000, pre_blur_sigma=SILHOUETTE_BLUR_SIGMA),
+          '#000')
 
 palette_lines = []
 for name, hex_col, _ in REGIONS:
-    paths = mask_to_paths(region_masks[name], smooth=True, harm=FOURIER_HARM, min_area=200)
+    paths = mask_to_paths(region_masks[name], smooth=True, harm=FOURIER_HARM_REGION, min_area=200)
     if write_svg(OUT/f'region_{name}.svg', paths, hex_col):
-        print(f"  region_{name}.svg ← {len(paths)} path(s) ({region_masks[name].sum()} px)")
+        print(f"  region_{name}.svg <- {len(paths)} path(s) ({region_masks[name].sum()} px)")
         palette_lines.append(f"{name}\t{hex_col}\t{region_masks[name].sum()} px")
     else:
         palette_lines.append(f"{name}\t{hex_col}\t(empty)")
+
+# ── Combined block-style regions ────────────────────────────────────
+# For STYLE='blocks' in the build pipeline: filling = lettuce_dark + light,
+# shell = shell_dark + light. Combined at MASK level (then morph-closed and
+# fill-holes) so the resulting SVG is one solid filled region per group —
+# no overlapping subpaths, clean boolean topology downstream.
+def combine_region(*names):
+    m = np.zeros_like(outer)
+    for n in names:
+        m |= region_masks[n]
+    m = ndimage.binary_closing(m, iterations=3)
+    m = ndimage.binary_fill_holes(m)
+    return m & outer
+
+combined_filling = combine_region('lettuce_dark', 'lettuce_light')
+# Shell = full silhouette MINUS the filling. Match the Filibertos logo's
+# shell-as-base proportion: in the source, the yellow shell forms the
+# entire taco shell shape (the "bun") with green lettuce sitting on top
+# of it. Color predicates miss the parts of the shell hidden behind
+# lettuce in the source image; reconstruct the full shell by subtracting.
+combined_shell = outer & ~combined_filling
+
+write_svg(OUT/'region_filling.svg', mask_to_paths(combined_filling, smooth=True, harm=FOURIER_HARM_REGION, min_area=300), '#3ea332')
+print(f"  region_filling.svg <- combined ({combined_filling.sum()} px)")
+write_svg(OUT/'region_shell.svg',   mask_to_paths(combined_shell,   smooth=True, harm=FOURIER_HARM_REGION, min_area=300), '#e6c41e')
+print(f"  region_shell.svg <- silhouette - filling ({combined_shell.sum()} px)")
 
 (OUT/'region_palette.txt').write_text('\n'.join(palette_lines) + '\n', encoding='utf-8')
 print(f"\nwrote silhouette + {len(REGIONS)} region SVGs + palette.txt + extract_debug.png")

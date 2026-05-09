@@ -21,10 +21,11 @@ SVG_BODY  = os.path.join(BEAD_DIR, "silhouette.svg")
 PRINT_DIR = os.path.join(BEAD_DIR, "print")
 
 # Decoration style:
-#   'painted' — fill colored regions on the show face (4-layer cartoon look)
-#   'neon'    — line-art strokes on a dark body (synthwave / stencil look)
+#   'painted' — fill 4 colored regions on the show face (cartoon)
+#   'neon'    — line-art strokes on a dark body (synthwave / stencil)
+#   'blocks'  — 3 flat colors: filling, shell, body (Filibertos block-color)
 # Switch with `bpy.context.scene["nfc_taco_style"] = "neon"` before exec, or
-# the env var FILIBERTOS_TACO_STYLE.
+# env var FILIBERTOS_TACO_STYLE.
 STYLE = os.environ.get('FILIBERTOS_TACO_STYLE', 'painted')
 
 # Painted-mode color palette (display only; slicer assigns filaments).
@@ -39,7 +40,24 @@ REGION_COLORS = {
 # Neon-mode color palette.
 NEON_COLORS = {
     "silhouette":    (0.36, 0.84, 1.00, 1),    # primary light blue stroke
-    "filling_line":  (0.36, 0.84, 1.00, 1),    # the lettuce-shell dividing line
+    "filling_line":  (0.36, 0.84, 1.00, 1),    # lettuce-shell dividing line
+    "accents":       (0.92, 0.20, 0.30, 1),    # cheese/salsa drips — third filament
+}
+
+# Block-mode color palette.
+BLOCK_COLORS = {
+    "filling":  (0.30, 0.65, 0.20, 1),    # green lettuce slab
+    "shell":    (0.95, 0.72, 0.10, 1),    # yellow shell slab
+}
+# Block-mode: each Decoration region is built by joining MULTIPLE source SVGs
+# under one name, so we get a single solid filling/shell slab even though the
+# extractor split each by brightness (light/dark green, light/dark yellow).
+BLOCK_GROUPS = {
+    # Single pre-combined SVG per block (extracted as a unioned mask in
+    # extract_regions.py, so the geometry is a clean fill not two
+    # overlapping subpaths).
+    "filling": ("region_filling.svg",),
+    "shell":   ("region_shell.svg",),
 }
 
 def _camel(name): return ''.join(p.capitalize() for p in name.split('_'))
@@ -54,8 +72,23 @@ def _discover(prefix, color_map):
         out.append((f"Decoration{_camel(slug)}", path, col))
     return out
 
+def _discover_blocks():
+    """Block style: each name maps to a TUPLE of SVGs that get joined into
+    one Decoration mesh. Empty tuple → skip. Returns list of
+    (object_name, svg_paths_tuple, color)."""
+    out = []
+    for slug, files in BLOCK_GROUPS.items():
+        paths = [os.path.join(BEAD_DIR, f) for f in files
+                 if os.path.exists(os.path.join(BEAD_DIR, f))]
+        if not paths: continue
+        col = BLOCK_COLORS.get(slug, (0.7, 0.7, 0.7, 1))
+        out.append((f"Decoration{_camel(slug)}", tuple(paths), col))
+    return out
+
 if STYLE == 'neon':
     SVG_REGIONS = _discover('stroke', NEON_COLORS)
+elif STYLE == 'blocks':
+    SVG_REGIONS = _discover_blocks()
 else:
     SVG_REGIONS = _discover('region', REGION_COLORS)
 
@@ -138,8 +171,10 @@ def verify_hole(obj, origin, direction, label=''):
     return not r[0]
 
 def import_svg_to_mesh(path, name, target_width_mm):
+    pre_objs = {o.name for o in bpy.context.scene.objects}
     bpy.ops.import_curve.svg(filepath=path)
-    curves = [o for o in bpy.context.scene.objects if o.type == 'CURVE' and o.name not in _existing_objs]
+    curves = [o for o in bpy.context.scene.objects
+              if o.type == 'CURVE' and o.name not in pre_objs]
     if not curves:
         return None
     bpy.ops.object.select_all(action='DESELECT')
@@ -156,6 +191,40 @@ def import_svg_to_mesh(path, name, target_width_mm):
         m.scale = (1000, 1000, 1000); bpy.ops.object.transform_apply(scale=True)
     return m
 
+def _build_silhouette_cropper(svg_path, target_w, z_lo, z_hi):
+    """Make a clean tall extrusion of silhouette.svg (no peg/NFC holes).
+    Used as a boolean INTERSECT cropper for decorations so they get
+    clipped to the silhouette outer boundary without inheriting any
+    interior holes from Top/Bottom."""
+    pre_objs = {o.name for o in bpy.context.scene.objects}
+    bpy.ops.import_curve.svg(filepath=svg_path)
+    curves = [o for o in bpy.context.scene.objects
+              if o.type == 'CURVE' and o.name not in pre_objs]
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in curves: o.select_set(True)
+    bpy.context.view_layer.objects.active = curves[0]
+    if len(curves) > 1: bpy.ops.object.join()
+    cv = bpy.context.active_object
+    cv.data.dimensions = '2D'; cv.data.fill_mode = 'BOTH'; cv.data.resolution_u = 64
+    bpy.ops.object.convert(target='MESH')
+    m = bpy.context.active_object
+    sf = (target_w / 1000.0) / m.dimensions.x
+    m.scale = (sf, sf, sf); bpy.ops.object.transform_apply(scale=True)
+    m.scale = (1000, 1000, 1000); bpy.ops.object.transform_apply(scale=True)
+    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+    m.location = (0, 0, z_lo)
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=0.005)
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.mesh.extrude_region_move(
+        TRANSFORM_OT_translate={"value": (0, 0, z_hi - z_lo)})
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.remove_doubles(threshold=0.005)
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    return m
+
 def assign_material(obj, name, color):
     mat = bpy.data.materials.new(name); mat.use_nodes = True
     b = mat.node_tree.nodes['Principled BSDF']
@@ -166,12 +235,15 @@ def assign_material(obj, name, color):
 # ── BUILD ──────────────────────────────────────────────────────────────
 def main():
     global _existing_objs, SVG_REGIONS, STYLE
-    # Allow scene custom-prop to override the env-var-derived STYLE.
     scene_style = bpy.context.scene.get('nfc_taco_style')
     if scene_style:
         STYLE = scene_style
-    SVG_REGIONS = _discover('stroke', NEON_COLORS) if STYLE == 'neon' \
-                  else _discover('region', REGION_COLORS)
+    if STYLE == 'neon':
+        SVG_REGIONS = _discover('stroke', NEON_COLORS)
+    elif STYLE == 'blocks':
+        SVG_REGIONS = _discover_blocks()
+    else:
+        SVG_REGIONS = _discover('region', REGION_COLORS)
     print("=" * 60)
     print(f"Filiberto's Taco NFC bead build  [STYLE={STYLE}]")
     print(f"  decorations: {[r[0] for r in SVG_REGIONS]}")
@@ -317,40 +389,58 @@ def main():
 
     decos = []
     for name, svg, color in SVG_REGIONS:
-        if not os.path.exists(svg):
+        # `svg` may be either a single path str (painted/neon) or a tuple of
+        # paths (blocks — multiple SVGs joined into one decoration object).
+        svg_paths = (svg,) if isinstance(svg, str) else tuple(svg)
+        existing_paths = [p for p in svg_paths if os.path.exists(p)]
+        if not existing_paths:
             print(f"  skip {name} (no svg)"); continue
         _existing_objs = {o.name for o in bpy.data.objects}
-        d = import_svg_to_mesh(svg, name, TARGET_WIDTH)
-        if d is None:
+        # Import each SVG, then join them into a single mesh under `name`
+        imported = []
+        for i, p in enumerate(existing_paths):
+            sub_name = name if len(existing_paths) == 1 else f"{name}__part{i}"
+            d_part = import_svg_to_mesh(p, sub_name, TARGET_WIDTH)
+            if d_part: imported.append(d_part)
+        if not imported:
             print(f"  skip {name} (no curves imported)"); continue
-        # the regions extracted are in the same scaled coordinate system as the
-        # silhouette; bbox-center them at the silhouette's center
+        # If multiple parts were imported (legacy layout), join them as
+        # flat 2D first (before extrude). The combined SVG is preferred —
+        # see BLOCK_GROUPS in CONFIG.
+        if len(imported) > 1:
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj in imported: obj.select_set(True)
+            bpy.context.view_layer.objects.active = imported[0]
+            bpy.ops.object.join()
+            d = bpy.context.active_object
+            d.name = name
+        else:
+            d = imported[0]
+        # bbox-center each decoration at the silhouette's center
+        bpy.ops.object.select_all(action='DESELECT')
+        d.select_set(True); bpy.context.view_layer.objects.active = d
         bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
         d.location = (0, 0, deco_z_floor)
-        # extrude to relief
+
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
         bpy.ops.mesh.remove_doubles(threshold=0.005)
         bpy.ops.mesh.normals_make_consistent(inside=False)
-        bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value": (0, 0, DECO_RELIEF)})
+        bpy.ops.mesh.extrude_region_move(
+            TRANSFORM_OT_translate={"value": (0, 0, DECO_RELIEF)})
         bpy.ops.mesh.select_all(action='SELECT')
         bpy.ops.mesh.remove_doubles(threshold=0.005)
         bpy.ops.mesh.normals_make_consistent(inside=False)
         bpy.ops.object.mode_set(mode='OBJECT')
-        # crop the decoration to the Top silhouette so it never extends past the body edge
-        # using a duplicate of Top extruded upward as the cropper
-        bpy.ops.object.select_all(action='DESELECT')
-        top.select_set(True); bpy.context.view_layer.objects.active = top
-        bpy.ops.object.duplicate()
-        cropper = bpy.context.active_object; cropper.name = '_Cropper'
-        # raise the cropper's top so it intersects the decoration relief above the show face
-        bpy.ops.object.mode_set(mode='EDIT')
-        bm = bmesh.from_edit_mesh(cropper.data)
-        for v in bm.verts:
-            if v.co.z > t_z_min + 0.01:
-                v.co.z = t_z_max + DECO_RELIEF + 0.5
-        bmesh.update_edit_mesh(cropper.data)
-        bpy.ops.object.mode_set(mode='OBJECT')
+        # Crop the decoration to the silhouette OUTER boundary so it never
+        # extends past the bead edge. Build the cropper from a fresh
+        # silhouette.svg import — NOT from Top. Top has peg-socket holes
+        # cut into it, and INTERSECT with that punches the socket holes
+        # through the decoration (visible as bare-show-face circles).
+        cropper = _build_silhouette_cropper(SVG_BODY, TARGET_WIDTH,
+                                            z_lo=t_z_min,
+                                            z_hi=t_z_max + DECO_RELIEF + 0.5)
+        cropper.name = '_Cropper'
         boolean_op(d, cropper, 'INTERSECT', f'{name}Crop')
         clean_mesh(d)
         repair_manifold(d)        # fixes ring-shape boolean artifacts
