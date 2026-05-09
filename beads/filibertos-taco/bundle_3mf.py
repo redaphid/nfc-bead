@@ -107,24 +107,21 @@ def main():
     top_obj    = _add_mesh(model, lib3mf, 'Top',    top_mesh)
     deco_objs  = [_add_mesh(model, lib3mf, name, m) for name, m in deco_meshes]
 
-    # Each part is a TOP-LEVEL object with its semantic name. Slicers
-    # (Bambu Studio / Elegoo Slicer) display each by the SetName above
-    # — no ComponentsObject wrapping that would cause the slicer to
-    # rewrite child names like `top_with_decorations_5`.
-    #
-    # All Top-frame parts share the same XY offset so the slicer sees
-    # them as co-located (auto-pairs them on the same plate position).
-    if args.separate_plates:
-        bot_offset = _translate_transform(lib3mf, -15, 0, 0)
-        top_offset = _translate_transform(lib3mf, +15, 0, 0)
-    else:
-        bot_offset = _identity_transform(lib3mf)
-        top_offset = _identity_transform(lib3mf)
-
-    model.AddBuildItem(bottom_obj, bot_offset)
-    model.AddBuildItem(top_obj,    top_offset)
+    # Bundle Top + every decoration into one ComponentsObject so the slicer
+    # treats it as ONE OBJECT WITH N PARTS. Each decoration keeps its own
+    # name → user assigns a filament per-part in the slicer.
+    asm = model.AddComponentsObject()
+    asm.SetName('Top_with_decorations')
+    asm.AddComponent(top_obj, _identity_transform(lib3mf))
     for o in deco_objs:
-        model.AddBuildItem(o, top_offset)
+        asm.AddComponent(o, _identity_transform(lib3mf))
+
+    if args.separate_plates:
+        model.AddBuildItem(bottom_obj, _translate_transform(lib3mf, -15, 0, 0))
+        model.AddBuildItem(asm,        _translate_transform(lib3mf, +15, 0, 0))
+    else:
+        model.AddBuildItem(bottom_obj, _identity_transform(lib3mf))
+        model.AddBuildItem(asm,        _identity_transform(lib3mf))
 
     md = model.GetMetaDataGroup()
     md.AddMetaData('', 'Title', f"{d.parent.name} multi-color print bundle", 'string', True)
@@ -137,8 +134,8 @@ def main():
     writer.WriteToFile(str(args.out))
     size = os.path.getsize(args.out)
     print(f"\nwrote {args.out} ({size:,} bytes)")
-    print(f"  objects: Bottom, Top, {', '.join(p.stem for p in deco_per_color)}")
-    print(f"  in slicer: each appears with its semantic name; assign 1 filament per object")
+    print(f"  parts: Bottom + Top + {len(deco_per_color)} decoration(s)")
+    print(f"  in slicer: Top_with_decorations is one object with parts; assign 1 filament per part")
 
 
 if __name__ == '__main__':

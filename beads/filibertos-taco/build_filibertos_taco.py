@@ -112,7 +112,11 @@ HOLE_Z_OFFSET = 1.25          # mm — shift hole entirely into Top half (recipe
 
 NFC_DIAMETER  = 10.5          # mm — recipe default (NTAG215)
 NFC_DEPTH     = 0.8           # mm
-NFC_POS       = (0.0, 0.5)    # mm — auto-fit: largest inscribed disk near center
+NFC_POS       = (0.0, 1.5)    # mm — bumped up from (0, 0.5): perimeter raycast
+                              # caught that with a 5.25mm radius the bottom of
+                              # the pocket sat too close to the silhouette
+                              # bottom edge (Y≈-8.5). Y=1.5 keeps perimeter
+                              # comfortably inside.
 
 PEG_DIAMETER  = 2.0           # mm
 PEG_HEIGHT    = 1.5
@@ -413,12 +417,32 @@ def main():
     z_mid = (z_min + z_max) / 2.0
     print(f"Z: [{z_min:.2f},{z_max:.2f}] mid={z_mid:.2f}")
 
-    # ── Step 3: Verify peg positions on full bead ──────────────────────
-    print("\nPeg position check:")
+    # ── Step 3: Verify peg + NFC positions on full bead ────────────────
+    print("\nPeg + NFC perimeter check:")
     ev = body.evaluated_get(bpy.context.evaluated_depsgraph_get())
     nfc_r = NFC_DIAMETER/2.0; peg_r = PEG_DIAMETER/2.0
     perim = [(peg_r*math.cos(k*math.pi/4), peg_r*math.sin(k*math.pi/4)) for k in range(8)]
     bad = False
+
+    # NFC perimeter check: 16 points around the pocket boundary must all
+    # land in solid silhouette. Without this, a too-large or off-center
+    # pocket can clip past the silhouette outer boundary, leaving a
+    # paper-thin or open wall along one side. Symmetric to the peg
+    # perimeter check (recipe gotcha #21) but with more samples since
+    # NFC radius is much larger.
+    nfc_perim = [(nfc_r*math.cos(k*math.pi/8), nfc_r*math.sin(k*math.pi/8))
+                 for k in range(16)]
+    nfc_misses = sum(1 for ox, oy in nfc_perim
+                     if not ev.ray_cast(Vector((NFC_POS[0]+ox, NFC_POS[1]+oy, z_max+5)),
+                                        Vector((0, 0, -1)))[0])
+    print(f"  NFC ({NFC_POS[0]:+.1f},{NFC_POS[1]:+.1f}) r={nfc_r}: "
+          f"perimeter inside silhouette = {16-nfc_misses}/16"
+          + (f"  CLIPPING {nfc_misses}/16 outside!" if nfc_misses else ""))
+    if nfc_misses > 0:
+        print(f"    → NFC pocket clips past silhouette boundary; "
+              f"adjust NFC_POS or shrink NFC_DIAMETER")
+        bad = True
+
     for i,(px,py) in enumerate(PEGS):
         c = ev.ray_cast(Vector((px,py,z_max+5)), Vector((0,0,-1)))[0]
         miss = sum(1 for ox,oy in perim
