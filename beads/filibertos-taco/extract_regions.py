@@ -220,9 +220,10 @@ def combine_region(*names, inset_iters=0):
         m = ndimage.binary_erosion(m, iterations=inset_iters)
     return m
 
-# inset filling by ~5px (~0.35mm at 0.07 mm/px) so a thin yellow shell rim
-# shows along the open-mouth boundary on the right side of the bead
-combined_filling = combine_region('lettuce_dark', 'lettuce_light', inset_iters=5)
+# inset filling by ~9px (~0.64mm at 0.07 mm/px) — bumped from 5px in v6.2
+# because the bottom-right rim was nearly invisible. 9px gives a clear
+# shell-color line all the way around the green/yellow boundary.
+combined_filling = combine_region('lettuce_dark', 'lettuce_light', inset_iters=9)
 # Shell = full silhouette MINUS the filling. Match the Filibertos logo's
 # shell-as-base proportion: in the source, the yellow shell forms the
 # entire taco shell shape (the "bun") with green lettuce sitting on top
