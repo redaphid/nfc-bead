@@ -58,14 +58,14 @@ BLOCK_COLORS = {
 BLOCK_GROUPS = {
     # Body (Bottom + Top) prints in shell yellow — it IS the shell.
     # Decorations stack on the show face (lower layer_idx = closer to body).
-    # Order matters: things lower in z get covered by things above. The
-    # lettuce_separator and interior_detail must sit ABOVE filling so the
-    # red details show; shell_outline ring sits below filling so the
-    # filling can cover its inner half (where filling extends past the ring).
-    "shell_outline":      ("region_shell_outline.svg",),       # z = lowest, ring around bead
-    "filling":            ("region_filling.svg",),             # z = +1 step, green lettuce
-    "lettuce_separator":  ("region_lettuce_separator.svg",),   # z = +2, red curve above filling
-    "interior_detail":    ("region_interior_detail.svg",),     # z = +3, red veins above filling
+    # Order matters: things higher in z OCCLUDE things lower. The slicer
+    # also fights coplanar/near-coplanar surfaces, so each layer sits
+    # 0.1mm above the previous (above typical layer height 0.16mm so the
+    # slicer can cleanly assign each to its own filament without z-fight).
+    "filling":            ("region_filling.svg",),             # base — green lettuce
+    "lettuce_separator":  ("region_lettuce_separator.svg",),   # red curve over filling
+    "interior_detail":    ("region_interior_detail.svg",),     # red veins inside lettuce
+    "shell_outline":      ("region_shell_outline.svg",),       # red ring TOP layer; never gets z-fought
 }
 
 def _camel(name): return ''.join(p.capitalize() for p in name.split('_'))
@@ -130,7 +130,12 @@ PEGS = [
 # so each decoration in the loop gets `i * DECO_LAYER_STEP` extra Z lift.
 DECO_RELIEF = 0.4              # mm — extruded above show face
 DECO_LIFT_EPS = 0.01           # mm — Z-fight buffer above show face
-DECO_LAYER_STEP = 0.02         # mm — additional Z lift per stacked decoration
+DECO_LAYER_STEP = 0.10         # mm — z-step per stacked decoration. >=0.16mm
+                               # (typical slicer layer height) ensures each
+                               # decoration prints as its own filament layer
+                               # without slicer z-fighting; 0.10mm is just
+                               # below for tighter visual stack while still
+                               # being unambiguous on most slicer settings.
 
 # ── BUILD HELPERS ──────────────────────────────────────────────────────
 def clean_mesh(obj, threshold=0.005):

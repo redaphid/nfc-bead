@@ -312,10 +312,30 @@ interior_detail = np.zeros_like(red_inside)
 if n_ri:
     sizes_ri = ndimage.sum(red_inside, labeled_ri, range(1, n_ri+1))
     centroids_ri = ndimage.center_of_mass(red_inside, labeled_ri, range(1, n_ri+1))
+    # Lettuce blob bbox for Y-quartile filtering
+    ys_l, _ = np.where(combined_filling)
+    if len(ys_l):
+        lett_y_min, lett_y_max = ys_l.min(), ys_l.max()
+        lett_h = lett_y_max - lett_y_min
+        # Exclude fragments in the TOP 30% of the lettuce — those land
+        # very near the silhouette top edge and read as "outline
+        # imperfections" rather than "stuff inside the taco".
+        y_keepout_top = lett_y_min + lett_h * 0.30
+    else:
+        y_keepout_top = -1
     cands = [(sz, i+1, centroids_ri[i]) for i, sz in enumerate(sizes_ri)
-             if sz >= INTERIOR_DETAIL_MIN_PX]
+             if sz >= INTERIOR_DETAIL_MIN_PX
+             and centroids_ri[i][0] >= y_keepout_top]   # row=y in image coords
     cands.sort(reverse=True)
-    chosen = cands[:INTERIOR_DETAIL_COUNT]
+    # Spatial spread via greedy farthest-first from size-ranked candidates
+    chosen = []
+    for c in cands:
+        if len(chosen) == 0:
+            chosen.append(c); continue
+        if len(chosen) >= INTERIOR_DETAIL_COUNT: break
+        if all(((c[2][0]-cc[2][0])**2 + (c[2][1]-cc[2][1])**2)**0.5 > 30
+               for cc in chosen):
+            chosen.append(c)
     for sz, idx, ctr in chosen:
         interior_detail |= labeled_ri == idx
         print(f"    keep fragment idx={idx} size={int(sz)}px at {ctr}")
