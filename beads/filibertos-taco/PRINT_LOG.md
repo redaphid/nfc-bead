@@ -4,6 +4,24 @@ Append-only, newest at the top. Every physical print of this charm gets one entr
 
 ---
 
+## v3 — 2026-05-08 — not yet printed (4-color decoration)
+
+Re-extracted color regions from the JPG using k-means (k=7) instead of hand-coded thresholds. Now produces 4 distinct decoration layers (was 3 in v1):
+
+| Region | px | Notes |
+|---|---|---|
+| `outline` (#921209) | 45,594 | Red — biggest region; covers most of the silhouette |
+| `shell_dark` (#d68a00) | 18,199 | Yellow — small visible band along the lower curve |
+| `lettuce_light` (#5fa520) | 10,711 | Bright green highlights |
+| `lettuce_dark` (#374806) | 9,583 | Deep green shadows inside the lettuce |
+| `shell_light` | (empty) | Pale-yellow cluster collapsed into shell_dark; no separate region |
+
+Build script now auto-discovers `region_*.svg` files via `_discover_regions()` and emits one `Decoration<Camel>` object per region. Adding more regions is now zero-code: drop a new `region_<name>.svg` and re-run.
+
+Visual result captured in `stages/02_v3_4color.blend`. Bare-show-face patches at the peg-socket XYs persist (peg sockets sit in regions that no color cluster covered) — cosmetic only, no geometric change. Same 4 printability checks PASS as v1.
+
+**Open**: shell yellow ended up only as a thin sliver along the bottom edge — most of the lower-curve area got claimed by red outline. Next iteration should re-tune cluster mapping so shell wins where it competes with outline in the lower band.
+
 ## v1 — 2026-05-08 — not yet printed
 
 First export. Build completed cleanly:

@@ -1,0 +1,5 @@
+shell_dark	#d68a00	18199 px
+shell_light	#fbcf5d	(empty)
+lettuce_dark	#374806	9583 px
+lettuce_light	#5fa520	10711 px
+outline	#921209	45594 px

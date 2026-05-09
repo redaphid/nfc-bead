@@ -18,12 +18,35 @@ from mathutils import Vector
 REPO_DIR  = r"D:\Projects\nfc-bead"
 BEAD_DIR  = os.path.join(REPO_DIR, "beads", "filibertos-taco")
 SVG_BODY  = os.path.join(BEAD_DIR, "silhouette.svg")
-SVG_REGIONS = [
-    ("DecorationYellow", os.path.join(BEAD_DIR, "region_yellow.svg"), (0.93, 0.78, 0.10, 1)),
-    ("DecorationGreen",  os.path.join(BEAD_DIR, "region_green.svg"),  (0.20, 0.65, 0.20, 1)),
-    ("DecorationRed",    os.path.join(BEAD_DIR, "region_red.svg"),    (0.80, 0.13, 0.13, 1)),
-]
 PRINT_DIR = os.path.join(BEAD_DIR, "print")
+
+# Decoration layers: discovered automatically from `region_*.svg` files in
+# the bead directory (output of extract_regions.py). Each becomes its own
+# DecorationXxx object so the multi-filament slicer can assign one color
+# per object. The display color in Blender comes from REGION_COLORS below
+# (used purely for viewport — slicer ignores material color).
+REGION_COLORS = {
+    "shell_dark":     (0.93, 0.66, 0.05, 1),   # rich orange-yellow
+    "shell_light":    (0.98, 0.82, 0.36, 1),   # pale yellow highlight
+    "lettuce_dark":   (0.22, 0.36, 0.04, 1),   # deep green shadow
+    "lettuce_light":  (0.37, 0.78, 0.13, 1),   # bright green highlight
+    "outline":        (0.82, 0.13, 0.10, 1),   # red outline
+    "filling":        (0.95, 0.78, 0.50, 1),   # cheese / sour cream / etc.
+    "tomato":         (0.85, 0.18, 0.13, 1),
+    "purple":         (0.55, 0.20, 0.65, 1),
+    "white":          (0.95, 0.95, 0.95, 1),
+}
+def _camel(name): return ''.join(p.capitalize() for p in name.split('_'))
+def _discover_regions():
+    import glob
+    out = []
+    for path in sorted(glob.glob(os.path.join(BEAD_DIR, 'region_*.svg'))):
+        base = os.path.splitext(os.path.basename(path))[0]    # 'region_shell_dark'
+        region = base[len('region_'):]                         # 'shell_dark'
+        col = REGION_COLORS.get(region, (0.7, 0.7, 0.7, 1))
+        out.append((f"Decoration{_camel(region)}", path, col))
+    return out
+SVG_REGIONS = _discover_regions()
 
 TARGET_WIDTH  = 25.0          # mm (taco silhouette ~25w x 17h after extraction)
 THICKNESS     = 5.0           # mm total split into 2 x 2.5
