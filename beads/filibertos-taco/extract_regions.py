@@ -341,12 +341,12 @@ print(f"  region_interior_detail.svg <- {INTERIOR_DETAIL_COUNT} largest fragment
 # guaranteed-consistent scale + position across every region.
 import json
 def mask_to_polygons_mm(mask, simplify_tol_px=0.0, smooth=False, harm=14, min_area=200):
-    """Return list of polygons, each as list of (x_mm, y_mm) vertices.
-    Polygon vertices are in mm relative to the silhouette bbox center
-    (i.e. origin = (0,0) at bead center, +X right, +Y up — note: SOURCE
-    image y-axis flipped so output y is already up-positive in mm)."""
+    """Return list of polygons, each as a dict:
+       {'outer': [(x_mm, y_mm), ...], 'holes': [[(x_mm, y_mm), ...], ...]}
+    Each connected component contributes one entry. Holes are inner
+    contours (for ring-shaped components). Coords are in mm at the
+    silhouette bbox center (origin = bead center, +X right, +Y up)."""
     px_to_mm = SCALE_PX_TO_MM
-    # silhouette bbox center in source pixels
     silh_cx_px = (bx0 + bx1) / 2.0
     silh_cy_px = (by0 + by1) / 2.0
     polygons = []
@@ -356,20 +356,62 @@ def mask_to_polygons_mm(mask, simplify_tol_px=0.0, smooth=False, harm=14, min_ar
         if comp.sum() < min_area: continue
         contours = measure.find_contours(comp.astype(np.uint8), level=0.5)
         if not contours: continue
+        # Sort by length: longest = outer; rest = holes
         contours.sort(key=lambda c: -len(c))
-        c = contours[0]
-        c = downsample(c, 400)
-        if smooth and len(c) > 10:
-            z = fourier_smooth(c, harm)
-            c = np.column_stack((z.real, z.imag))
-        # c is (row=y, col=x) — convert to (x_mm, y_mm) at origin = bead center
-        # row→y: source-image y grows DOWN, but bead has +Y UP for up. Flip y.
-        ys = c[:, 0]; xs = c[:, 1]
-        x_mm = (xs - silh_cx_px) * px_to_mm
-        y_mm = -(ys - silh_cy_px) * px_to_mm
-        poly = list(zip(x_mm.tolist(), y_mm.tolist()))
-        polygons.append(poly)
+
+        def transform(c):
+            c = downsample(c, 400)
+            if smooth and len(c) > 10:
+                z = fourier_smooth(c, harm)
+                c = np.column_stack((z.real, z.imag))
+            ys, xs = c[:, 0], c[:, 1]
+            x_mm = (xs - silh_cx_px) * px_to_mm
+            y_mm = -(ys - silh_cy_px) * px_to_mm
+            return list(zip(x_mm.tolist(), y_mm.tolist()))
+
+        outer = transform(contours[0])
+        holes = [transform(h) for h in contours[1:] if len(h) >= 8]
+        polygons.append({'outer': outer, 'holes': holes})
     return polygons
+
+# ── Red shell outline (4th decoration layer) ────────────────────────
+# The taco's outer red border in the source. Extract: red-cluster pixels
+# OUTSIDE the lettuce blob (since pixels INSIDE lettuce are interior_detail).
+# This captures the outer outline ring + the shell-vs-lettuce separator
+# curve. Dilate by 2px (~0.14mm) to bring stroke width up to ~0.5mm so
+# the Centauri Carbon 2's 0.4mm nozzle prints it reliably.
+# Restrict the red mask to a THIN BAND along the silhouette outer edge —
+# that's where the source's "outline" is. Without this restriction we
+# pick up every red pixel everywhere (transition shading, red bits between
+# elements) and the outline floods most of the bead.
+from skimage.morphology import skeletonize as _skeletonize
+SHELL_OUTLINE_THICK_PX = 5   # ~0.35 mm — single-line stroke at 25mm scale
+# Two separate 1-px-thick line skeletons:
+# 1. Silhouette outer perimeter (the bead's outline ring)
+# 2. Filling-shell boundary (lettuce-shell separator curve)
+# Then dilate each by SHELL_OUTLINE_THICK_PX/2 to get a uniform thin stroke.
+silhouette_band = outer & ~ndimage.binary_erosion(outer, iterations=2)
+silhouette_skel = _skeletonize(silhouette_band)
+
+# The filling-shell boundary: 1-pixel band where filling meets non-filling
+# inside the silhouette
+filling_edge = combined_filling & ~ndimage.binary_erosion(combined_filling, iterations=1)
+# Drop the part of filling_edge that's the silhouette boundary itself
+filling_edge_inner = filling_edge & ~silhouette_band
+
+dilate_r = SHELL_OUTLINE_THICK_PX // 2
+silhouette_outline = ndimage.binary_dilation(silhouette_skel, iterations=dilate_r)
+separator_outline = ndimage.binary_dilation(filling_edge_inner, iterations=dilate_r)
+shell_outline = (silhouette_outline | separator_outline) & outer
+labeled_so, n_so = ndimage.label(shell_outline)
+if n_so:
+    sizes_so = ndimage.sum(shell_outline, labeled_so, range(1, n_so+1))
+    keep = np.zeros_like(shell_outline)
+    for i, sz in enumerate(sizes_so, 1):
+        if sz >= 200: keep |= labeled_so == i
+    shell_outline = keep
+print(f"  shell_outline (red border, ring + lettuce-line): {shell_outline.sum()} px, "
+      f"{ndimage.label(shell_outline)[1]} fragments")
 
 regions_data = {
     'scale_mm_per_px': float(SCALE_PX_TO_MM),
@@ -389,6 +431,10 @@ regions_data = {
         'interior_detail': {
             'polygons': mask_to_polygons_mm(interior_detail, smooth=False, min_area=INTERIOR_DETAIL_MIN_PX),
             'color_hex': '#921209',
+        },
+        'shell_outline': {
+            'polygons': mask_to_polygons_mm(shell_outline, smooth=False, min_area=200),
+            'color_hex': '#a01a14',
         },
     },
 }

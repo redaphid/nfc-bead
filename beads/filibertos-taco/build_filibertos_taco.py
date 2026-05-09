@@ -49,15 +49,20 @@ BLOCK_COLORS = {
     "filling":          (0.30, 0.65, 0.20, 1),    # green lettuce slab
     "shell":            (0.95, 0.72, 0.10, 1),    # yellow shell slab
     "interior_detail":  (0.78, 0.13, 0.10, 1),    # red veins inside the lettuce
+    "shell_outline":    (0.63, 0.10, 0.08, 1),    # darker red outline border
 }
 # Block-mode: each Decoration region is built by joining MULTIPLE source SVGs
 # under one name, so we get a single solid filling/shell slab even though the
 # extractor split each by brightness (light/dark green, light/dark yellow).
 BLOCK_GROUPS = {
     # Body (Bottom + Top) prints in shell yellow — it IS the shell.
-    # Filling on top. Interior detail (red squiggles inside lettuce) on
-    # top of filling. Three filaments: yellow body + green filling +
-    # red interior.
+    # Decorations stack on the show face (lower layer_idx = closer to body):
+    #   shell_outline: red border tracing the bead silhouette + lettuce-
+    #     shell boundary curve. Prints first so other layers can override.
+    #   filling:       green lettuce blob.
+    #   interior_detail: red squiggles inside the lettuce.
+    # Four filaments: yellow body + red outline + green filling + red interior.
+    "shell_outline":   ("region_shell_outline.svg",),
     "filling":         ("region_filling.svg",),
     "interior_detail": ("region_interior_detail.svg",),
 }
@@ -75,16 +80,19 @@ def _discover(prefix, color_map):
     return out
 
 def _discover_blocks():
-    """Block style: each name maps to a TUPLE of SVGs that get joined into
-    one Decoration mesh. Empty tuple → skip. Returns list of
-    (object_name, svg_paths_tuple, color)."""
+    """Block style: list every region from BLOCK_GROUPS, even if no SVG
+    exists for it. The polygon-manifest path (regions.json) doesn't need
+    SVGs; it discovers regions by name match. SVG paths are still
+    returned for fallback when regions.json is unavailable.
+    Returns list of (object_name, svg_paths_tuple, color)."""
     out = []
     for slug, files in BLOCK_GROUPS.items():
-        paths = [os.path.join(BEAD_DIR, f) for f in files
-                 if os.path.exists(os.path.join(BEAD_DIR, f))]
-        if not paths: continue
+        # Always include the slug — polygon path will skip if regions.json
+        # has no entry for it. SVG fallback path filters out missing files.
+        paths = tuple(os.path.join(BEAD_DIR, f) for f in files
+                      if os.path.exists(os.path.join(BEAD_DIR, f)))
         col = BLOCK_COLORS.get(slug, (0.7, 0.7, 0.7, 1))
-        out.append((f"Decoration{_camel(slug)}", tuple(paths), col))
+        out.append((f"Decoration{_camel(slug)}", paths, col))
     return out
 
 if STYLE == 'neon':
@@ -176,29 +184,48 @@ def verify_hole(obj, origin, direction, label=''):
     return not r[0]
 
 def polygons_to_mesh(polygons, name, z=0.0):
-    """Build a flat Blender mesh from a list of polygons (each = list of
-    (x_mm, y_mm) vertices). Each polygon becomes one n-gon face. Triangulate
-    afterwards so booleans behave. Coordinates are already in mm at the
-    bead's centered frame — no scaling/translation needed.
+    """Build a flat Blender mesh from a list of polygons.
 
-    Replaces import_svg_to_mesh for decorations: avoids Blender's SVG
-    importer (which auto-fits per-SVG using path bbox, breaking alignment
-    between regions whose paths cover different fractions of their viewBox)."""
+    Each polygon is a dict {'outer': [(x,y),...], 'holes': [[(x,y),...]]}
+    (legacy flat lists also accepted). Hole-aware: ring-shaped regions
+    (silhouette outline) print as actual rings, not solid disks.
+
+    Uses bmesh.ops.triangle_fill which handles polygon-with-holes via
+    constrained Delaunay triangulation — built into Blender, no extra
+    dependencies."""
     import bmesh
     if not polygons:
         return None
     me = bpy.data.meshes.new(name + 'Mesh')
     bm = bmesh.new()
     for poly in polygons:
-        try:
-            verts = [bm.verts.new((float(x), float(y), float(z))) for x, y in poly]
-            if len(verts) >= 3:
-                bm.faces.new(verts)
-        except ValueError:
-            # duplicate verts within polygon — skip
-            pass
-    # triangulate so EXACT boolean is well-behaved
-    bmesh.ops.triangulate(bm, faces=bm.faces[:])
+        if isinstance(poly, dict):
+            outer = poly.get('outer', [])
+            holes = poly.get('holes', [])
+        else:
+            outer = poly
+            holes = []
+        if len(outer) < 3: continue
+
+        # Add outer + hole loops as edges (no faces yet)
+        all_loops = [outer] + holes
+        loop_edges = []
+        for loop in all_loops:
+            verts = [bm.verts.new((float(x), float(y), float(z))) for x, y in loop]
+            edges = []
+            for i in range(len(verts)):
+                try:
+                    e = bm.edges.new((verts[i], verts[(i+1) % len(verts)]))
+                    edges.append(e)
+                except ValueError:
+                    pass
+            loop_edges.extend(edges)
+
+        if loop_edges:
+            try:
+                bmesh.ops.triangle_fill(bm, edges=loop_edges, use_beauty=True)
+            except Exception as ex:
+                print(f"  triangle_fill failed for {name}: {ex}")
     bm.normal_update()
     bm.to_mesh(me)
     bm.free()
