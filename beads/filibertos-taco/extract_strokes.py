@@ -75,12 +75,25 @@ def boundary_stroke_between(a_mask, b_mask, half_w):
     a_dilated = ndimage.binary_dilation(a_mask, iterations=half_w)
     return (a_mask & b_dilated) | (b_mask & a_dilated)
 
-silhouette_stroke   = ring_stroke(silhouette, half)
-# Boundary between lettuce (top half) and shell (bottom half) — neon "where
-# the filling meets the shell" line.
-lettuce_shell_line  = boundary_stroke_between(lettuce_full, shell_m, half)
-# Boundary between bright and dark green inside lettuce — leaf-vein lines.
-lettuce_veins       = boundary_stroke_between(lettuce_light_m, lettuce_dark_m, half//2)
+silhouette_stroke = ring_stroke(silhouette, half)
+
+# Lettuce: aggressively close the mask first so all the leaf blobs merge
+# into ONE continuous shape, then ring-stroke its outer contour. Without
+# the strong close, you get one ring per leaf (fragmented).
+def merge_blobs(mask, dilate_iters=12):
+    closed = ndimage.binary_dilation(mask, iterations=dilate_iters)
+    closed = ndimage.binary_erosion(closed, iterations=dilate_iters)
+    closed = ndimage.binary_fill_holes(closed)
+    # keep only the largest component
+    labeled, n = ndimage.label(closed)
+    if not n: return closed
+    sizes = ndimage.sum(closed, labeled, range(1, n+1))
+    return labeled == 1 + int(np.argmax(sizes))
+
+lettuce_blob = merge_blobs(lettuce_full, dilate_iters=14) & silhouette
+shell_blob   = merge_blobs(shell_m,      dilate_iters=14) & silhouette
+lettuce_outline = ring_stroke(lettuce_blob, half)
+shell_outline   = ring_stroke(shell_blob,   half)
 
 # Drop tiny disconnected fragments per stroke
 def keep_large(mask, min_px=80):
@@ -92,13 +105,13 @@ def keep_large(mask, min_px=80):
         if sz >= min_px: keep |= labeled == i
     return keep
 
-silhouette_stroke  = keep_large(silhouette_stroke, 200)
-lettuce_shell_line = keep_large(lettuce_shell_line, 60)
-lettuce_veins      = keep_large(lettuce_veins, 40)
+silhouette_stroke = keep_large(silhouette_stroke, 200)
+lettuce_outline   = keep_large(lettuce_outline,   200)
+shell_outline     = keep_large(shell_outline,     200)
 
-print(f"silhouette_stroke:  {silhouette_stroke.sum()} px")
-print(f"lettuce_shell_line: {lettuce_shell_line.sum()} px")
-print(f"lettuce_veins:      {lettuce_veins.sum()} px")
+print(f"silhouette_stroke: {silhouette_stroke.sum()} px")
+print(f"lettuce_outline:   {lettuce_outline.sum()} px")
+print(f"shell_outline:     {shell_outline.sum()} px")
 
 # ── Outer bbox (shared coord frame with silhouette.svg) ─────────────
 ys_o, xs_o = np.where(silhouette)
@@ -154,17 +167,22 @@ def write_svg(filename, paths, fill='#000'):
 
 # Each stroke is exported as its own SVG so the build script can pick
 # which ones to emboss as separate decoration objects (and assign filaments).
-write_svg(OUT/'stroke_silhouette.svg',   mask_to_paths(silhouette_stroke,   harm=FOURIER_HARM, min_area=200), '#5dd6ff')
-write_svg(OUT/'stroke_lettuce_line.svg', mask_to_paths(lettuce_shell_line,  harm=12,           min_area=60),  '#5dd6ff')
-write_svg(OUT/'stroke_lettuce_veins.svg', mask_to_paths(lettuce_veins,       harm=8,            min_area=40),  '#e63946')
+write_svg(OUT/'stroke_silhouette.svg', mask_to_paths(silhouette_stroke, harm=FOURIER_HARM, min_area=200), '#5dd6ff')
+write_svg(OUT/'stroke_lettuce.svg',    mask_to_paths(lettuce_outline,   harm=14,           min_area=200), '#5dd6ff')
+write_svg(OUT/'stroke_shell.svg',      mask_to_paths(shell_outline,     harm=14,           min_area=200), '#e63946')
+
+# Drop the older fragmented strokes if they exist — name change
+for old in ('stroke_lettuce_line.svg', 'stroke_lettuce_veins.svg'):
+    p = OUT / old
+    if p.exists(): p.unlink()
 
 # Debug overlay
 overlay = img.astype(np.float32) * 0.25
 def tint(mask, col, alpha=0.85):
     overlay[mask] = (1-alpha) * overlay[mask] + alpha * np.array(col, dtype=np.float32)
-tint(silhouette_stroke,  (93, 214, 255))
-tint(lettuce_shell_line, (160, 230, 255))
-tint(lettuce_veins,      (230, 57, 70))
+tint(silhouette_stroke, (93, 214, 255))
+tint(lettuce_outline,   (160, 230, 255))
+tint(shell_outline,     (230, 57, 70))
 np.clip(overlay, 0, 255, out=overlay)
 Image.fromarray(overlay.astype(np.uint8)).save(OUT/'stroke_debug.png')
 print(f"  wrote {OUT/'stroke_debug.png'}")

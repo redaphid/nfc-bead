@@ -4,6 +4,26 @@ Append-only, newest at the top. Every physical print of this charm gets one entr
 
 ---
 
+## v4b-neon — 2026-05-08 — not yet printed (continuous-stroke neon)
+
+Refined v4-neon. Original strokes used boundary-between-mask which produced
+fragmented blobs (one ring per leaf). Replaced with merged-blob outlines:
+the lettuce mask is morphologically closed (dilate 14 / erode 14 / fill /
+keep largest component) before ring-stroking, so all the leaf shapes merge
+into ONE blob whose outer contour traces the lettuce as a single line.
+Same for the shell.
+
+Result: 3 continuous neon-line strokes instead of ~30 fragments.
+
+| Stroke | Suggested filament | Notes |
+|---|---|---|
+| `DecorationSilhouette` | light blue | Outer perimeter of the bead |
+| `DecorationLettuce` | light blue | Single curve tracing the filling/lettuce blob |
+| `DecorationShell` | red or navy | Single curve tracing the shell (taco hard-shell underside) |
+
+Ring stroke width = 0.42 mm (`STROKE_WIDTH_PX = 6` × `0.0708 mm/px`).
+Tune via `STROKE_WIDTH_PX` in `extract_strokes.py` (4 for thin, 8 for bold).
+
 ## v4-neon — 2026-05-08 — not yet printed (synthwave / stencil look)
 
 A second stylistic variant for the same bead body. Identical Bottom + Top
