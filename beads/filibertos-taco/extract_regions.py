@@ -203,9 +203,15 @@ def combine_region(*names):
     m = np.zeros_like(outer)
     for n in names:
         m |= region_masks[n]
-    m = ndimage.binary_closing(m, iterations=3)
+    # Heavier close (6) bridges narrow yellow gaps inside the lettuce
+    # blob (the U-shape notch on the bottom-right of v6 came from a
+    # close=3 not bridging that wedge). A pre-blur helps fill_holes
+    # close concavities on the boundary as well.
+    m = ndimage.binary_closing(m, iterations=6)
     m = ndimage.binary_fill_holes(m)
-    return m & outer
+    blurred = ndimage.gaussian_filter(m.astype(np.float32), sigma=2.0)
+    m = (blurred > 0.5) & outer
+    return m
 
 combined_filling = combine_region('lettuce_dark', 'lettuce_light')
 # Shell = full silhouette MINUS the filling. Match the Filibertos logo's
