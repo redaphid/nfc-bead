@@ -53,11 +53,10 @@ BLOCK_COLORS = {
 # under one name, so we get a single solid filling/shell slab even though the
 # extractor split each by brightness (light/dark green, light/dark yellow).
 BLOCK_GROUPS = {
-    # Single pre-combined SVG per block (extracted as a unioned mask in
-    # extract_regions.py, so the geometry is a clean fill not two
-    # overlapping subpaths).
+    # The body (Bottom + Top) is printed in shell yellow — it IS the shell.
+    # Only the filling needs its own decoration STL on top of the body.
+    # Two filaments: yellow body + green filling.
     "filling": ("region_filling.svg",),
-    "shell":   ("region_shell.svg",),
 }
 
 def _camel(name): return ''.join(p.capitalize() for p in name.split('_'))

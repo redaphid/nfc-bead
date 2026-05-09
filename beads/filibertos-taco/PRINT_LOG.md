@@ -4,7 +4,25 @@ Append-only, newest at the top. Every physical print of this charm gets one entr
 
 ---
 
-## v5-blocks — 2026-05-08 — not yet printed (Filibertos block-color)
+## v6-blocks-2color — 2026-05-08 — not yet printed (body=shell)
+
+Simplification of v5: drop the DecorationShell entirely. The bead body
+(Bottom + Top) is printed directly in shell yellow — it IS the shell.
+Only the filling needs its own decoration STL on top.
+
+**Filaments: 2** (was 3 in v5).
+- Body: yellow shell color
+- DecorationFilling: green lettuce/filling
+
+Same geometry, simpler print bundle.
+
+`bundle_3mf.py` (new): emits a multi-decoration 3MF where each
+`Decoration*.stl` becomes its own component in the Top assembly. The
+stock `nfc-make-3mf` only knew one Decoration slot, which collapsed
+the multi-color separation. Use `bundle_3mf.py` for any charm with >1
+decoration STL.
+
+## v5-blocks — 2026-05-08 — not yet printed (Filibertos block-color, 3-filament)
 
 Third stylistic variant: 3-color flat blocks like the actual Filibertos
 logo. Yellow shell forms the base; green filling sits on top with the
