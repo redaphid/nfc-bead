@@ -4,6 +4,40 @@ Append-only, newest at the top. Every physical print of this charm gets one entr
 
 ---
 
+## v4-neon — 2026-05-08 — not yet printed (synthwave / stencil look)
+
+A second stylistic variant for the same bead body. Identical Bottom + Top
+geometry, but the show-face decoration is **stroke-based** instead of
+filled-region:
+
+| Decoration | Source | Suggested filament |
+|---|---|---|
+| `DecorationSilhouette.stl` | outer perimeter ring of the bead | light blue |
+| `DecorationLettuceLine.stl` | boundary stroke between filling and shell | light blue (same as silhouette) |
+| `DecorationLettuceVeins.stl` | interior boundaries inside lettuce | red or navy |
+
+Body filament: black (matches the negative-space areas around strokes — looks
+like a neon sign on a dark plate).
+
+Build pipeline supports both via `STYLE` (env var `FILIBERTOS_TACO_STYLE`
+or scene custom prop `nfc_taco_style`):
+
+```
+bpy.context.scene["nfc_taco_style"] = "neon"
+exec(open("build_filibertos_taco.py").read(), {"__name__":"__main__"})
+```
+
+The STYLE flag toggles which directory of SVGs (`region_*.svg` or
+`stroke_*.svg`) gets discovered into `SVG_REGIONS`. Adding more strokes:
+just drop another `stroke_*.svg` next to the others and re-run.
+
+Stroke generation lives in `extract_strokes.py` — uses morphological
+dilate-XOR on the color masks to derive ring/boundary geometry, then
+Fourier-smooths the contours.
+
+Output: `print/neon/filibertos-taco-neon.3mf` (205 KB) plus per-stroke
+STLs for filament assignment in the slicer.
+
 ## v3 — 2026-05-08 — not yet printed (4-color decoration)
 
 Re-extracted color regions from the JPG using k-means (k=7) instead of hand-coded thresholds. Now produces 4 distinct decoration layers (was 3 in v1):

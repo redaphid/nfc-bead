@@ -20,33 +20,45 @@ BEAD_DIR  = os.path.join(REPO_DIR, "beads", "filibertos-taco")
 SVG_BODY  = os.path.join(BEAD_DIR, "silhouette.svg")
 PRINT_DIR = os.path.join(BEAD_DIR, "print")
 
-# Decoration layers: discovered automatically from `region_*.svg` files in
-# the bead directory (output of extract_regions.py). Each becomes its own
-# DecorationXxx object so the multi-filament slicer can assign one color
-# per object. The display color in Blender comes from REGION_COLORS below
-# (used purely for viewport — slicer ignores material color).
+# Decoration style:
+#   'painted' — fill colored regions on the show face (4-layer cartoon look)
+#   'neon'    — line-art strokes on a dark body (synthwave / stencil look)
+# Switch with `bpy.context.scene["nfc_taco_style"] = "neon"` before exec, or
+# the env var FILIBERTOS_TACO_STYLE.
+STYLE = os.environ.get('FILIBERTOS_TACO_STYLE', 'painted')
+
+# Painted-mode color palette (display only; slicer assigns filaments).
 REGION_COLORS = {
-    "shell_dark":     (0.93, 0.66, 0.05, 1),   # rich orange-yellow
-    "shell_light":    (0.98, 0.82, 0.36, 1),   # pale yellow highlight
-    "lettuce_dark":   (0.22, 0.36, 0.04, 1),   # deep green shadow
-    "lettuce_light":  (0.37, 0.78, 0.13, 1),   # bright green highlight
-    "outline":        (0.82, 0.13, 0.10, 1),   # red outline
-    "filling":        (0.95, 0.78, 0.50, 1),   # cheese / sour cream / etc.
-    "tomato":         (0.85, 0.18, 0.13, 1),
-    "purple":         (0.55, 0.20, 0.65, 1),
-    "white":          (0.95, 0.95, 0.95, 1),
+    "shell_dark":     (0.93, 0.66, 0.05, 1),
+    "shell_light":    (0.98, 0.82, 0.36, 1),
+    "lettuce_dark":   (0.22, 0.36, 0.04, 1),
+    "lettuce_light":  (0.37, 0.78, 0.13, 1),
+    "outline":        (0.82, 0.13, 0.10, 1),
 }
+
+# Neon-mode color palette.
+NEON_COLORS = {
+    "silhouette":    (0.36, 0.84, 1.00, 1),    # primary light blue stroke
+    "lettuce_line":  (0.36, 0.84, 1.00, 1),    # second light blue stroke
+    "lettuce_veins": (0.90, 0.18, 0.25, 1),    # red accent (or swap for navy)
+}
+
 def _camel(name): return ''.join(p.capitalize() for p in name.split('_'))
-def _discover_regions():
+
+def _discover(prefix, color_map):
     import glob
     out = []
-    for path in sorted(glob.glob(os.path.join(BEAD_DIR, 'region_*.svg'))):
-        base = os.path.splitext(os.path.basename(path))[0]    # 'region_shell_dark'
-        region = base[len('region_'):]                         # 'shell_dark'
-        col = REGION_COLORS.get(region, (0.7, 0.7, 0.7, 1))
-        out.append((f"Decoration{_camel(region)}", path, col))
+    for path in sorted(glob.glob(os.path.join(BEAD_DIR, f'{prefix}_*.svg'))):
+        base = os.path.splitext(os.path.basename(path))[0]
+        slug = base[len(prefix)+1:]
+        col = color_map.get(slug, (0.7, 0.7, 0.7, 1))
+        out.append((f"Decoration{_camel(slug)}", path, col))
     return out
-SVG_REGIONS = _discover_regions()
+
+if STYLE == 'neon':
+    SVG_REGIONS = _discover('stroke', NEON_COLORS)
+else:
+    SVG_REGIONS = _discover('region', REGION_COLORS)
 
 TARGET_WIDTH  = 25.0          # mm (taco silhouette ~25w x 17h after extraction)
 THICKNESS     = 5.0           # mm total split into 2 x 2.5
@@ -135,9 +147,16 @@ def assign_material(obj, name, color):
 
 # ── BUILD ──────────────────────────────────────────────────────────────
 def main():
-    global _existing_objs
+    global _existing_objs, SVG_REGIONS, STYLE
+    # Allow scene custom-prop to override the env-var-derived STYLE.
+    scene_style = bpy.context.scene.get('nfc_taco_style')
+    if scene_style:
+        STYLE = scene_style
+    SVG_REGIONS = _discover('stroke', NEON_COLORS) if STYLE == 'neon' \
+                  else _discover('region', REGION_COLORS)
     print("=" * 60)
-    print("Filiberto's Taco NFC bead build")
+    print(f"Filiberto's Taco NFC bead build  [STYLE={STYLE}]")
+    print(f"  decorations: {[r[0] for r in SVG_REGIONS]}")
     print("=" * 60)
 
     # wipe scene meshes/curves and overlay objects

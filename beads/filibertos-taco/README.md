@@ -57,6 +57,29 @@ It also stress-tests the SVG → silhouette pipeline against a *bitmap* input �
 | `stages/01_built_verified.blend` | snapshot at the post-build verification step |
 | `PRINT_LOG.md` | per-print iteration log (failure modes + parameter changes) |
 
+## Two style variants
+
+Build script `build_filibertos_taco.py` switches between two looks by
+reading `STYLE` (env var `FILIBERTOS_TACO_STYLE`, scene custom prop
+`nfc_taco_style`, default `"painted"`):
+
+| Style | Decoration source | Output |
+|---|---|---|
+| `painted` (default) | `region_*.svg` (filled color regions, k-means extraction) | `print/` — 4-filament cartoon look |
+| `neon` | `stroke_*.svg` (line strokes, dilate-XOR extraction) | `print/neon/` — 2-3-filament neon-sign look on a black body |
+
+Switch in Blender:
+```python
+bpy.context.scene["nfc_taco_style"] = "neon"
+exec(open(r"...build_filibertos_taco.py").read(), {"__name__":"__main__"})
+```
+
+Re-extract decoration sources independently:
+```sh
+uv run python beads/filibertos-taco/extract_regions.py   # k-means → region_*.svg
+uv run python beads/filibertos-taco/extract_strokes.py   # dilate-XOR → stroke_*.svg
+```
+
 ## Re-build / re-export
 
 ```sh
