@@ -207,20 +207,50 @@ def polygons_to_mesh(polygons, name, z=0.0):
             holes = []
         if len(outer) < 3: continue
 
-        # Add outer + hole loops as edges (no faces yet)
+        if not holes:
+            # Simple polygon: direct n-gon face.
+            try:
+                verts = [bm.verts.new((float(x), float(y), float(z))) for x, y in outer]
+                bm.faces.new(verts)
+            except ValueError:
+                pass
+            continue
+
+        if len(holes) == 1:
+            # Ring polygon: outer loop + 1 inner loop = annulus. Build by
+            # creating both loops as edges, then bridge_loops to skin.
+            # Manifold by construction (no triangle_fill artifacts).
+            outer_verts = [bm.verts.new((float(x), float(y), float(z))) for x, y in outer]
+            inner_verts = [bm.verts.new((float(x), float(y), float(z))) for x, y in holes[0]]
+            outer_edges, inner_edges = [], []
+            for i in range(len(outer_verts)):
+                try:
+                    outer_edges.append(bm.edges.new((outer_verts[i], outer_verts[(i+1) % len(outer_verts)])))
+                except ValueError: pass
+            for i in range(len(inner_verts)):
+                try:
+                    inner_edges.append(bm.edges.new((inner_verts[i], inner_verts[(i+1) % len(inner_verts)])))
+                except ValueError: pass
+            try:
+                bmesh.ops.bridge_loops(bm, edges=outer_edges + inner_edges)
+            except Exception as ex:
+                print(f"  bridge_loops failed for {name}: {ex}; falling back to triangle_fill")
+                try:
+                    bmesh.ops.triangle_fill(bm, edges=outer_edges + inner_edges, use_beauty=True)
+                except Exception:
+                    pass
+            continue
+
+        # Multi-hole polygon: triangle_fill (best Blender can do without earcut)
         all_loops = [outer] + holes
         loop_edges = []
         for loop in all_loops:
             verts = [bm.verts.new((float(x), float(y), float(z))) for x, y in loop]
-            edges = []
             for i in range(len(verts)):
                 try:
-                    e = bm.edges.new((verts[i], verts[(i+1) % len(verts)]))
-                    edges.append(e)
+                    loop_edges.append(bm.edges.new((verts[i], verts[(i+1) % len(verts)])))
                 except ValueError:
                     pass
-            loop_edges.extend(edges)
-
         if loop_edges:
             try:
                 bmesh.ops.triangle_fill(bm, edges=loop_edges, use_beauty=True)

@@ -384,34 +384,62 @@ def mask_to_polygons_mm(mask, simplify_tol_px=0.0, smooth=False, harm=14, min_ar
 # that's where the source's "outline" is. Without this restriction we
 # pick up every red pixel everywhere (transition shading, red bits between
 # elements) and the outline floods most of the bead.
-from skimage.morphology import skeletonize as _skeletonize
-SHELL_OUTLINE_THICK_PX = 5   # ~0.35 mm — single-line stroke at 25mm scale
-# Two separate 1-px-thick line skeletons:
-# 1. Silhouette outer perimeter (the bead's outline ring)
-# 2. Filling-shell boundary (lettuce-shell separator curve)
-# Then dilate each by SHELL_OUTLINE_THICK_PX/2 to get a uniform thin stroke.
-silhouette_band = outer & ~ndimage.binary_erosion(outer, iterations=2)
-silhouette_skel = _skeletonize(silhouette_band)
+SHELL_OUTLINE_THICK_MM = 0.5    # ~Centauri 0.4mm nozzle, slightly over for safety
+# Build the outline ring DIRECTLY FROM THE SILHOUETTE POLYGON via shapely.
+# This guarantees the outline's outer edge is identical to the silhouette
+# polygon used for the bead body — no holes/gaps where they would diverge
+# due to mismatched smoothing between the raw mask and silhouette.svg.
+from shapely.geometry import Polygon as _Poly, MultiPolygon as _MPoly
+import json as _json
+shell_outline_polys_mm = None
+silh_paths = mask_to_paths(outer, smooth=True, harm=FOURIER_HARM_BODY,
+                           min_area=2000, pre_blur_sigma=SILHOUETTE_BLUR_SIGMA)
+if silh_paths:
+    silh_pts_px = silh_paths[0]
+    # silh_pts_px is in source pixel coords (row=y, col=x). Convert to mm
+    # at silhouette bbox center, +Y up.
+    silh_cx_px = (bx0 + bx1) / 2.0
+    silh_cy_px = (by0 + by1) / 2.0
+    silh_xy_mm = [((float(p[1]) - silh_cx_px) * SCALE_PX_TO_MM,
+                   -(float(p[0]) - silh_cy_px) * SCALE_PX_TO_MM)
+                  for p in silh_pts_px]
+    silh_poly = _Poly(silh_xy_mm)
+    if not silh_poly.is_valid: silh_poly = silh_poly.buffer(0)
+    inset_poly = silh_poly.buffer(-SHELL_OUTLINE_THICK_MM, join_style=2)
+    # build polygon-with-holes representation
+    outline_dicts = []
+    if silh_poly.is_valid and not inset_poly.is_empty:
+        # Inset can yield a MultiPolygon if the bead "pinches" thinner than
+        # 2× outline thickness somewhere. Subtract each component.
+        if isinstance(inset_poly, _MPoly):
+            holes = [list(p.exterior.coords) for p in inset_poly.geoms]
+        else:
+            holes = [list(inset_poly.exterior.coords)]
+        outline_dicts.append({
+            'outer': list(silh_poly.exterior.coords),
+            'holes': holes,
+        })
+    shell_outline_polys_mm = outline_dicts
 
-# The filling-shell boundary: 1-pixel band where filling meets non-filling
-# inside the silhouette
-filling_edge = combined_filling & ~ndimage.binary_erosion(combined_filling, iterations=1)
-# Drop the part of filling_edge that's the silhouette boundary itself
-filling_edge_inner = filling_edge & ~silhouette_band
+# Filling-shell separator (a curve, not a ring): keep mask-derived
+filling_inner_edge = combined_filling & ~ndimage.binary_erosion(
+    combined_filling, iterations=int(SHELL_OUTLINE_THICK_MM/SCALE_PX_TO_MM))
+silhouette_ring_mask = outer & ~ndimage.binary_erosion(
+    outer, iterations=int(SHELL_OUTLINE_THICK_MM/SCALE_PX_TO_MM))
+separator = filling_inner_edge & ~silhouette_ring_mask & outer
 
-dilate_r = SHELL_OUTLINE_THICK_PX // 2
-silhouette_outline = ndimage.binary_dilation(silhouette_skel, iterations=dilate_r)
-separator_outline = ndimage.binary_dilation(filling_edge_inner, iterations=dilate_r)
-shell_outline = (silhouette_outline | separator_outline) & outer
-labeled_so, n_so = ndimage.label(shell_outline)
+# Combined "shell_outline" data: polygon-with-holes ring (from shapely
+# silhouette polygon offset) + separator polygons (from mask).
+# Filter the separator mask of tiny fragments
+labeled_so, n_so = ndimage.label(separator)
 if n_so:
-    sizes_so = ndimage.sum(shell_outline, labeled_so, range(1, n_so+1))
-    keep = np.zeros_like(shell_outline)
+    sizes_so = ndimage.sum(separator, labeled_so, range(1, n_so+1))
+    keep = np.zeros_like(separator)
     for i, sz in enumerate(sizes_so, 1):
-        if sz >= 200: keep |= labeled_so == i
-    shell_outline = keep
-print(f"  shell_outline (red border, ring + lettuce-line): {shell_outline.sum()} px, "
-      f"{ndimage.label(shell_outline)[1]} fragments")
+        if sz >= 100: keep |= labeled_so == i
+    separator = keep
+print(f"  shell_outline ring polygons: {len(shell_outline_polys_mm or [])}, "
+      f"separator px: {separator.sum()} ({ndimage.label(separator)[1]} fragments)")
 
 regions_data = {
     'scale_mm_per_px': float(SCALE_PX_TO_MM),
@@ -433,7 +461,8 @@ regions_data = {
             'color_hex': '#921209',
         },
         'shell_outline': {
-            'polygons': mask_to_polygons_mm(shell_outline, smooth=False, min_area=200),
+            'polygons': (shell_outline_polys_mm or [])
+                        + mask_to_polygons_mm(separator, smooth=False, min_area=120),
             'color_hex': '#a01a14',
         },
     },
