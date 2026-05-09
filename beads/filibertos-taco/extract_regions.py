@@ -230,13 +230,19 @@ def combine_region(*names, inset_iters=0, trim_bottom_px=0):
         m = trimmed
     return m
 
-# Filling: 9px uniform inset (thin shell rim around all sides) + 14px
-# bottom-only trim. The bottom trim kills the "tongue" extending toward
-# the bottom-right silhouette tip while preserving the natural curvy
-# top contour (lettuce frill) and the natural left + right contours
-# (where the filling tapers into the shell points).
+# Filling: NO uniform inset + 14px bottom-only trim.
+#
+# Source-image stats (measured from just-taco.jpg via per-Y-band pixel
+# count): top 30% of the taco is 50-58% green / <10% yellow. A uniform
+# inset on the lettuce blob pulls it away from the top silhouette edge,
+# leaving an unwanted yellow rim at the TOP where the source has none.
+#
+# Drop the uniform inset → lettuce reaches the silhouette top, matching
+# the source ratio. Keep trim_bottom_px to expose the shell rim along
+# the open-mouth bottom-right curve (this IS visible as yellow in the
+# source, ~50% yellow at Y≈100-150).
 combined_filling = combine_region('lettuce_dark', 'lettuce_light',
-                                  inset_iters=9, trim_bottom_px=14)
+                                  inset_iters=0, trim_bottom_px=14)
 # Shell = full silhouette MINUS the filling. Match the Filibertos logo's
 # shell-as-base proportion: in the source, the yellow shell forms the
 # entire taco shell shape (the "bun") with green lettuce sitting on top
