@@ -118,28 +118,34 @@ NFC_POS       = (0.0, 1.5)    # mm — bumped up from (0, 0.5): perimeter raycas
                               # bottom edge (Y≈-8.5). Y=1.5 keeps perimeter
                               # comfortably inside.
 
-PEG_DIAMETER  = 2.0           # mm
+PEG_DIAMETER  = 2.6           # mm — recipe default 2.0 is too narrow on the
+                              # Centauri Carbon 2; redaphid-portrait v5 bumped
+                              # to 2.6 for actual snap-fit. See gotcha #30.
 PEG_HEIGHT    = 1.5
-PEG_CLEARANCE = 0.1
-# auto-fit picked corners; pull inward a touch so peg perimeter sits comfortably
-# inside the silhouette
+PEG_CLEARANCE = 0.05          # mm radial — recipe default 0.1 was too generous;
+                              # redaphid-portrait v6 nailed snap-fit at 0.05.
+# Re-tuned for PEG_DIAMETER=2.6: original (7.5,-6),(-9.5,0),(7.5,+2.5) all
+# failed the perimeter check at peg_r=1.35mm. find_pegs.py scans candidates
+# against the clean silhouette + NFC + string-hole clearances. These three
+# form the widest triangle that passes (silhouette is asymmetric — there
+# are no valid left-side candidates below y≈-1).
 PEGS = [
-    ( 7.5, -6.0),     # right shell tip
-    (-9.5,  0.0),     # left taco tip
-    ( 7.5,  2.5),     # right upper, near filling
+    (-10.5,  0.0),    # far-left, mid-height (left shell tip area)
+    (  8.5,  2.0),    # upper right (above lettuce)
+    (  9.5, -5.5),    # lower right (right shell tip)
 ]
 
-# Multi-color raised relief on Top show face. Decorations stack in the
-# order they're loaded — `interior_detail` should sit on TOP of `filling`,
-# so each decoration in the loop gets `i * DECO_LAYER_STEP` extra Z lift.
-DECO_RELIEF = 0.4              # mm — extruded above show face
-DECO_LIFT_EPS = 0.01           # mm — Z-fight buffer above show face
-DECO_LAYER_STEP = 0.10         # mm — z-step per stacked decoration. >=0.16mm
-                               # (typical slicer layer height) ensures each
-                               # decoration prints as its own filament layer
-                               # without slicer z-fighting; 0.10mm is just
-                               # below for tighter visual stack while still
-                               # being unambiguous on most slicer settings.
+# Multi-color FLUSH inlay on Top show face. Each decoration's top face sits
+# exactly at t_z_max (the bead surface) and the mesh extrudes DOWN by
+# DECO_RELIEF into Top; matching pockets are carved out of Top so the inlay
+# fills its socket without protrusion. Painter's order is resolved by
+# subtracting higher-rank deco footprints from lower-rank ones (so each
+# pixel of the show face belongs to exactly one filament). The whole bead
+# surface is therefore smooth — colors are visible at the surface only as
+# different filaments, not as raised relief. See gotcha #29 in the recipe.
+DECO_RELIEF = 0.4              # mm — depth of inlay socket
+DECO_LIFT_EPS = 0.0            # mm — kept for API compat; 0 in flush mode
+DECO_LAYER_STEP = 0.0          # mm — flush mode: no z-stack between layers
 
 # ── BUILD HELPERS ──────────────────────────────────────────────────────
 def clean_mesh(obj, threshold=0.005):
@@ -176,6 +182,13 @@ def boolean_op(target, cutter, operation='DIFFERENCE', name='Bool'):
     bpy.ops.object.modifier_apply(modifier=name)
     bpy.ops.object.select_all(action='DESELECT')
     cutter.select_set(True); bpy.ops.object.delete()
+
+def boolean_diff_keep_cutter(target, cutter, name='DiffKeep'):
+    """Boolean DIFFERENCE that preserves the cutter (uses a copy)."""
+    cut_copy = cutter.copy()
+    cut_copy.data = cutter.data.copy()
+    bpy.context.collection.objects.link(cut_copy)
+    boolean_op(target, cut_copy, 'DIFFERENCE', name)
 
 def check_nonmanifold(obj):
     obj.select_set(True); bpy.context.view_layer.objects.active = obj
@@ -524,10 +537,11 @@ def main():
     clean_mesh(bottom)
     print(f"Bottom after pegs non-manifold: {check_nonmanifold(bottom)}")
 
-    # ── Step 8: Multi-color decoration on Top show face ────────────────
+    # ── Step 8: Multi-color FLUSH decoration on Top show face ──────────
     t_z_max = max(v.co.z for v in top.data.vertices)
-    deco_z_floor = t_z_max + DECO_LIFT_EPS
-    print(f"\nDecorations at z={deco_z_floor:.3f}, relief={DECO_RELIEF}mm")
+    # Inlay: top face of every deco = bead surface; mesh extrudes DOWN.
+    deco_z_floor = t_z_max - DECO_RELIEF
+    print(f"\nDecorations FLUSH at z=[{deco_z_floor:.3f}, {t_z_max:.3f}]  relief={DECO_RELIEF}mm")
 
     # Prefer the polygon manifest when available — guaranteed-consistent
     # coordinate frame across regions. Falls back to per-SVG import if
@@ -650,6 +664,35 @@ def main():
         nm = check_nonmanifold(d)
         print(f"  {name}: dims={d.dimensions.x:.2f}x{d.dimensions.y:.2f}x{d.dimensions.z:.2f}  non-manifold={nm}")
 
+    # ── Step 8.5: FLUSH inlay postprocess ──────────────────────────────
+    # decos[] is populated in painter's order: index 0 = lowest layer,
+    # index -1 = topmost. With flush mode all decos occupy the same Z
+    # slab [deco_z_floor, t_z_max], so overlapping footprints would
+    # z-fight. Resolve by subtracting every higher-rank deco from each
+    # lower-rank one (so each pixel of the show face belongs to a single
+    # filament), then carve matching pockets in Top so the inlay sits
+    # flush. See gotcha #29.
+    if decos:
+        print(f"\nFlush inlay: resolving overlap (n={len(decos)})...")
+        for i, target in enumerate(decos):
+            for j in range(i + 1, len(decos)):
+                boolean_diff_keep_cutter(target, decos[j], f'OvrRes_{j}_into_{i}')
+            clean_mesh(target)
+
+        print("Flush inlay: cutting Top pockets...")
+        for d in decos:
+            cut = d.copy(); cut.data = d.data.copy()
+            bpy.context.collection.objects.link(cut)
+            # extend cutter up 0.05mm so the coplanar top face cuts cleanly
+            for v in cut.data.vertices:
+                if v.co.z >= t_z_max - 1e-4:
+                    v.co.z += 0.05
+            cut.data.update()
+            boolean_op(top, cut, 'DIFFERENCE', f'Pocket_{d.name}')
+        clean_mesh(top)
+        repair_manifold(top)   # ring-shape pockets (e.g. shell_outline) leave coplanar fragments
+        print(f"  Top after pockets: dims={top.dimensions.x:.2f}x{top.dimensions.y:.2f}x{top.dimensions.z:.2f}  non-manifold={check_nonmanifold(top)}")
+
     # ── Step 9: Hide FullBead, materials, save ─────────────────────────
     body.hide_set(True); body.hide_render = True
 
@@ -662,8 +705,9 @@ def main():
     # Bottom 180° around X at export time.
     bottom.location = (0, 0, 0)
     top.location = (0, 0, 0)
-    for d in decos:
-        d.location = (d.location.x, d.location.y, deco_z_floor)
+    # Decos already have absolute z baked into their vertex coords from the
+    # polygon-manifest path (or via location set in the SVG-fallback path).
+    # Don't rewrite location.z — would double-shift polygon-built decos.
 
     # Recipe gotcha #16: this centered-mesh pipeline produces Bottom already
     # in print orientation (silhouette face DOWN, pegs UP). The default
@@ -671,13 +715,10 @@ def main():
     # silhouette cantilevered above. Override per-charm so re-exports stay
     # printable.
     import json
-    bpy.context.scene["nfc_export_flip_override"] = json.dumps({
-        "Bottom": 0.0,
-        "Top": 0.0,
-        "DecorationYellow": 0.0,
-        "DecorationGreen":  0.0,
-        "DecorationRed":    0.0,
-    })
+    flip_overrides = {"Bottom": 0.0, "Top": 0.0}
+    for d in decos:
+        flip_overrides[d.name] = 0.0
+    bpy.context.scene["nfc_export_flip_override"] = json.dumps(flip_overrides)
 
     os.makedirs(PRINT_DIR, exist_ok=True)
     blend_path = os.path.join(PRINT_DIR, 'filibertos-taco_charm.blend')
