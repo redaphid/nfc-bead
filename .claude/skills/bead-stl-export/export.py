@@ -99,11 +99,25 @@ def _mesh_sanity(obj):
 
 
 def _resolve_targets():
+    """Pick up exact matches AND `Decoration<Suffix>` siblings.
+
+    Multi-color charms (e.g. filibertos-taco) split the show-face decoration
+    into several named meshes (DecorationFilling, DecorationShellOutline,
+    …). Treat any mesh whose name starts with `Decoration` as a printable
+    target so the slicer 3MF gets all filament regions.
+    """
     targets = []
+    seen = set()
     for name in EXPECTED_OBJECTS:
         o = bpy.data.objects.get(name)
         if o and o.type == 'MESH':
-            targets.append(o)
+            targets.append(o); seen.add(o.name)
+        # multi-decoration siblings
+        if name == 'Decoration':
+            for o in bpy.data.objects:
+                if (o.type == 'MESH' and o.name.startswith('Decoration')
+                        and o.name not in seen):
+                    targets.append(o); seen.add(o.name)
     return targets
 
 
@@ -238,6 +252,9 @@ for obj in targets:
     zmin_own = min(v.z for v in bb)
 
     share_with = EXPORT_SHARE_SHIFT_WITH.get(obj.name)
+    # Multi-decoration siblings (DecorationFilling, …) share Top's shift.
+    if share_with is None and obj.name.startswith('Decoration'):
+        share_with = EXPORT_SHARE_SHIFT_WITH.get('Decoration', 'Top')
     if share_with and share_with in _shifts:
         cx, cy, zoff = _shifts[share_with]
         obj.matrix_world = Matrix.Translation((cx, cy, zoff)) @ obj.matrix_world

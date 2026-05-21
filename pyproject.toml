@@ -25,6 +25,7 @@ dependencies = [
     "rtree>=1.4.1",
     "scikit-learn>=1.8.0",
     "mapbox-earcut>=2.0.0",
+    "imageio[ffmpeg]>=2.37.3",
 ]
 
 [project.optional-dependencies]
