@@ -40,11 +40,23 @@ HOLE_Y        = 4.0       # mm — wide head band (silhouette ≥ 12 mm wide her
 HOLE_Z_OFFSET = 1.25      # mm — THICKNESS/4 → hole sits entirely inside Top half
                           # (gotcha #23: better first-layer adhesion than split-plane).
 
-# NFC pocket — torso center, just below the bead's geometric center so the
-# perimeter clears the antenna mount and body-arm gaps (after fill).
+# NFC pocket — torso center, just below the bead's geometric center.
+# Body-arm gaps clip 3/32 perimeter points without fill; SHOULDER_FILLERS
+# below patches the gaps before the pocket is cut.
 NFC_DIAMETER = 10.5
 NFC_DEPTH    = 0.8
 NFC_POS      = (0.0, -1.5)
+
+# Shoulder-gap fillers — 3D box UNIONs welding the silhouette body to its
+# arms so the NFC pocket has solid material to recess into.  Without this,
+# the pocket wall is open across the body-arm gap on both sides and the
+# NTAG215 sticker is visible from outside through the armpits. Each entry
+# is (xmin, xmax, ymin, ymax) in mm — the box extends across the full
+# bead thickness in Z.
+SHOULDER_FILLERS = [
+    (-6.0, -3.5, -5.5, -1.0),   # left shoulder/armpit
+    (+3.5, +6.0, -5.5, -1.0),   # right shoulder/armpit
+]
 
 # Pegs — friction fit on Bottom (gotcha #14: pegs on Bottom because Top has
 # raised eye decoration). Triangulated: two in the head shoulders, one in
@@ -237,6 +249,30 @@ bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
 mesh_obj.location = (0, 0, 0)
 dims = mesh_obj.dimensions
 print(f"Extruded silhouette: {dims.x:.2f} x {dims.y:.2f} x {dims.z:.2f} mm")
+
+# ── Step 3.5: Fill shoulder gaps (UNION'd boxes) ────────────────────────
+# Welds the body to each arm so the NFC pocket has solid material to
+# recess into. Without this the pocket is exposed through the armpits.
+# Boxes are sized to *exactly* match the bead's Z extent so the UNION
+# caps coincide with the silhouette caps — no bisect-trim needed.
+if SHOULDER_FILLERS:
+    print(f"Filling {len(SHOULDER_FILLERS)} shoulder gap(s)...")
+    for i, (xmin, xmax, ymin, ymax) in enumerate(SHOULDER_FILLERS):
+        cx = (xmin + xmax) / 2.0
+        cy = (ymin + ymax) / 2.0
+        sx = xmax - xmin
+        sy = ymax - ymin
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(cx, cy, 0))
+        box = bpy.context.active_object
+        box.scale = (sx, sy, dims.z)         # exactly match bead height
+        bpy.ops.object.transform_apply(scale=True)
+        boolean_op(mesh_obj, box, 'UNION', f"SF{i}")
+    clean_mesh(mesh_obj)
+    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+    mesh_obj.location = (0, 0, 0)
+    dims = mesh_obj.dimensions
+    nm = check_nonmanifold(mesh_obj)
+    print(f"After shoulder fill: {dims.x:.2f} x {dims.y:.2f} x {dims.z:.2f} mm  NM={nm}")
 
 # ── Step 4: String hole (gotcha #13: real z_mid, gotcha #23: offset) ───
 zs = [v.co.z for v in mesh_obj.data.vertices]
