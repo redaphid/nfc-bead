@@ -119,6 +119,40 @@ def drop_nm_slivers(obj):
     bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.object.mode_set(mode='OBJECT')
 
+def drop_small_bodies(obj, min_vol=0.5):
+    """Delete disconnected components whose enclosed volume is below min_vol
+    mm³. Splitting flames into red(base)/orange(tip) by prism leaves the tip
+    mesh as many bodies; the boolean also sheds sub-mm specks and degenerate
+    zero-volume slivers (a long thin sliver has a big bbox but ~0 volume, so
+    filter on volume, not bbox extent). Keeps only real, printable flame tips."""
+    bm = bmesh.new(); bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    visited = set(); doomed = []
+    for f0 in bm.faces:
+        if f0 in visited:
+            continue
+        comp = []; stack = [f0]
+        while stack:
+            f = stack.pop()
+            if f in visited:
+                continue
+            visited.add(f); comp.append(f)
+            for e in f.edges:
+                for lf in e.link_faces:
+                    if lf not in visited:
+                        stack.append(lf)
+        vol = 0.0
+        for f in comp:
+            vs = f.verts
+            v0 = vs[0].co
+            for i in range(1, len(vs) - 1):
+                vol += v0.dot(vs[i].co.cross(vs[i + 1].co)) / 6.0
+        if abs(vol) < min_vol:
+            doomed.extend(comp)
+    if doomed:
+        bmesh.ops.delete(bm, geom=doomed, context='FACES')
+    bm.to_mesh(obj.data); bm.free()
+
 def check_nonmanifold(obj):
     obj.select_set(True); bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode='EDIT')
@@ -383,11 +417,13 @@ def main():
 
         red_part = dup(flames_part, f'{hname}Red')
         boolean_op(red_part, red_prism, 'INTERSECT', 'RedCut', delete_cutter=False)
-        clean_mesh(red_part); repair_manifold(red_part); drop_nm_slivers(red_part)
+        clean_mesh(red_part); repair_manifold(red_part)
+        drop_small_bodies(red_part); drop_nm_slivers(red_part)
 
         orange_part = dup(flames_part, f'{hname}Orange')
         boolean_op(orange_part, red_prism, 'DIFFERENCE', 'OrangeCut', delete_cutter=True)
-        clean_mesh(orange_part); repair_manifold(orange_part); drop_nm_slivers(orange_part)
+        clean_mesh(orange_part); repair_manifold(orange_part)
+        drop_small_bodies(orange_part); drop_nm_slivers(orange_part)
 
         bpy.data.objects.remove(flames_part, do_unlink=True)
 
