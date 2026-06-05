@@ -96,36 +96,18 @@ chy0, chy1 = hy_idx.min(), hy_idx.max()
 # Parametric traditional heart curve; sample, then fit to the detected blob
 # bbox (optionally fattened so the round lobes reclaim flame-bitten area).
 HEART_FATTEN = 1.06          # >1 grows the heart to occlude fire over the lobes
-
-def _heart_pt(t):
-    return (16 * np.sin(t) ** 3,
-            13 * np.cos(t) - 5 * np.cos(2 * t) - 2 * np.cos(3 * t) - np.cos(4 * t))
-
-def _heart_tan(t):
-    return (48 * np.sin(t) ** 2 * np.cos(t),
-            -13 * np.sin(t) + 10 * np.sin(2 * t) + 6 * np.sin(3 * t) + 4 * np.sin(4 * t))
-
-# The cleft (t=0) is a sharp downward CUSP: x ∝ sin³t flattens near t=0, so
-# both lobes approach the center with a VERTICAL tangent → a vertical clip
-# where they meet. Fix with math: cut each lobe at ±CLEFT_T (where its tangent
-# is still well-sloped) and replace the inner cleft with a circular arc that is
-# TANGENT to both lobe curves at the cut — a fillet that traces the lobes into
-# a round dimple. Larger CLEFT_T → rounder/shallower dimple.
-CLEFT_T = 0.55
-xr, yr = _heart_pt(CLEFT_T)                   # right cut point (left is mirror)
-dxr, dyr = _heart_tan(CLEFT_T)                # lobe tangent there
-yo = yr + xr * dxr / dyr                      # fillet-circle centre on the y-axis
-r = np.hypot(xr, yr - yo)                     #   (tangency ⇒ radius ⟂ tangent)
-phi_r = np.arctan2(yr - yo, xr)
-phi_l = np.arctan2(yr - yo, -xr)
-# Body = lobes + sides + bottom point, i.e. t in [CLEFT_T, 2π−CLEFT_T]
-# (skips the cuspy inner wedge). Then close with the dimple arc P_L→P_R.
-tb = np.linspace(CLEFT_T, 2 * np.pi - CLEFT_T, 560)
-bx, by = _heart_pt(tb)
-ph = np.linspace(phi_l, phi_r, 80)            # sweep through the bottom (−π/2)
-ax, ay = r * np.cos(ph), yo + r * np.sin(ph)
-hx = np.concatenate([bx, ax])
-hy = np.concatenate([by, ay])
+tt = np.linspace(0, 2 * np.pi, 600)
+hx = 16 * np.sin(tt) ** 3
+hy = 13 * np.cos(tt) - 5 * np.cos(2 * tt) - 2 * np.cos(3 * tt) - np.cos(4 * tt)
+# The cleft (t=0) is a sharp downward cusp — it reads as a vertical clip where
+# the two lobes meet. Round ONLY that cusp: blend in a smoothed copy weighted
+# near t=0, leaving the bottom point (t=π) sharp and the lobes untouched.
+sm_x = ndimage.gaussian_filter1d(hx, sigma=9, mode='wrap')
+sm_y = ndimage.gaussian_filter1d(hy, sigma=9, mode='wrap')
+ang = np.minimum(tt, 2 * np.pi - tt)         # angular distance from the cleft
+w = np.exp(-(ang / 0.30) ** 2)               # ≈1 at the cleft, →0 elsewhere
+hx = (1 - w) * hx + w * sm_x
+hy = (1 - w) * hy + w * sm_y
 # Normalize param curve to [0,1], then map to the (fattened) blob bbox.
 hx_n = (hx - hx.min()) / (hx.max() - hx.min())
 hy_n = (hy - hy.min()) / (hy.max() - hy.min())
