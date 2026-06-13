@@ -22,10 +22,41 @@ from mathutils import Vector
 
 HERE      = os.path.dirname(os.path.abspath(__file__))
 REGIONS   = os.path.join(HERE, "regions.json")
+EPS       = 1e-4
+
+# ─── Variant config (override via CLI args after `--`) ───────────────────
+# HOLE_AXIS:
+#   "Z" — hole through the flat face (pendant style, the default variant)
+#   "X" — hole horizontally through the body left<->right (thread-through-bead
+#         style). Bounded by the 2.5mm thickness, so the diameter is reduced.
+HOLE_AXIS    = "Z"
+HOLE_DIA_OVR = None    # mm; override regions.json hole dia (for the X variant)
+SUFFIX       = ""      # output dir/name suffix, e.g. "_thread"
+
+# set in main() from SUFFIX
 PRINT_DIR = os.path.join(HERE, "print")
 BLEND_OUT = os.path.join(HERE, "gymnasts.blend")
 PREVIEW   = os.path.join(HERE, "preview.png")
-EPS       = 1e-4
+
+
+def parse_args():
+    global HOLE_AXIS, HOLE_DIA_OVR, SUFFIX, PRINT_DIR, BLEND_OUT, PREVIEW
+    argv = sys.argv
+    extra = argv[argv.index("--") + 1:] if "--" in argv else []
+    i = 0
+    while i < len(extra):
+        a = extra[i]
+        if a == "--axis":
+            HOLE_AXIS = extra[i + 1].upper(); i += 2
+        elif a == "--hole-dia":
+            HOLE_DIA_OVR = float(extra[i + 1]); i += 2
+        elif a == "--suffix":
+            SUFFIX = extra[i + 1]; i += 2
+        else:
+            i += 1
+    PRINT_DIR = os.path.join(HERE, "print" + SUFFIX)
+    BLEND_OUT = os.path.join(HERE, f"gymnasts{SUFFIX}.blend")
+    PREVIEW   = os.path.join(HERE, f"preview{SUFFIX}.png")
 
 
 def wipe_scene():
@@ -73,10 +104,26 @@ def build_figure(name, poly, thickness, hole):
 
 
 def drill_hole(obj, hole, thickness):
+    radius = (HOLE_DIA_OVR / 2.0) if HOLE_DIA_OVR else float(hole["r"])
+    if HOLE_AXIS == "Z":
+        # through the flat face
+        depth = thickness + 4.0
+        rot = (0.0, 0.0, 0.0)
+    elif HOLE_AXIS == "X":
+        # horizontal tunnel left<->right at the hole's Y, mid-thickness; long
+        # enough to clear the widest figure so it cuts fully through.
+        depth = 80.0
+        rot = (0.0, math.radians(90), 0.0)
+    elif HOLE_AXIS == "Y":
+        depth = 80.0
+        rot = (math.radians(90), 0.0, 0.0)
+    else:
+        raise ValueError(f"bad HOLE_AXIS {HOLE_AXIS!r}")
     bpy.ops.mesh.primitive_cylinder_add(
-        radius=float(hole["r"]),
-        depth=thickness + 4.0,
+        radius=radius,
+        depth=depth,
         location=(float(hole["x"]), float(hole["y"]), thickness / 2.0),
+        rotation=rot,
         vertices=48,
     )
     cutter = bpy.context.active_object
@@ -146,10 +193,13 @@ def setup_preview_camera(objs):
 
 
 def main():
+    parse_args()
     data = json.load(open(REGIONS))
     thickness = data["thickness_mm"]
     figs = data["figures"]
-    print(f"Building {len(figs)} gymnast beads @ {thickness}mm thick")
+    dia = HOLE_DIA_OVR if HOLE_DIA_OVR else data.get("hole_dia_mm")
+    print(f"Building {len(figs)} gymnast beads @ {thickness}mm thick  "
+          f"hole-axis={HOLE_AXIS} dia={dia}mm  ->  {os.path.basename(PRINT_DIR)}/")
 
     wipe_scene()
     objs = []

@@ -7,17 +7,17 @@ spread across the plate (distinct XY per part — the multi-item-same-XY trap
 from prompts/nfc-bead/prompt.md gotcha #28 does NOT apply here).
 
   uv run python beads/gymnasts/bundle_3mf.py
+  uv run python beads/gymnasts/bundle_3mf.py --dir print_thread --out print_thread/gymnasts_thread.3mf
 """
 from __future__ import annotations
 
+import argparse
 import glob
 import os
 
 import trimesh
 
-HERE      = os.path.dirname(os.path.abspath(__file__))
-PRINT_DIR = os.path.join(HERE, "print")
-OUT       = os.path.join(PRINT_DIR, "gymnasts.3mf")
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 GRID_COLS = 3
 SPACING   = 30.0   # mm between part centers; parts are <=25mm so 5mm gap
@@ -49,10 +49,17 @@ def _translate(lib3mf, dx, dy, dz):
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dir", default="print", help="STL dir relative to bead folder (or absolute)")
+    ap.add_argument("--out", default="print/gymnasts.3mf", help="output 3MF (relative to bead folder or absolute)")
+    args = ap.parse_args()
+    print_dir = args.dir if os.path.isabs(args.dir) else os.path.join(HERE, args.dir)
+    out = args.out if os.path.isabs(args.out) else os.path.join(HERE, args.out)
+
     lib3mf = _import_lib3mf()
-    stls = sorted(glob.glob(os.path.join(PRINT_DIR, "pose*.stl")))
+    stls = sorted(glob.glob(os.path.join(print_dir, "pose*.stl")))
     if not stls:
-        raise SystemExit(f"no pose*.stl in {PRINT_DIR}")
+        raise SystemExit(f"no pose*.stl in {print_dir}")
 
     wrapper = lib3mf.Wrapper()
     model = wrapper.CreateModel()
@@ -73,8 +80,9 @@ def main():
                    "6 extruded gymnast silhouette charms, 2.5mm thick, "
                    "string holes on poses 1/4/5/6", "string", True)
 
-    model.QueryWriter("3mf").WriteToFile(OUT)
-    print(f"wrote {OUT} ({os.path.getsize(OUT)} bytes, {len(stls)} parts)")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    model.QueryWriter("3mf").WriteToFile(out)
+    print(f"wrote {out} ({os.path.getsize(out)} bytes, {len(stls)} parts)")
 
 
 if __name__ == "__main__":
