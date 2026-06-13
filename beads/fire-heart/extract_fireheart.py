@@ -96,18 +96,33 @@ chy0, chy1 = hy_idx.min(), hy_idx.max()
 # Parametric traditional heart curve; sample, then fit to the detected blob
 # bbox (optionally fattened so the round lobes reclaim flame-bitten area).
 HEART_FATTEN = 1.06          # >1 grows the heart to occlude fire over the lobes
-tt = np.linspace(0, 2 * np.pi, 600)
-hx = 16 * np.sin(tt) ** 3
-hy = 13 * np.cos(tt) - 5 * np.cos(2 * tt) - 2 * np.cos(3 * tt) - np.cos(4 * tt)
-# The cleft (t=0) is a sharp downward cusp — it reads as a vertical clip where
-# the two lobes meet. Round ONLY that cusp: blend in a smoothed copy weighted
-# near t=0, leaving the bottom point (t=π) sharp and the lobes untouched.
-sm_x = ndimage.gaussian_filter1d(hx, sigma=9, mode='wrap')
-sm_y = ndimage.gaussian_filter1d(hy, sigma=9, mode='wrap')
-ang = np.minimum(tt, 2 * np.pi - tt)         # angular distance from the cleft
-w = np.exp(-(ang / 0.30) ** 2)               # ≈1 at the cleft, →0 elsewhere
-hx = (1 - w) * hx + w * sm_x
-hy = (1 - w) * hy + w * sm_y
+
+def _hpt(t):
+    return (16 * np.sin(t) ** 3,
+            13 * np.cos(t) - 5 * np.cos(2 * t) - 2 * np.cos(3 * t) - np.cos(4 * t))
+
+def _htan(t):
+    return (48 * np.sin(t) ** 2 * np.cos(t),
+            -13 * np.sin(t) + 10 * np.sin(2 * t) + 6 * np.sin(3 * t) + 4 * np.sin(4 * t))
+
+# The cleft (t=0) is a cusp whose lobes approach with a VERTICAL tangent
+# (x ∝ sin³t), which reads as a vertical clip / kink where each lobe meets the
+# dimple. Keep the cleft POINTED but kill the vertical: cut each lobe at
+# ±CLEFT_T and continue along its OWN tangent line straight to a shared apex on
+# the y-axis. The straight side is colinear with the lobe tangent (no kink) and
+# the two meet at a sharp point (still pointed), with slanted — not vertical —
+# sides. Smaller CLEFT_T → deeper, steeper dimple.
+CLEFT_T = 0.45
+xr, yr = _hpt(CLEFT_T)
+dxr, dyr = _htan(CLEFT_T)
+y_apex = yr - xr * dyr / dxr                  # where the lobe tangent line hits x=0
+tb = np.linspace(CLEFT_T, 2 * np.pi - CLEFT_T, 560)
+bx, by = _hpt(tb)                             # lobes + sides + bottom point
+nV = 40
+vx = np.concatenate([np.linspace(-xr, 0, nV), np.linspace(0, xr, nV)])
+vy = np.concatenate([np.linspace(yr, y_apex, nV), np.linspace(y_apex, yr, nV)])
+hx = np.concatenate([bx, vx])
+hy = np.concatenate([by, vy])
 # Normalize param curve to [0,1], then map to the (fattened) blob bbox.
 hx_n = (hx - hx.min()) / (hx.max() - hx.min())
 hy_n = (hy - hy.min()) / (hy.max() - hy.min())
