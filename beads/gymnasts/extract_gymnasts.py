@@ -90,23 +90,30 @@ def outer_contour(mask: np.ndarray) -> np.ndarray:
     return contours[0]  # (row, col)
 
 
-def compute_hole(mask: np.ndarray, px_per_mm: float):
+def compute_hole(mask: np.ndarray, px_per_mm: float, prefer_upper: bool = True):
     """Pick the thickest interior point (preferring the upper body) for a
-    through-thickness string hole. Returns (col, row) in pixel coords, or None."""
+    through-thickness string hole. Returns (col, row) in pixel coords, or None.
+
+    prefer_upper=True  -> bias toward the upper body (face/pendant hole: hangs
+                          right-side-up). prefer_upper=False -> the global
+                          thickest point (thread hole: balanced, material all
+                          around so a horizontal tunnel has walls above+below)."""
     dist = ndimage.distance_transform_edt(mask)  # px to nearest edge
     need_px = (HOLE_DIA_MM / 2 + HOLE_WALL_MM) * px_per_mm
     ys, xs = np.where(mask)
     rmin, rmax = ys.min(), ys.max()
-    upper_cut = rmin + (rmax - rmin) * HOLE_UPPER_FRAC
 
-    # candidates in the upper region that clear the wall requirement
-    upper = mask.copy()
-    upper[int(upper_cut):, :] = False
-    upper_dist = dist * upper
-    if upper_dist.max() >= need_px:
-        r, c = np.unravel_index(np.argmax(upper_dist), dist.shape)
-        return int(c), int(r)
-    # fallback: global thickest point
+    if prefer_upper:
+        # candidates in the upper region that clear the wall requirement
+        upper_cut = rmin + (rmax - rmin) * HOLE_UPPER_FRAC
+        upper = mask.copy()
+        upper[int(upper_cut):, :] = False
+        upper_dist = dist * upper
+        if upper_dist.max() >= need_px:
+            r, c = np.unravel_index(np.argmax(upper_dist), dist.shape)
+            return int(c), int(r)
+    # global thickest point — most material all around (best for a horizontal
+    # thread tunnel, where you want solid material above AND below the hole).
     if dist.max() >= need_px:
         r, c = np.unravel_index(np.argmax(dist), dist.shape)
         return int(c), int(r)
@@ -142,24 +149,30 @@ def main() -> int:
         poly = np.column_stack(((cs - cmin) / px_per_mm,
                                 (bb_h_px - (rs - rmin)) / px_per_mm))
 
-        hole = compute_hole(mask, px_per_mm)
-        hole_mm = None
-        if hole is not None:
+        def to_hole_mm(hole):
+            if hole is None:
+                return None
             hc, hr = hole
-            hole_mm = {"x": (hc - cmin) / px_per_mm,
-                       "y": (bb_h_px - (hr - rmin)) / px_per_mm,
-                       "r": HOLE_DIA_MM / 2}
+            return {"x": round((hc - cmin) / px_per_mm, 4),
+                    "y": round((bb_h_px - (hr - rmin)) / px_per_mm, 4),
+                    "r": round(HOLE_DIA_MM / 2, 4)}
+
+        hole = compute_hole(mask, px_per_mm, prefer_upper=True)    # face/pendant
+        hole_thread = compute_hole(mask, px_per_mm, prefer_upper=False)  # thread
+        hole_mm = to_hole_mm(hole)
+        hole_thread_mm = to_hole_mm(hole_thread)
 
         out["figures"].append({
             "name": f"pose{i}",
             "width_mm": bb_w_px / px_per_mm,
             "height_mm": bb_h_px / px_per_mm,
             "polygon": [[round(x, 4), round(y, 4)] for x, y in poly],
-            "hole": (None if hole_mm is None
-                     else {k: round(v, 4) for k, v in hole_mm.items()}),
+            "hole": hole_mm,                # Z / face variant (upper-body)
+            "hole_thread": hole_thread_mm,  # X / thread variant (global thickest)
         })
-        hole_desc = "none" if hole_mm is None else f"({hole_mm['x']:.1f},{hole_mm['y']:.1f})"
-        print(f"  pose{i}: {bb_w_px/px_per_mm:5.1f} x {bb_h_px/px_per_mm:5.1f} mm  hole={hole_desc}")
+        hd = "none" if hole_mm is None else f"({hole_mm['x']:.1f},{hole_mm['y']:.1f})"
+        td = "none" if hole_thread_mm is None else f"({hole_thread_mm['x']:.1f},{hole_thread_mm['y']:.1f})"
+        print(f"  pose{i}: {bb_w_px/px_per_mm:5.1f} x {bb_h_px/px_per_mm:5.1f} mm  face-hole={hd}  thread-hole={td}")
 
         # debug overlay
         tint = np.zeros_like(rgb); tint[..., 1] = 120
@@ -167,12 +180,16 @@ def main() -> int:
         rr = np.clip(contour_rc[:, 0].astype(int), 0, H - 1)
         cc = np.clip(contour_rc[:, 1].astype(int), 0, W - 1)
         overlay[rr, cc] = (255, 64, 64)
-        if hole is not None:
+        yy, xx = np.ogrid[:H, :W]
+        rpx = (HOLE_DIA_MM / 2) * px_per_mm
+        if hole is not None:                       # face hole — blue
             hc, hr = hole
-            yy, xx = np.ogrid[:H, :W]
-            ring = (xx - hc) ** 2 + (yy - hr) ** 2
-            rpx = (HOLE_DIA_MM / 2) * px_per_mm
-            overlay[np.abs(np.sqrt(ring) - rpx) < 1.5] = (0, 160, 255)
+            ring = np.sqrt((xx - hc) ** 2 + (yy - hr) ** 2)
+            overlay[np.abs(ring - rpx) < 1.5] = (0, 160, 255)
+        if hole_thread is not None:                # thread hole — orange
+            hc, hr = hole_thread
+            ring = np.sqrt((xx - hc) ** 2 + (yy - hr) ** 2)
+            overlay[np.abs(ring - rpx) < 1.5] = (255, 140, 0)
 
     (OUT_DIR / "regions.json").write_text(json.dumps(out, indent=2))
     print(f"Wrote {OUT_DIR / 'regions.json'}")

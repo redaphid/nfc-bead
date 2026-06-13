@@ -13,8 +13,13 @@ to host one.
 | **Face** (default) | Z — through the 2.5 mm flat face, 1.4 mm dia | `print/pose*.stl`, `print/gymnasts.3mf` | a flat pendant facing forward |
 | **Thread** | X — horizontal tunnel through the body, 1.5 mm dia | `print_thread/pose*.stl`, `print_thread/gymnasts_thread.3mf` | a bead the cord passes through |
 
-Both share the same silhouettes, dimensions, and hole *positions* (poses 1/4/5/6;
-slim handstands 2/3 are hole-free in both). The thread hole (1.5 mm) is sized by
+Both share the same silhouettes and dimensions, and the same poses host a hole
+(1/4/5/6; slim handstands 2/3 are hole-free in both). Hole *placement* differs by
+intent: the **face** hole biases to the upper body so the pendant hangs
+right-side-up, while the **thread** hole goes to the *global thickest* point
+(most material all around, so the horizontal tunnel has walls above + below and
+the bead hangs balanced). For most poses these coincide; on pose6 the thread
+hole drops lower into the body. The thread hole (1.5 mm) is sized by
 the 2.5 mm thickness, not the silhouette — it leaves ~0.5 mm walls above/below
 that the slicer bridges. **The thread cutter is limited to the local solid span
 at the hole point** (a short tunnel through one body part), NOT a full-width

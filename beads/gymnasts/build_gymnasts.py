@@ -232,21 +232,25 @@ def main():
     print(f"Building {len(figs)} gymnast beads @ {thickness}mm thick  "
           f"hole-axis={HOLE_AXIS} dia={dia}mm  ->  {os.path.basename(PRINT_DIR)}/")
 
+    # Face/Z variant uses the upper-body hole; thread (X/Y) variant uses the
+    # global-thickest hole (balanced, material above+below the tunnel).
+    hole_key = "hole_thread" if HOLE_AXIS in ("X", "Y") else "hole"
+
     wipe_scene()
     objs = []
     GRID_COLS = 3
     SPACING = 30.0
     for i, fig in enumerate(figs):
-        obj = build_figure(fig["name"], fig["polygon"], thickness, fig.get("hole"))
+        hole = fig.get(hole_key) or fig.get("hole")   # fall back if missing
+        obj = build_figure(fig["name"], fig["polygon"], thickness, hole)
         # grid layout for scene + preview
         col = i % GRID_COLS
         row = i // GRID_COLS
         obj.location.x += col * SPACING
         obj.location.y -= row * SPACING
         objs.append(obj)
-        h = fig.get("hole")
         print(f"  {fig['name']}: {fig['width_mm']:.1f}x{fig['height_mm']:.1f}mm "
-              f"hole={'yes' if h else 'no'}  verts={len(obj.data.vertices)}")
+              f"hole={'yes' if hole else 'no'}  verts={len(obj.data.vertices)}")
 
     export_stls(objs)
     setup_preview_camera(objs)
