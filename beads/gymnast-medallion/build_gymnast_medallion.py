@@ -204,14 +204,33 @@ def main():
     print("DONE")
 
 
+def _area_centroid(pts):
+    """Shoelace area-centroid — the figure's visual center of mass, not the
+    bbox center (which a long thin limb skews)."""
+    A = cx = cy = 0.0
+    n = len(pts)
+    for i in range(n):
+        x0, y0 = pts[i]; x1, y1 = pts[(i + 1) % n]
+        cr = x0 * y1 - x1 * y0
+        A += cr; cx += (x0 + x1) * cr; cy += (y0 + y1) * cr
+    if abs(A) < 1e-9:
+        return sum(x for x, _ in pts) / n, sum(y for _, y in pts) / n
+    return cx / (3 * A), cy / (3 * A)
+
+
 def build_decoration(show_z):
     data = json.load(open(FIGURE_JSON))
     poly = data["polygon"]
     if len(poly) > 2 and abs(poly[0][0]-poly[-1][0]) < 1e-4 and abs(poly[0][1]-poly[-1][1]) < 1e-4:
         poly = poly[:-1]
-    # scale so farthest point from center == FIGURE_FIT_RADIUS (fits in circle)
+    # Center on the area centroid (visual mass), not the bbox — the extended
+    # leg otherwise leaves the figure looking shoved to the upper-right.
+    ccx, ccy = _area_centroid(poly)
+    poly = [(x - ccx, y - ccy) for x, y in poly]
+    # scale so farthest point from the (mass) center == FIGURE_FIT_RADIUS
     rmax = max(math.hypot(x, y) for x, y in poly)
     s = FIGURE_FIT_RADIUS / rmax
+    print(f"  figure mass-centered (shifted {ccx:+.2f},{ccy:+.2f} from bbox)")
     z0 = show_z + RELIEF_LIFT
     bm = bmesh.new()
     verts = [bm.verts.new((x * s, y * s, z0)) for x, y in poly]
