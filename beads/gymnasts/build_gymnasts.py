@@ -88,7 +88,7 @@ def build_figure(name, poly, thickness, hole):
     bpy.context.scene.collection.objects.link(obj)
 
     if hole is not None:
-        drill_hole(obj, hole, thickness)
+        drill_hole(obj, hole, thickness, poly)
 
     # center on its own XY origin, drop to z=0
     bpy.context.view_layer.objects.active = obj
@@ -103,26 +103,57 @@ def build_figure(name, poly, thickness, hole):
     return obj
 
 
-def drill_hole(obj, hole, thickness):
+def _local_span(poly, axis, hx, hy):
+    """Span of solid silhouette along `axis` ('X' or 'Y') that contains the
+    hole point — so a horizontal/vertical tunnel only pierces the ONE body
+    part at the hole, instead of slotting across the whole figure (which would
+    shave thin floating slivers off far parts at the same row/column)."""
+    if axis == "X":          # crossings of the horizontal line y = hy
+        line, other = hy, hx
+        a_i, b_i = 1, 0      # compare poly[:,1], interpolate poly[:,0]
+    else:                    # axis == "Y": crossings of the vertical line x = hx
+        line, other = hx, hy
+        a_i, b_i = 0, 1
+    xs = []
+    n = len(poly)
+    for i in range(n):
+        p, q = poly[i], poly[(i + 1) % n]
+        a1, a2 = p[a_i], q[a_i]
+        if (a1 <= line < a2) or (a2 <= line < a1):
+            t = (line - a1) / (a2 - a1)
+            xs.append(p[b_i] + t * (q[b_i] - p[b_i]))
+    xs.sort()
+    for j in range(0, len(xs) - 1, 2):
+        if xs[j] - 0.2 <= other <= xs[j + 1] + 0.2:
+            return xs[j], xs[j + 1]
+    return None
+
+
+def drill_hole(obj, hole, thickness, poly):
     radius = (HOLE_DIA_OVR / 2.0) if HOLE_DIA_OVR else float(hole["r"])
+    hx, hy = float(hole["x"]), float(hole["y"])
+    SPAN_MARGIN = 1.0        # mm the tunnel overshoots the local span on each side
+    loc = [hx, hy, thickness / 2.0]
     if HOLE_AXIS == "Z":
         # through the flat face
         depth = thickness + 4.0
         rot = (0.0, 0.0, 0.0)
-    elif HOLE_AXIS == "X":
-        # horizontal tunnel left<->right at the hole's Y, mid-thickness; long
-        # enough to clear the widest figure so it cuts fully through.
-        depth = 80.0
-        rot = (0.0, math.radians(90), 0.0)
-    elif HOLE_AXIS == "Y":
-        depth = 80.0
-        rot = (math.radians(90), 0.0, 0.0)
+    elif HOLE_AXIS in ("X", "Y"):
+        span = _local_span(poly, HOLE_AXIS, hx, hy)
+        if span is None:
+            depth = 80.0     # fallback: cut all the way through
+            print(f"    WARN {obj.name}: no local span for {HOLE_AXIS} hole; full-width cut")
+        else:
+            lo, hi = span
+            depth = (hi - lo) + 2 * SPAN_MARGIN
+            loc[0 if HOLE_AXIS == "X" else 1] = (lo + hi) / 2.0
+        rot = (0.0, math.radians(90), 0.0) if HOLE_AXIS == "X" else (math.radians(90), 0.0, 0.0)
     else:
         raise ValueError(f"bad HOLE_AXIS {HOLE_AXIS!r}")
     bpy.ops.mesh.primitive_cylinder_add(
         radius=radius,
         depth=depth,
-        location=(float(hole["x"]), float(hole["y"]), thickness / 2.0),
+        location=tuple(loc),
         rotation=rot,
         vertices=48,
     )

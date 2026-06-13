@@ -10,15 +10,18 @@ to host one.
 
 | Variant | Hole axis | Files | Hangs like |
 |---|---|---|---|
-| **Face** (default) | Z — through the 2.5 mm flat face, 2 mm dia | `print/pose*.stl`, `print/gymnasts.3mf` | a flat pendant facing forward |
+| **Face** (default) | Z — through the 2.5 mm flat face, 1.4 mm dia | `print/pose*.stl`, `print/gymnasts.3mf` | a flat pendant facing forward |
 | **Thread** | X — horizontal tunnel through the body, 1.5 mm dia | `print_thread/pose*.stl`, `print_thread/gymnasts_thread.3mf` | a bead the cord passes through |
 
 Both share the same silhouettes, dimensions, and hole *positions* (poses 1/4/5/6;
-slim handstands 2/3 are hole-free in both). The thread hole is smaller (1.5 mm
-vs 2 mm) because a horizontal hole is bounded by the 2.5 mm thickness — 1.5 mm
-leaves ~0.5 mm walls above/below, which the slicer bridges. Build either via the
-`--axis`/`--suffix` args (see Rebuild). Thread tunnels verified open by raycast
-(0/40 centerline points inside, all parts watertight).
+slim handstands 2/3 are hole-free in both). The thread hole (1.5 mm) is sized by
+the 2.5 mm thickness, not the silhouette — it leaves ~0.5 mm walls above/below
+that the slicer bridges. **The thread cutter is limited to the local solid span
+at the hole point** (a short tunnel through one body part), NOT a full-width
+slot — a full-width cut shaved thin floating slivers off far parts of arched
+poses like pose5. Build either via the `--axis`/`--suffix` args (see Rebuild).
+Thread tunnels verified open by raycast (0/40 centerline points inside), all
+parts single-body + watertight.
 
 ## Source
 
@@ -39,10 +42,11 @@ just want the outline as a printable token/pendant."
 | Decision | Why / tradeoff |
 |---|---|
 | No NFC pocket / split / pegs | User wanted plain extruded outlines. Drops most of the recipe; each bead is one watertight solid. |
-| 25 mm longest side, 2.5 mm thick | Each figure scaled so its *longest* bbox side = 25 mm (poses vary wildly in aspect ratio). 2.5 mm is sturdy for a flat charm. |
+| 17.5 mm longest side, 2.5 mm thick | Each figure scaled so its *longest* bbox side = 17.5 mm (~30% smaller than the original 25 mm; poses vary wildly in aspect ratio). Thickness deliberately NOT scaled — 2.5 mm keeps parts sturdy and hole walls printable. |
+| Hole scaled with the figure (1.4 mm dia / 0.7 mm wall) | At 0.7× the original 2.0/1.0, so the *same* poses (1/4/5/6) keep a hole — a fixed 2 mm hole would be too large a fraction of the shrunken figure and poses would drop out. |
 | Faithful outlines (no limb thickening) | Kept the silhouettes exact. Cost: thin extended limbs/toes (esp. poses 2, 3, 6 feet) are the fragility risk on the print. |
-| String hole = thickest interior point, prefer upper body | Auto-placed via distance transform so the hole always lands in load-bearing material. Hole runs through the 2.5 mm face (flat-pendant style), not lengthwise. |
-| Poses 2 & 3 have **no hole** | The slim vertical handstands lack 2 mm-dia + 1 mm-wall of material anywhere. Per user ("keep the easy ones") they ship hole-free rather than getting a non-faithful hang tab. |
+| String hole = thickest interior point, prefer upper body | Auto-placed via distance transform so the hole always lands in load-bearing material. |
+| Poses 2 & 3 have **no hole** | The slim vertical handstands lack 1.4 mm-dia + 0.7 mm-wall of material anywhere. Per user ("keep the easy ones") they ship hole-free rather than getting a non-faithful hang tab. |
 | 6 parts → one 3MF, 3×2 grid | Distinct XY per part, so slicers import them already spread on the plate. |
 
 ## What's transferable / what's specific

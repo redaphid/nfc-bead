@@ -29,16 +29,18 @@ from skimage import measure
 # ─── Tunables ────────────────────────────────────────────────────────────
 SRC            = Path(r"C:\Users\hypnodroid\Downloads\handstand.png")
 OUT_DIR        = Path(__file__).resolve().parent
-TARGET_MAX_MM  = 25.0     # longest bbox side of each figure -> this many mm
-THICKNESS_MM   = 2.5
+TARGET_MAX_MM  = 17.5     # longest bbox side of each figure -> this many mm (~30% smaller than 25)
+THICKNESS_MM   = 2.5      # NOT scaled with size — keeps parts sturdy + hole walls printable
 BLUR_SIGMA     = 1.5
 LUMA_THRESHOLD = 128      # luma < this == figure (dark on white)
 MIN_AREA_PX    = 2000     # drop specks / antialias crumbs
 FRAME_BBOX_FRAC = 0.85    # a component whose bbox spans > this of BOTH dims == frame
 FOURIER_HARM   = 48       # contour smoothing; high to preserve thin limbs/toes
 CONTOUR_PTS    = 600
-HOLE_DIA_MM    = 2.0
-HOLE_WALL_MM   = 1.0      # min material between hole edge and silhouette boundary
+# Hole scaled 0.7x with the figure (2.0/1.0 -> 1.4/0.7) so the SAME poses keep
+# a hole at the smaller size — a fixed 2mm hole would be too big a fraction.
+HOLE_DIA_MM    = 1.4
+HOLE_WALL_MM   = 0.7      # min material between hole edge and silhouette boundary
 HOLE_UPPER_FRAC = 0.45    # search top this fraction of the figure first for a hole
 
 
