@@ -184,6 +184,9 @@ def main():
     # ── Decoration: gymnast relief on Top show face ──
     deco = build_decoration(z_max)
 
+    # drop the intermediate FullBead so it doesn't clutter previews / the .blend
+    bpy.data.objects.remove(full, do_unlink=True)
+
     # ── orient for print (centered-cylinder pipeline: NO flips needed) ──
     # Bottom: circle/back face is lowest (z_min) -> raise so it sits on z=0,
     #         pegs point up. Top: inner face (peg holes) already lowest -> sits
