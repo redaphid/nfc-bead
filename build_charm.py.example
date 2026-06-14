@@ -500,9 +500,14 @@ for i, (px, py) in enumerate(PEGS):
     )
     boolean_op(bottom, bpy.context.active_object, 'UNION', f"Peg{i}")
     if PEG_CHAMFER > 0:
+        # OVERLAP the shaft by 0.15 mm (shift the cone down into the shaft) so
+        # the UNION actually merges — a coplanar butt-join leaves the tip as a
+        # SEPARATE body (non-watertight, prints as a loose cone).
+        overlap = 0.15
         bpy.ops.mesh.primitive_cone_add(
             vertices=32, radius1=peg_r, radius2=max(peg_r - PEG_CHAMFER, 0.2),
-            depth=PEG_CHAMFER, location=(px, py, b_z_max + shaft_h + PEG_CHAMFER / 2.0),
+            depth=PEG_CHAMFER,
+            location=(px, py, b_z_max + shaft_h + PEG_CHAMFER / 2.0 - overlap),
         )
         boolean_op(bottom, bpy.context.active_object, 'UNION', f"PegTip{i}")
 
