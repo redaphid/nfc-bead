@@ -43,10 +43,15 @@ NFC_DIAMETER = 10.5       # mm
 NFC_DEPTH = 0.8           # mm
 NFC_POS = (0.0, -1.0)    # (X, Y) center
 
-# Pegs — friction fit
-PEG_DIAMETER = 2.0        # mm (was 1.5 — bigger for strength)
+# Pegs — friction fit. Proven snap-fit tuning from redaphid-portrait v5/v6
+# (gotcha #29): 2.0 mm/0.1 mm was too narrow + loose to grip. 2.6 mm dia at
+# 0.05 mm radial clearance holds firmly on the Centauri Carbon 2.
+PEG_DIAMETER = 2.6        # mm
 PEG_HEIGHT = 1.5          # mm
-PEG_CLEARANCE = 0.1       # mm gap per side for peg holes
+PEG_CLEARANCE = 0.05      # mm radial gap for peg holes
+PEG_CHAMFER = 0.35        # mm — lead-in taper on the peg TIP (gotcha #30). Blunt
+                          # tips catch on the socket rim and must be forced;
+                          # tapering the tip lets each peg self-start. 0 = none.
 
 # Peg positions (X, Y) — adjust these freely
 PEGS = [
@@ -481,15 +486,25 @@ print("Verifying peg holes:")
 for i, (px, py) in enumerate(PEGS):
     verify_hole(top, Vector((px, py, t_z_min - 2)), Vector((0, 0, 1)), f"Peg {i}")
 
-# ── Step 10: Pegs on bottom (boolean UNION) ───────────────
+# ── Step 10: Pegs on bottom (boolean UNION) — shaft + chamfered tip ───────
+# The full-diameter shaft grips; the tip tapers over PEG_CHAMFER so the peg
+# self-starts into its socket instead of catching on the rim (gotcha #30).
 b_z_max = max(v.co.z for v in bottom.data.vertices)
-print(f"\nPegs on bottom (d={PEG_DIAMETER}mm, h={PEG_HEIGHT}mm)...")
+peg_r = PEG_DIAMETER / 2.0
+shaft_h = PEG_HEIGHT - PEG_CHAMFER if PEG_CHAMFER > 0 else PEG_HEIGHT
+print(f"\nPegs on bottom (d={PEG_DIAMETER}mm, h={PEG_HEIGHT}mm, chamfer={PEG_CHAMFER}mm)...")
 for i, (px, py) in enumerate(PEGS):
     bpy.ops.mesh.primitive_cylinder_add(
-        vertices=32, radius=PEG_DIAMETER / 2.0, depth=PEG_HEIGHT,
-        location=(px, py, b_z_max + PEG_HEIGHT / 2.0),
+        vertices=32, radius=peg_r, depth=shaft_h,
+        location=(px, py, b_z_max + shaft_h / 2.0),
     )
     boolean_op(bottom, bpy.context.active_object, 'UNION', f"Peg{i}")
+    if PEG_CHAMFER > 0:
+        bpy.ops.mesh.primitive_cone_add(
+            vertices=32, radius1=peg_r, radius2=max(peg_r - PEG_CHAMFER, 0.2),
+            depth=PEG_CHAMFER, location=(px, py, b_z_max + shaft_h + PEG_CHAMFER / 2.0),
+        )
+        boolean_op(bottom, bpy.context.active_object, 'UNION', f"PegTip{i}")
 
 clean_mesh(bottom)
 nm = check_nonmanifold(bottom)

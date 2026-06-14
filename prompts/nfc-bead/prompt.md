@@ -256,6 +256,25 @@ Trade-off: the slicer renames component children with a numeric suffix (`top_wit
 
 `tools/make_3mf.py` already follows this pattern for the canonical Bottom + Top + Decoration + Hair set. For charms with more decoration layers, write a per-charm `bundle_3mf.py` (mirror of `make_3mf.py`'s structure but with the charm's full decoration list) — see `beads/filibertos-taco/bundle_3mf.py` for the reference.
 
+### 29. Snap-fit peg tuning: 2.6 mm dia, 0.05 mm radial clearance
+The recipe-default **2.0 mm pegs at 0.1 mm clearance don't grip** — they're too narrow and too loose; the halves fall apart ("pegs don't fit together"). redaphid-portrait v5/v6 nailed the actual snap-fit on the Centauri Carbon 2 at **2.6 mm dia + 0.05 mm radial clearance** (so `hole_r = (PEG_DIAMETER + 0.1) / 2`). `build_charm.py.example` ships these defaults. At a small bead (≤20 mm) check `peg_radius` clearance to the NFC pocket edge — 2.6 mm pegs need the peg ring at radius ≥ ~7.5 mm around a centered 10.5 mm pocket.
+
+### 30. Chamfer the peg TIPS or they catch on the socket rim
+Even at the correct clearance, **blunt (flat-top) pegs catch on the socket opening and have to be forced together** — the user literally had to bite down on a printed bead to seat them. The grip is fine; the *entry* is the problem. Add a lead-in taper to the tip: keep a full-diameter shaft of `PEG_HEIGHT − PEG_CHAMFER`, then a cone frustum from full radius down to `radius − PEG_CHAMFER` over `PEG_CHAMFER` (~0.35 mm). The narrow tip self-centers into the socket, then the chamfer guides the full shaft in. Do NOT loosen the clearance to fix entry — that costs grip. `build_charm.py.example` Step 10 builds this (shaft cylinder + cone tip, both UNIONed).
+
+### 31. Slimming a bead: thin ONE half asymmetrically, and move the string hole to the thick half
+To make a bead thinner than the default 2×2.5 mm, don't thin both halves equally — the deep features set a per-half floor. The **socket-host half must stay thick** (peg sockets are `PEG_HEIGHT + 0.3` deep, and pegs *must* live on Bottom so sockets are in Top — gotcha #14), so thin the OTHER half. The thin half can only host the shallow NFC pocket (0.8 mm) + peg bases (pegs rise *above* the inner face, so they don't consume that half's thickness). Two consequences:
+- The **string hole must live in the thick half** (single-half hole, gotcha #23) — a 1.5 mm half can't host even a 1.2 mm hole with printable walls.
+- Split at an **asymmetric seam** (`z_split = z_min + BOTTOM_THICK`), not the geometric mid-plane.
+
+Reference: `beads/gymnast-medallion` runs Bottom 1.5 mm + Top 2.0 mm + 0.5 mm relief = 4.0 mm total (down from 5.5), with the hole in the 2.0 mm Top.
+
+### 32. Round "medallion" beads: procedural cylinder base + a figure silhouette as the raised relief
+For a round bead with a figure (not a spiral) raised on the show face — like `beads/gymnast-medallion`:
+- **Build the round base as a `primitive_cylinder` (≥128 verts), not an SVG.** A circle doesn't need a traced outline, and the cylinder is exact + clean. Centre it on z=0 and run the same hole→split→NFC→pegs pipeline.
+- **The decoration is a plain extruded silhouette polygon** (figure → ngon → extrude `RELIEF_HEIGHT`), placed on the Top show face + ε. The rezz "flat ribbon" workaround (gotcha #9) is only for tube-section curves; a *filled* figure extrudes cleanly. Thin limbs are fine on a relief — they sit on the solid show face.
+- **Mass-center the relief on its area centroid, NOT its bbox center.** A figure with a long thin limb (an extended leg, a pointed toe) has a bbox center far from its visual mass; centering on the bbox leaves it looking shoved to one side. Use the shoelace area-centroid, then **scale by max radial extent** (`FIT_RADIUS / max_dist_from_centroid`) so the whole figure — including the sprawling limb — sits inside the circle with no clipped edges. Centering on the bbox or scaling by "longest side" both clip or off-center it.
+
 ---
 
 ## Print orientation
