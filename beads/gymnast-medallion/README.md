@@ -24,10 +24,10 @@ primitive instead of importing a circle SVG.
 | Feature | Value | Notes |
 |---|---|---|
 | Diameter | 20 mm | ~30% under 25 mm; floor is ~17 mm (NTAG215 pocket + pegs + walls). Rim wall ~2 mm. |
-| Thickness | 5.0 mm + 0.5 mm relief | 2.5 mm bottom + 2.5 mm top + 0.5 mm raised figure = 5.5 mm total |
-| String hole | 2 mm dia, X axis, Y = +7 | Entirely in the **Bottom** half (HOLE_Z_OFFSET = −1.25), filibertos-taco model. No seam groove; Top stays solid under the figure; Bottom's first print layer (back face) is solid. Tube walls 0.25 mm top/bottom (verified open by ray cast). |
-| NFC pocket | 10.5 mm dia × 0.8 mm, centered (0,0) | NTAG215, on the bottom inner face; clear of the y=7 hole (pocket reaches y=5.25). |
-| Pegs | 3 × **2.6 mm** dia × 1.5 mm at radius 7.5, **0.05 mm** clearance | (−7.5,0)(7.5,0)(0,−7.5); 0.95 mm to NFC edge, 1.2 mm to rim, 0/8 perimeter clip. Snap-fit tuning from redaphid-portrait v5/v6 (gotcha #30) — 2.0 mm/0.1 mm was too narrow + loose to grip. |
+| Thickness | **asymmetric: 1.5 mm bottom + 2.0 mm top + 0.5 mm relief = 4.0 mm** | Slimmed from 5.5 mm. Back/NFC half (Bottom) is the thin one; the figure/socket half (Top) stays thicker so pegs keep length + grip. |
+| String hole | 1.2 mm dia, X axis, Y = +7 | Now in the **Top** (thick) half, centered in its 2.0 mm (walls ~0.4 mm, bridged). Moved here because thinning the Bottom left it too thin to host a hole. Verified open by ray cast (void z 0.4–1.6). |
+| NFC pocket | 10.5 mm dia × 0.8 mm, centered (0,0) | NTAG215, on the bottom inner face; 0.7 mm floor under the pocket in the 1.5 mm half. |
+| Pegs | 3 × **2.6 mm** dia × 1.2 mm at radius 7.5, **0.05 mm** clearance, **chamfered tips** | (−7.5,0)(7.5,0)(0,−7.5); 0.95 mm to NFC edge. 2.6 mm/0.05 mm grips firmly (held when forced); a 0.35 mm tip chamfer (shaft 1.30 → tip 1.10 mm radius) lets each peg self-start into the socket instead of catching and needing force. |
 | Figure relief | 0.5 mm proud, scaled to fit radius 9 | Whole figure fits inside the circle (no clipped limbs); lifted 0.01 mm to avoid Z-fight |
 
 ## Key decisions / tradeoffs
@@ -38,8 +38,9 @@ primitive instead of importing a circle SVG.
 | Figure scaled to *fit radius 9*, not "longest side" | The handstand sprawls (extended leg); scaling by max radial extent guarantees the whole figure sits inside the circle so no limb is clipped at the rim. Cost: the compact body ends up ~14 mm across — smaller than the bead, with a margin ring. |
 | Relief is a plain extruded polygon | The figure is a filled shape (not a tube), so the rezz "flat ribbon" workaround (gotcha #9) isn't needed — a simple ngon extrude is manifold. Thin limbs are fine here: they sit on the solid top face, unlike the standalone charms. |
 | No decoration crop boolean | The figure is fully inside radius 9 < the 10 mm circle, so cropping (gotcha #26) is unnecessary — skipped to avoid fragmenting thin limbs. |
-| String hole in one half (Bottom), not the split plane | The **filibertos-taco model** (recipe gotcha #23). v1 put the hole on the seam → half-groove on each inner face. Moving it fully into the Bottom keeps the seam clean, the decorated Top solid, and gives Bottom a solid first layer. Cost: 0.25 mm tube walls top/bottom (printable; bump THICKNESS if it fails). |
-| Snap-fit pegs: 2.6 mm dia, 0.05 mm clearance | v1 used the recipe-default 2.0 mm / 0.1 mm and **the pegs didn't grip** ("didn't fit together"). redaphid-portrait v5/v6 (adopted by filibertos) proved 2.6 mm + 0.05 mm radial clearance is the actual snap-fit on the Centauri Carbon 2 (gotcha #30). |
+| Asymmetric halves (thin Bottom, thick Top) | User wanted it slimmer "but mostly the back". The Top must stay thick — it hosts the peg sockets (so pegs keep length/grip) and now the string hole. The Bottom only holds the shallow NFC pocket + peg bases, so it drops to 1.5 mm. The seam is off-center (z = −0.25 on a 3.5 mm body). |
+| String hole in the THICK (Top) half | filibertos-taco single-half model (gotcha #23) — no seam groove. v2 had it in the Bottom, but thinning the Bottom to 1.5 mm left no room for a hole, so it moved to the 2.0 mm Top. Shrunk to 1.2 mm (Kandi cord) for ~0.4 mm walls. Cost: a 0.4 mm wall under the figure at y=7 (bridged, printable). |
+| Snap-fit pegs: 2.6 mm / 0.05 mm + chamfered tip | The 2.6 mm/0.05 mm grip (gotcha #30) holds firmly — it held once *forced* together. The real problem was ENTRY: blunt peg tips caught on the socket rim. A 0.35 mm tip chamfer fixes self-start without touching the (good) grip diameter. Clearance deliberately NOT loosened. |
 
 ## What's transferable / specific
 

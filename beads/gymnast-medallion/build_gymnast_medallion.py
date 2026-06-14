@@ -22,29 +22,31 @@ FIGURE_JSON  = os.path.join(HERE, "figure.json")
 PRINT_DIR    = os.path.join(HERE, "print")
 
 TARGET_WIDTH = 20.0      # mm — bead diameter
-THICKNESS    = 5.0       # mm — total, split 2 x 2.5
 CIRCLE_VERTS = 160       # smoothness of the round base
 
-HOLE_DIAMETER = 2.0      # mm — string hole (X axis, through the body)
-HOLE_Y        = 7.0      # mm — top wall = R - HOLE_Y - HOLE_DIAMETER/2 = 10-7-1 = 2.0mm
-# filibertos-taco model: shift the hole ENTIRELY into ONE half (recipe gotcha
-# #23) so the seam has no half-groove. We put it in the BOTTOM half (negative)
-# so (a) the decorated Top stays fully solid under the figure, and (b) Bottom's
-# first print layer (its back face) is solid -> best bed adhesion. Hole center
-# lands at z=-1.25 (mid of the lower half), clear of the centered NFC pocket.
-HOLE_Z_OFFSET = -1.25    # mm — into Bottom half (THICKNESS/4)
+# ── Asymmetric halves (user: "shrink both, mostly the back") ──
+# The Top hosts the figure + the peg SOCKETS (so it must stay thick enough for
+# full-length pegs) and now the string hole; the Bottom only holds the shallow
+# NFC pocket + the peg bases, so it can be thinner. Body = 3.5mm + 0.5 relief =
+# 4.0mm total (was 5.5mm).
+TOP_THICK     = 2.0      # mm — figure side (sockets + string hole live here)
+BOTTOM_THICK  = 1.5      # mm — back/NFC side (thinner)
+BODY          = TOP_THICK + BOTTOM_THICK
+
+HOLE_DIAMETER = 1.2      # mm — string hole, Kandi elastic cord. Lives in the THICK
+HOLE_Y        = 7.0      # Top half (centered in its 2.0mm) — walls ~0.4mm, bridged.
 
 NFC_DIAMETER  = 10.5     # mm — NTAG215 pocket on bottom inner face
 NFC_DEPTH     = 0.8
 NFC_POS       = (0.0, 0.0)   # centered: pocket reaches y=5.25, clear of the hole at y=7
 
-# Snap-fit peg tuning from redaphid-portrait v5/v6 (adopted by filibertos-taco,
-# recipe gotcha #30): 2.0mm pegs were too narrow and 0.1mm clearance too loose
-# to grip — they "didn't fit together". 2.6mm dia + 0.05mm radial clearance is
-# the proven snap-fit on the Centauri Carbon 2.
+# Pegs: 2.6mm dia at 0.05mm clearance grips firmly (user confirmed it holds when
+# seated) — keep that. The problem was ENTRY: they had to be forced in. Add a
+# CHAMFERED TIP (lead-in taper) so each peg self-starts into its socket.
 PEG_DIAMETER  = 2.6
-PEG_HEIGHT    = 1.5
-PEG_CLEARANCE = 0.05
+PEG_HEIGHT    = 1.2      # shorter to fit the thinner Top's socket (depth = +0.3)
+PEG_CLEARANCE = 0.05     # radial — unchanged; grip is good, only entry needed help
+PEG_CHAMFER   = 0.35     # mm — tip taper height; tip radius shrinks by this much
 PEGS = [(-7.5, 0.0), (7.5, 0.0), (0.0, -7.5)]   # radius 7.5: ~0.95mm to NFC edge, 1.2mm to rim
 
 FIGURE_FIT_RADIUS = 9.0  # mm — scale figure so its farthest point is this from center (1mm rim)
@@ -117,24 +119,23 @@ def main():
     wipe()
     R = TARGET_WIDTH / 2.0
 
-    # ── round base, centered on z=0 (z in -T/2 .. +T/2) ──
-    full = add_cylinder(R, THICKNESS, (0, 0, 0), verts=CIRCLE_VERTS)
+    # ── round base, centered on z=0 (z in -BODY/2 .. +BODY/2) ──
+    full = add_cylinder(R, BODY, (0, 0, 0), verts=CIRCLE_VERTS)
     full.name = "FullBead"
     clean_mesh(full)
+    z_min, z_max = -BODY / 2.0, BODY / 2.0
+    z_split = z_min + BOTTOM_THICK          # asymmetric seam: Bottom below, Top above
+    top_mid = (z_split + z_max) / 2.0        # center of the (thicker) Top half
 
-    # ── string hole (X axis, through the body) — offset into one half ──
-    zs0 = [v.co.z for v in full.data.vertices]
-    z_hole = (min(zs0) + max(zs0)) / 2.0 + HOLE_Z_OFFSET
-    print(f"String hole d={HOLE_DIAMETER} at Y={HOLE_Y} z={z_hole:.2f} (offset {HOLE_Z_OFFSET:+.2f} -> "
-          f"{'Bottom' if HOLE_Z_OFFSET < 0 else 'Top'} half)")
+    # ── string hole (X axis) — in the THICK Top half, centered in its thickness ──
+    z_hole = top_mid
+    print(f"String hole d={HOLE_DIAMETER} at Y={HOLE_Y} z={z_hole:.2f} (in Top half, "
+          f"walls ~{(TOP_THICK - HOLE_DIAMETER) / 2:.2f}mm)")
     cut = add_cylinder(HOLE_DIAMETER / 2.0, TARGET_WIDTH * 2,
                        (0, HOLE_Y, z_hole), rotation=(0, math.radians(90), 0), verts=48)
     boolean_op(full, cut, 'DIFFERENCE', "Hole")
     clean_mesh(full)
-    zs = [v.co.z for v in full.data.vertices]
-    z_min, z_max = min(zs), max(zs)
-    z_mid = (z_min + z_max) / 2.0
-    print(f"Z: {z_min:.2f}..{z_max:.2f} mid={z_mid:.2f}")
+    print(f"Z: {z_min:.2f}..{z_max:.2f}  seam={z_split:.2f}  (Bottom {BOTTOM_THICK} / Top {TOP_THICK})")
 
     # ── peg + NFC perimeter sanity (circle is convex, but verify anyway) ──
     deps = bpy.context.evaluated_depsgraph_get(); ev = full.evaluated_get(deps)
@@ -162,9 +163,9 @@ def main():
         clean_mesh(h, 0.01)
         return h
 
-    bottom = half("Bottom", z_min, z_mid)
+    bottom = half("Bottom", z_min, z_split)
     print(f"Bottom non-manifold: {check_nonmanifold(bottom)}")
-    top = half("Top", z_mid, z_max)
+    top = half("Top", z_split, z_max)
     print(f"Top non-manifold: {check_nonmanifold(top)}")
 
     # ── NFC pocket on Bottom inner face ──
@@ -186,13 +187,23 @@ def main():
     for i, (px, py) in enumerate(PEGS):
         verify_hole(top, Vector((px, py, t_z_min - 2)), Vector((0, 0, 1)), f"peg hole {i}")
 
-    # ── pegs on Bottom inner face (UNION) ──
+    # ── pegs on Bottom inner face (UNION) — full shaft + chamfered tip ──
+    # The shaft (full PEG_DIAMETER) does the gripping; the tip tapers down over
+    # PEG_CHAMFER so the peg self-starts into the socket instead of catching on
+    # the rim and needing to be forced.
     b_z_max = max(v.co.z for v in bottom.data.vertices)
+    peg_r = PEG_DIAMETER / 2.0
+    shaft_h = PEG_HEIGHT - PEG_CHAMFER
     for i, (px, py) in enumerate(PEGS):
-        cyl = add_cylinder(PEG_DIAMETER / 2.0, PEG_HEIGHT, (px, py, b_z_max + PEG_HEIGHT / 2.0), verts=32)
+        cyl = add_cylinder(peg_r, shaft_h, (px, py, b_z_max + shaft_h / 2.0), verts=32)
         boolean_op(bottom, cyl, 'UNION', f"Peg{i}")
+        # chamfer tip: frustum from full radius up to (full - PEG_CHAMFER)
+        bpy.ops.mesh.primitive_cone_add(
+            vertices=32, radius1=peg_r, radius2=max(peg_r - PEG_CHAMFER, 0.2),
+            depth=PEG_CHAMFER, location=(px, py, b_z_max + shaft_h + PEG_CHAMFER / 2.0))
+        boolean_op(bottom, bpy.context.active_object, 'UNION', f"PegTip{i}")
     clean_mesh(bottom)
-    print(f"Bottom after pegs non-manifold: {check_nonmanifold(bottom)}")
+    print(f"Bottom after chamfered pegs non-manifold: {check_nonmanifold(bottom)}")
 
     # ── Decoration: gymnast relief on Top show face ──
     deco = build_decoration(z_max)
