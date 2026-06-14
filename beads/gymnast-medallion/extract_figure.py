@@ -23,11 +23,6 @@ BLUR_SIGMA     = 1.5
 LUMA_THRESHOLD = 128      # luma < this == figure (dark on white)
 FOURIER_HARM   = 56       # high to preserve thin limbs/toes/bun
 CONTOUR_PTS    = 700
-# Grow the silhouette so thin limbs print SOLID as a 0.5mm relief. At this size
-# the raw limbs are < 2 extrusion widths, so the slicer single-lines them ->
-# stringy/gappy fill. Dilation (in source px) fattens every feature relative to
-# the figure; ~8px ≈ +0.4mm of width at the final ~13mm relief size. 0 = faithful.
-THICKEN_PX     = 8
 
 
 def luminance(rgb):
@@ -60,11 +55,7 @@ def main():
     mask = luminance(blur) < LUMA_THRESHOLD
     mask = ndimage.binary_fill_holes(mask)
     mask = keep_largest(mask)
-    if THICKEN_PX > 0:
-        mask = ndimage.binary_dilation(
-            mask, structure=ndimage.generate_binary_structure(2, 1), iterations=THICKEN_PX)
-        mask = ndimage.binary_fill_holes(mask)   # close any thin gaps the growth pinched
-    print(f"figure pixels: {int(mask.sum())}  (thicken={THICKEN_PX}px)")
+    print(f"figure pixels: {int(mask.sum())}")
 
     contours = measure.find_contours(mask.astype(np.uint8), 0.5)
     contours.sort(key=lambda c: -len(c))

@@ -27,15 +27,25 @@ CIRCLE_VERTS = 160       # smoothness of the round base
 
 HOLE_DIAMETER = 2.0      # mm — string hole (X axis, through the body)
 HOLE_Y        = 7.0      # mm — top wall = R - HOLE_Y - HOLE_DIAMETER/2 = 10-7-1 = 2.0mm
+# filibertos-taco model: shift the hole ENTIRELY into ONE half (recipe gotcha
+# #23) so the seam has no half-groove. We put it in the BOTTOM half (negative)
+# so (a) the decorated Top stays fully solid under the figure, and (b) Bottom's
+# first print layer (its back face) is solid -> best bed adhesion. Hole center
+# lands at z=-1.25 (mid of the lower half), clear of the centered NFC pocket.
+HOLE_Z_OFFSET = -1.25    # mm — into Bottom half (THICKNESS/4)
 
 NFC_DIAMETER  = 10.5     # mm — NTAG215 pocket on bottom inner face
 NFC_DEPTH     = 0.8
-NFC_POS       = (0.0, 0.0)
+NFC_POS       = (0.0, 0.0)   # centered: pocket reaches y=5.25, clear of the hole at y=7
 
-PEG_DIAMETER  = 2.0
+# Snap-fit peg tuning from redaphid-portrait v5/v6 (adopted by filibertos-taco,
+# recipe gotcha #30): 2.0mm pegs were too narrow and 0.1mm clearance too loose
+# to grip — they "didn't fit together". 2.6mm dia + 0.05mm radial clearance is
+# the proven snap-fit on the Centauri Carbon 2.
+PEG_DIAMETER  = 2.6
 PEG_HEIGHT    = 1.5
-PEG_CLEARANCE = 0.1
-PEGS = [(-7.0, 0.0), (7.0, 0.0), (0.0, -7.0)]   # radius 7: 0.75mm to NFC edge, 2mm to rim
+PEG_CLEARANCE = 0.05
+PEGS = [(-7.5, 0.0), (7.5, 0.0), (0.0, -7.5)]   # radius 7.5: ~0.95mm to NFC edge, 1.2mm to rim
 
 FIGURE_FIT_RADIUS = 9.0  # mm — scale figure so its farthest point is this from center (1mm rim)
 RELIEF_HEIGHT     = 0.5  # mm — raised height of the figure (matches rezz spiral)
@@ -112,10 +122,13 @@ def main():
     full.name = "FullBead"
     clean_mesh(full)
 
-    # ── string hole (X axis, through the body) ──
-    z_mid = 0.0
+    # ── string hole (X axis, through the body) — offset into one half ──
+    zs0 = [v.co.z for v in full.data.vertices]
+    z_hole = (min(zs0) + max(zs0)) / 2.0 + HOLE_Z_OFFSET
+    print(f"String hole d={HOLE_DIAMETER} at Y={HOLE_Y} z={z_hole:.2f} (offset {HOLE_Z_OFFSET:+.2f} -> "
+          f"{'Bottom' if HOLE_Z_OFFSET < 0 else 'Top'} half)")
     cut = add_cylinder(HOLE_DIAMETER / 2.0, TARGET_WIDTH * 2,
-                       (0, HOLE_Y, z_mid), rotation=(0, math.radians(90), 0), verts=48)
+                       (0, HOLE_Y, z_hole), rotation=(0, math.radians(90), 0), verts=48)
     boolean_op(full, cut, 'DIFFERENCE', "Hole")
     clean_mesh(full)
     zs = [v.co.z for v in full.data.vertices]
@@ -183,9 +196,6 @@ def main():
 
     # ── Decoration: gymnast relief on Top show face ──
     deco = build_decoration(z_max)
-
-    # drop the intermediate FullBead so it doesn't clutter previews / the .blend
-    bpy.data.objects.remove(full, do_unlink=True)
 
     # ── orient for print (centered-cylinder pipeline: NO flips needed) ──
     # Bottom: circle/back face is lowest (z_min) -> raise so it sits on z=0,
