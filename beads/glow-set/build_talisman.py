@@ -59,7 +59,7 @@ def get_outline():
 # CONFIG ====================================================================
 NAME   = os.environ.get("BEAD_NAME", "shield")   # which talisman to build
 SEED   = os.environ.get("BEAD_SEED", "virginia")  # seeds the proportions
-R_OUT  = 16.0            # circumscribed radius -> ~32mm pendant
+R_OUT  = float(os.environ.get("BEAD_R", "12.0"))   # circumscribed radius; 12 -> 24mm
 
 BOTTOM_THICK = 1.5       # NFC pocket + peg bases
 TOP_THICK    = 3.0       # sockets + string hole; thicker = brighter glow
@@ -213,7 +213,7 @@ def main():
     hr = (PEG_DIAMETER + PEG_CLEAR * 2) / 2.0
     for i, (gx, gy) in enumerate(pegs):
         lo, hi = tz - 1.0, tz + PEG_HEIGHT + 0.3
-        c = cyl(hr, hi - lo, (gx, gy, (lo + hi) / 2.0), verts=32)
+        c = cyl(hr, hi - lo, (gx, gy, (lo + hi) / 2.0), verts=64)
         boolean_op(top, c, 'DIFFERENCE', "PH%d" % i)
     clean_mesh(top)
 
@@ -222,11 +222,11 @@ def main():
     pr = PEG_DIAMETER / 2.0
     shaft = PEG_HEIGHT - PEG_CHAMFER
     for i, (gx, gy) in enumerate(pegs):
-        c = cyl(pr, shaft, (gx, gy, bz + shaft / 2.0), verts=32)
+        c = cyl(pr, shaft, (gx, gy, bz + shaft / 2.0), verts=64)
         boolean_op(bottom, c, 'UNION', "Peg%d" % i)
         ov = 0.15
         bpy.ops.mesh.primitive_cone_add(
-            vertices=32, radius1=pr, radius2=max(pr - PEG_CHAMFER, 0.2),
+            vertices=64, radius1=pr, radius2=max(pr - PEG_CHAMFER, 0.2),
             depth=PEG_CHAMFER + ov,
             location=(gx, gy, bz + shaft - ov + (PEG_CHAMFER + ov) / 2.0))
         boolean_op(bottom, bpy.context.active_object, 'UNION', "Tip%d" % i)

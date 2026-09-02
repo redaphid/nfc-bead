@@ -200,7 +200,7 @@ def build_3dmodel_model(parent_objects, build_items):
     return out.getvalue()
 
 
-def build_model_settings(top_assembly, bottom):
+def build_model_settings(top_assembly, bottom, body_extruder=2):
     """Build Metadata/model_settings.config — per-part extruder + matrix."""
     out = io.StringIO()
     out.write('<?xml version="1.0" encoding="UTF-8"?>\n<config>\n')
@@ -209,7 +209,7 @@ def build_model_settings(top_assembly, bottom):
     obj_id, parts = top_assembly
     out.write(f'  <object id="{obj_id}">\n')
     out.write('    <metadata key="name" value="top_assembly"/>\n')
-    out.write('    <metadata key="extruder" value="2"/>\n')   # default; overridden per part
+    out.write(f'    <metadata key="extruder" value="{body_extruder}"/>\n')   # default; overridden per part
     for part_id, name, source_file, matrix_12f, extruder in parts:
         out.write(f'    <part id="{part_id}" subtype="normal_part">\n')
         out.write(f'      <metadata key="name" value="{xml_escape(name)}"/>\n')
@@ -225,7 +225,7 @@ def build_model_settings(top_assembly, bottom):
     obj_id_b, parts_b = bottom
     out.write(f'  <object id="{obj_id_b}">\n')
     out.write('    <metadata key="name" value="Bottom"/>\n')
-    out.write('    <metadata key="extruder" value="2"/>\n')
+    out.write(f'    <metadata key="extruder" value="{body_extruder}"/>\n')
     for part_id, name, source_file, matrix_12f, extruder in parts_b:
         out.write(f'    <part id="{part_id}" subtype="normal_part">\n')
         out.write(f'      <metadata key="name" value="{xml_escape(name)}"/>\n')
@@ -254,7 +254,8 @@ def build_model_settings(top_assembly, bottom):
 
 
 # ─── Main builder ─────────────────────────────────────────────────────
-def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
+def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
+          body_extruder=2):
     if not template_dir.is_dir():
         raise SystemExit(f"Template dir missing: {template_dir}\n"
                          f"  Drop a reference .3mf into tmp/latest/ and extract it there, "
@@ -287,7 +288,10 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
         parts.append({
             "filename":  fname,
             "name":      dispname,
-            "extruder":  extruder,
+            # Decoration keeps its own accent slot; the body follows
+            # --body-extruder so a single-filament bead lands on the slot
+            # actually loaded with that colour (see below).
+            "extruder":  extruder if dispname == "Decoration" else body_extruder,
             "stl_path":  stl_path,
             "verts":     v,
             "tris":      t,
@@ -411,7 +415,8 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
             (bottom["object_id"], bottom["name"], str(bottom["stl_path"]), identity_with_translation(0, 0, 0), bottom["extruder"]),
         ],
     )
-    model_settings = build_model_settings(top_assembly_meta, bottom_meta)
+    model_settings = build_model_settings(top_assembly_meta, bottom_meta,
+                                          body_extruder=body_extruder)
 
     # 7. plate_1.json — minimal valid placement
     bottom_xy_min = (bxy[0] - 12.5, bxy[1] - 12.5)
@@ -486,7 +491,13 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
         project_settings = proj_path.read_text(encoding="utf-8")
         # Patch settings via simple regex (the file is JSON-formatted but with
         # comments/extras in places, safer than full-parse for now).
-        patches = {"raft_layers": "0"}
+        # Z-SEAM. PRINT_LOG v5c: with seam_position=aligned the slicer put the
+        # seam on the same XY every layer and compounded it into a visible
+        # stringy mass around ONE peg socket - deformed bores that will not
+        # take a peg at 0.05mm clearance. Random spreads the artefact around
+        # the perimeter. The log calls this the single setting most likely to
+        # ruin a print, so it is forced here rather than left to the template.
+        patches = {"raft_layers": "0", "seam_position": "random"}
         if no_brim:
             patches["brim_type"] = "no_brim"
             patches["brim_width"] = "0"
@@ -582,9 +593,15 @@ def main():
     p.add_argument("--no-brim", action="store_true",
                    help="force brim off (default: keep the template's brim - "
                         "a missing brim caused a dragged/smeared print)")
+    p.add_argument("--body-extruder", type=int, default=2, metavar="N",
+                   help="filament slot for the bead body (default 2, the red "
+                        "slot the multi-colour recipe was built around). A "
+                        "single-colour bead must name the slot actually holding "
+                        "that filament - 1 is black in the saved profile - or "
+                        "it prints in the wrong colour.")
     args = p.parse_args()
     build(out_path=Path(args.out), template_dir=Path(args.template_dir),
-          no_brim=args.no_brim)
+          no_brim=args.no_brim, body_extruder=args.body_extruder)
 
 
 if __name__ == "__main__":
