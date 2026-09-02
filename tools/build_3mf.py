@@ -38,6 +38,14 @@ from xml.sax.saxutils import escape as xml_escape
 REPO_ROOT      = Path(__file__).resolve().parent.parent
 TMP_LATEST     = REPO_ROOT / "tmp" / "latest"
 TEMPLATE_DIR   = TMP_LATEST / "slicer_template"     # extracted reference 3MF
+
+# Producer string the slicer sees. Elegoo Slicer warns "the 3mf file you are
+# importing may be incompatible" when this names a tool it does not recognise -
+# and a package it treats as foreign may also ignore the embedded
+# project_settings, silently dropping the brim and reproducing the very failure
+# the template mechanism exists to prevent. So adopt the template's own
+# Application string when one is available.
+PRODUCER = "nfc-bead-3mf-builder/1.0"
 DEFAULT_OUT    = TMP_LATEST / "bead_multicolor.3mf"
 
 # ─── Per-bead config ──────────────────────────────────────────────────
@@ -171,7 +179,7 @@ def build_3dmodel_model(parent_objects, build_items):
                 "CreationDate", "Description", "Designer", "DesignerCover",
                 "DesignerUserId", "License", "ModificationDate", "Origin", "Title"):
         if tag == "Application":
-            out.write(f' <metadata name="{tag}">nfc-bead-3mf-builder/1.0</metadata>\n')
+            out.write(f' <metadata name="{tag}">{PRODUCER}</metadata>\n')
         elif tag == "BambuStudio:3mfVersion":
             out.write(f' <metadata name="{tag}">1</metadata>\n')
         elif tag == "CreationDate":
@@ -251,6 +259,16 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
         raise SystemExit(f"Template dir missing: {template_dir}\n"
                          f"  Drop a reference .3mf into tmp/latest/ and extract it there, "
                          f"OR adjust TEMPLATE_DIR in build_3mf.py.")
+
+    # 0. Adopt the reference slicer's producer string (see PRODUCER above).
+    global PRODUCER
+    _tmpl_model = template_dir / "3D" / "3dmodel.model"
+    if _tmpl_model.is_file():
+        _m = re.search(r'<metadata name="Application">([^<]+)</metadata>',
+                       _tmpl_model.read_text(encoding="utf-8", errors="replace"))
+        if _m:
+            PRODUCER = _m.group(1).strip()
+            print(f"[3mf] producer adopted from template: {PRODUCER}")
 
     # 1. Read STL geometry
     print(f"[3mf] reading STLs from {TMP_LATEST}")
@@ -426,12 +444,29 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
         ' <Default Extension="gcode" ContentType="text/x.gcode"/>\n'
         '</Types>\n'
     )
+    # The slicer's own packages carry plate previews and reference them from
+    # _rels/.rels. Shipping them (copied from the template) keeps the package
+    # shaped like slicer output rather than like a foreign file.
+    thumbs = []
+    for _fn, _rid, _rt in (
+        ("plate_1.png", "rel-2",
+         "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"),
+        ("plate_1.png", "rel-4",
+         "http://schemas.bambulab.com/package/2021/cover-thumbnail-middle"),
+        ("plate_1_small.png", "rel-5",
+         "http://schemas.bambulab.com/package/2021/cover-thumbnail-small"),
+    ):
+        if (template_dir / "Metadata" / _fn).is_file():
+            thumbs.append((_fn, _rid, _rt))
+
     pkg_rels = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
         ' <Relationship Target="/3D/3dmodel.model" Id="rel-1" '
         'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n'
-        '</Relationships>\n'
+        + ''.join(' <Relationship Target="/Metadata/%s" Id="%s" Type="%s"/>\n'
+                  % (fn, rid, rt) for fn, rid, rt in thumbs)
+        + '</Relationships>\n'
     )
 
     # Pull printer/process settings from the template, then patch them.
@@ -488,6 +523,9 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
         z.writestr("Metadata/slice_info.config", slice_info)
         if project_settings:
             z.writestr("Metadata/project_settings.config", project_settings)
+        for _fn in sorted({t[0] for t in thumbs}):
+            z.writestr("Metadata/" + _fn,
+                       (template_dir / "Metadata" / _fn).read_bytes())
 
     # 10. Verify by re-reading the zip + parsing the model files
     print(f"\n[3mf] wrote {out_path} ({out_path.stat().st_size} bytes)")
