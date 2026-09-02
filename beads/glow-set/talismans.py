@@ -141,14 +141,64 @@ def star_seal(r, g):
     return pts
 
 
-ARCHETYPES = [shield, lozenge, stele, seal, spear, keystone, star_seal]
+def cross(r, g):
+    """Greek cross - the most distinct silhouette in the set, and the only one
+    with concave corners."""
+    a = r * g.uniform(0.30, 0.42)          # half arm width
+    L = r * g.uniform(0.86, 1.0)
+    return [(-a, -L), (a, -L), (a, -a), (L, -a), (L, a), (a, a),
+            (a, L), (-a, L), (-a, a), (-L, a), (-L, -a), (-a, -a)]
+
+
+def vesica(r, g):
+    """Pointed oval on its side - wide and flat, the counterweight to all the
+    tall pointed forms."""
+    w = r * g.uniform(0.95, 1.0)
+    h = r * g.uniform(0.66, 0.84)   # <0.66 leaves too little height to space
+    k = g.uniform(0.52, 0.72)       # three pegs - the peg triangle collapses
+    return [(-w, 0.0), (-w * k, h), (w * k, h), (w, 0.0), (w * k, -h),
+            (-w * k, -h)]
+
+
+def ziggurat(r, g):
+    """Stepped terraces on a broad base - reads as built, not cut."""
+    steps = g.choice([2, 3])
+    bw = r * g.uniform(0.88, 1.0)
+    tw = bw * g.uniform(0.34, 0.50)
+    pts_r, pts_l = [], []
+    for i in range(steps + 1):
+        t = i / steps
+        w = bw + (tw - bw) * t
+        y0 = -r + 2 * r * t
+        y1 = -r + 2 * r * (i + 1) / steps if i < steps else r
+        pts_r += [(w, y0), (w, min(y1, r))]
+        pts_l += [(-w, y0), (-w, min(y1, r))]
+    return pts_r + pts_l[::-1]
+
+
+def arch(r, g):
+    """Flat base, domed top - a doorway/headstone form."""
+    w = r * g.uniform(0.72, 0.90)
+    base = -r * g.uniform(0.80, 1.0)
+    n = 12
+    top = [(w * math.cos(math.pi * i / n), r * 0.92 * math.sin(math.pi * i / n))
+           for i in range(n + 1)]
+    return [(-w, base)] + top[::-1] + [(w, base)]
+
+
+# Weighted, because uniform choice let `spear` take 4 of 16 slots and every
+# archetype was tall-and-pointed. The flat/wide forms are up-weighted to break
+# up the arrowhead read.
+ARCHETYPES = [shield, lozenge, stele, seal, spear, keystone, star_seal,
+              cross, vesica, ziggurat, arch]
+WEIGHTS = [3, 3, 3, 3, 1, 3, 2, 3, 3, 3, 3]
 
 
 def talisman(name, r_out=16.0):
     """One seeded talisman: archetype + seeded proportions + optional chamfer."""
     g = rng_for(name)
-    arch = g.choice(ARCHETYPES)
-    pts = clean(arch(r_out, g))
+    fn = g.choices(ARCHETYPES, weights=WEIGHTS, k=1)[0]
+    pts = clean(fn(r_out, g))
     if g.random() < 0.55:
         c = g.choice([1.2, 1.8, 2.4])
         cand = clean(chamfer(pts, c))
@@ -181,7 +231,7 @@ if __name__ == "__main__":
     good = 0
     for nm in ROSTER:
         g = rng_for(nm)
-        arch_name = g.choice(ARCHETYPES).__name__
+        arch_name = g.choices(ARCHETYPES, weights=WEIGHTS, k=1)[0].__name__
         pts = talisman(nm)
         f = S.fit_report(pts)
         e, a = min_edge(pts), min_angle(pts)
