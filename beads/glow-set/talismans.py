@@ -52,6 +52,31 @@ def chamfer(pts, dist):
     return out
 
 
+def asymmetry(pts):
+    """Max mm a shape deviates from its own mirror about x=0.
+
+    The rule this enforces: a form should be SYMMETRIC or OBVIOUSLY
+    ASYMMETRIC, never in between. A couple of percent of difference does not
+    read as intent, it reads as a slip."""
+    xs = [p[0] for p in pts]
+    cx = (max(xs) + min(xs)) / 2.0
+    mirror = [(2 * cx - x, y) for x, y in pts]
+    worst = 0.0
+    for q in pts:
+        worst = max(worst, min(math.hypot(q[0] - m[0], q[1] - m[1])
+                               for m in mirror))
+    return worst
+
+
+SYM_TOL = 0.15        # mm - below this the form counts as symmetric
+ASYM_MIN = 2.5        # mm - above this the asymmetry reads as deliberate
+
+
+def symmetry_ok(pts):
+    a = asymmetry(pts)
+    return a <= SYM_TOL or a >= ASYM_MIN, a
+
+
 def min_edge(pts):
     n = len(pts)
     return min(math.hypot(pts[(i + 1) % n][0] - pts[i][0],
@@ -84,19 +109,24 @@ def clean(pts):
 
 # ------------------------------------------------------------- archetypes
 def shield(r, g):
+    # Every proportion is drawn ONCE and mirrored. Drawing per-side gave left
+    # and right a few percent of difference - "almost symmetrical", which reads
+    # as a mistake rather than a decision.
     w = r * g.uniform(0.80, 0.95)
     sh = r * g.uniform(0.18, 0.34)          # shoulder height below the top
-    return [(-w, r - sh), (-w * g.uniform(0.55, 0.85), r),
-            (w * g.uniform(0.55, 0.85), r), (w, r - sh),
-            (w * g.uniform(0.70, 0.92), -r * g.uniform(0.10, 0.35)),
-            (0.0, -r), (-w * g.uniform(0.70, 0.92), -r * g.uniform(0.10, 0.35))]
+    tw = g.uniform(0.55, 0.85)              # top width fraction
+    hw = g.uniform(0.70, 0.92)              # hip width fraction
+    hy = -r * g.uniform(0.10, 0.35)         # hip height
+    return [(-w, r - sh), (-w * tw, r), (w * tw, r), (w, r - sh),
+            (w * hw, hy), (0.0, -r), (-w * hw, hy)]
 
 
 def lozenge(r, g):
     w = r * g.uniform(0.62, 0.86)
     k = g.uniform(0.30, 0.55)               # waist height as a fraction of r
-    return [(0.0, r), (w, r * k), (w * g.uniform(0.80, 1.0), -r * k),
-            (0.0, -r), (-w * g.uniform(0.80, 1.0), -r * k), (-w, r * k)]
+    lw = g.uniform(0.80, 1.0)               # lower width fraction, mirrored
+    return [(0.0, r), (w, r * k), (w * lw, -r * k),
+            (0.0, -r), (-w * lw, -r * k), (-w, r * k)]
 
 
 def stele(r, g):
@@ -117,10 +147,10 @@ def spear(r, g):
     w = r * g.uniform(0.50, 0.70)
     by = r * g.uniform(0.02, 0.26)          # barb height
     bw = w * g.uniform(1.18, 1.48)          # barb reach
-    return [(0.0, r), (w, r * g.uniform(0.10, 0.34)), (bw, -by),
-            (w * 0.52, -by - r * g.uniform(0.10, 0.20)), (0.0, -r),
-            (-w * 0.52, -by - r * g.uniform(0.10, 0.20)), (-bw, -by),
-            (-w, r * g.uniform(0.10, 0.34))]
+    sy = r * g.uniform(0.10, 0.34)          # shoulder height, mirrored
+    ty = by + r * g.uniform(0.10, 0.20)     # tail notch depth, mirrored
+    return [(0.0, r), (w, sy), (bw, -by), (w * 0.52, -ty), (0.0, -r),
+            (-w * 0.52, -ty), (-bw, -by), (-w, sy)]
 
 
 def keystone(r, g):
@@ -208,7 +238,8 @@ def talisman(name, r_out=16.0):
 
 
 def ok_shape(pts):
-    return min_edge(pts) >= MIN_EDGE and min_angle(pts) >= MIN_ANGLE
+    return (min_edge(pts) >= MIN_EDGE and min_angle(pts) >= MIN_ANGLE
+            and symmetry_ok(pts)[0])
 
 
 def fitted(name, r_out=16.0):
