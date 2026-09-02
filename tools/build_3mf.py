@@ -246,7 +246,7 @@ def build_model_settings(top_assembly, bottom):
 
 
 # ─── Main builder ─────────────────────────────────────────────────────
-def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
+def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
     if not template_dir.is_dir():
         raise SystemExit(f"Template dir missing: {template_dir}\n"
                          f"  Drop a reference .3mf into tmp/latest/ and extract it there, "
@@ -258,7 +258,14 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
     for fname, dispname, extruder, _zoff in [(PARTS_BOTTOM[0])] + PARTS_TOP_ASSEMBLY:
         stl_path = TMP_LATEST / fname
         if not stl_path.is_file():
-            raise SystemExit(f"missing STL: {stl_path}")
+            # NOTE: build_3mf's assembly layout assumes exactly Bottom+Top+
+            # Decoration (parts[2] is indexed directly in 6 places). For a
+            # SINGLE-FILAMENT bead use `nfc-make-3mf`, which handles a missing
+            # Decoration, and set the brim in the slicer. Making this path
+            # decoration-optional is worth doing when the black-inscription
+            # phase lands and the multi-part path gets revisited.
+            raise SystemExit(f"missing STL: {stl_path}  "
+                             f"(single-filament bead? use nfc-make-3mf)")
         v, t = read_binary_stl(stl_path)
         print(f"  {fname:<24} {len(v):>5} verts  {len(t):>5} tris")
         parts.append({
@@ -429,21 +436,26 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
     )
 
     # Pull printer/process settings from the template, then patch them.
-    # The user reported "raft" appearance — that's actually the BRIM
-    # (auto_brim, 5mm wide) the user's saved profile has. Disable brim and
-    # raft for these tiny press-fit parts; the Centauri Carbon's textured
-    # plate has plenty of bed adhesion at this footprint.
+    # BRIM POLICY. This used to force no_brim, on the reasoning that the brim
+    # merely looked like an unwanted raft and the textured plate had adhesion
+    # to spare. That was a cosmetic judgement and the evidence went the other
+    # way: on 2026-09-02 a ~30mm single-filament talisman sliced WITHOUT a brim
+    # lifted, was dragged by the nozzle and smeared, while the medallion
+    # printed from a profile carrying auto_brim/5mm came out clean. The vault
+    # had this logged as an unresolved conflict ("add a brim" vs the
+    # PRINT_GUIDE's "no brim"); this is the resolution.
+    # Default is now to KEEP whatever the reference template used. Pass
+    # --no-brim to force it off.
     project_settings = None
     proj_path = template_dir / "Metadata" / "project_settings.config"
     if proj_path.is_file():
         project_settings = proj_path.read_text(encoding="utf-8")
         # Patch settings via simple regex (the file is JSON-formatted but with
         # comments/extras in places, safer than full-parse for now).
-        patches = {
-            "brim_type":    "no_brim",
-            "brim_width":   "0",
-            "raft_layers":  "0",
-        }
+        patches = {"raft_layers": "0"}
+        if no_brim:
+            patches["brim_type"] = "no_brim"
+            patches["brim_width"] = "0"
         for key, value in patches.items():
             project_settings = re.sub(
                 rf'"{key}"\s*:\s*"[^"]*"',
@@ -514,8 +526,9 @@ def verify(path, parts):
         content = z.read("3D/Objects/top_assembly.model").decode("utf-8")
         v_total = len(re.findall(r"<vertex\s", content))
         t_total = len(re.findall(r"<triangle\s", content))
-        exp_v = expected_counts["Top.stl"][0] + expected_counts["Decoration.stl"][0]
-        exp_t = expected_counts["Top.stl"][1] + expected_counts["Decoration.stl"][1]
+        deco = expected_counts.get("Decoration.stl", (0, 0))
+        exp_v = expected_counts["Top.stl"][0] + deco[0]
+        exp_t = expected_counts["Top.stl"][1] + deco[1]
         ok = (v_total == exp_v and t_total == exp_t)
         print(f"  3D/Objects/top_assembly.model: {v_total} verts, {t_total} tris  "
               f"(expect {exp_v}/{exp_t})  {'OK' if ok else 'MISMATCH'}")
@@ -529,8 +542,12 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("-o", "--out", default=str(DEFAULT_OUT))
     p.add_argument("-t", "--template-dir", default=str(TEMPLATE_DIR))
+    p.add_argument("--no-brim", action="store_true",
+                   help="force brim off (default: keep the template's brim - "
+                        "a missing brim caused a dragged/smeared print)")
     args = p.parse_args()
-    build(out_path=Path(args.out), template_dir=Path(args.template_dir))
+    build(out_path=Path(args.out), template_dir=Path(args.template_dir),
+          no_brim=args.no_brim)
 
 
 if __name__ == "__main__":
