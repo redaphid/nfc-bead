@@ -1,0 +1,260 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="932" height="1568" viewBox="0 0 932 1568">
+<defs><radialGradient id="glow" cx="50%%" cy="45%%"><stop offset="0%%" stop-color="#b8ffd0"/><stop offset="70%%" stop-color="#6ee7a0"/><stop offset="100%%" stop-color="#2fa86a"/></radialGradient></defs>
+<rect width="100%" height="100%" fill="#05080a"/>
+<text x="14" y="30" font-size="15" font-family="monospace" fill="#e8f8ee">theme: star</text>
+<circle cx="127.0" cy="157.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="127.0" cy="85.0" r="5.4" fill="#05080a"/>
+<line x1="144.04" y1="110.38" x2="142.71" y2="140.12" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="142.71" y1="140.12" x2="109.34" y2="146.50" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="109.34" y1="146.50" x2="122.25" y2="170.87" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="122.25" y1="170.87" x2="103.12" y2="197.05" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="103.12" y1="197.05" x2="123.80" y2="206.91" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="123.80" y1="206.91" x2="155.42" y2="188.97" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="155.42" y1="188.97" x2="173.83" y2="162.31" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<circle cx="144.04" cy="110.38" r="5.85" fill="#0a1410"/>
+<circle cx="103.12" cy="197.05" r="4.05" fill="#0a1410"/>
+<circle cx="123.80" cy="206.91" r="4.50" fill="#0a1410"/>
+<circle cx="155.42" cy="188.97" r="4.95" fill="#0a1410"/>
+<circle cx="109.34" cy="146.50" r="4.50" fill="#0a1410"/>
+<circle cx="173.83" cy="162.31" r="4.05" fill="#0a1410"/>
+<circle cx="142.71" cy="140.12" r="4.95" fill="#0a1410"/>
+<circle cx="122.25" cy="170.87" r="5.85" fill="#0a1410"/>
+<text x="127.0" y="271.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">sterling</text>
+<circle cx="353.0" cy="157.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="353.0" cy="85.0" r="5.4" fill="#05080a"/>
+<line x1="364.64" y1="157.21" x2="336.08" y2="150.37" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="336.08" y1="150.37" x2="312.08" y2="177.83" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="312.08" y1="177.83" x2="333.90" y2="188.91" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="333.90" y1="188.91" x2="393.45" y2="172.48" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<circle cx="364.64" cy="157.21" r="4.05" fill="#0a1410"/>
+<circle cx="312.08" cy="177.83" r="4.05" fill="#0a1410"/>
+<circle cx="336.08" cy="150.37" r="5.85" fill="#0a1410"/>
+<circle cx="333.90" cy="188.91" r="4.50" fill="#0a1410"/>
+<circle cx="393.45" cy="172.48" r="5.85" fill="#0a1410"/>
+<text x="353.0" y="271.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">brycen</text>
+<circle cx="579.0" cy="157.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="579.0" cy="85.0" r="5.4" fill="#05080a"/>
+<line x1="583.54" y1="164.22" x2="610.96" y2="180.70" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="610.96" y1="180.70" x2="608.47" y2="142.60" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="608.47" y1="142.60" x2="600.54" y2="118.47" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="600.54" y1="118.47" x2="564.17" y2="137.17" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="564.17" y1="137.17" x2="528.56" y2="163.30" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="528.56" y1="163.30" x2="570.76" y2="193.68" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<circle cx="583.54" cy="164.22" r="4.05" fill="#0a1410"/>
+<circle cx="564.17" cy="137.17" r="5.85" fill="#0a1410"/>
+<circle cx="570.76" cy="193.68" r="4.95" fill="#0a1410"/>
+<circle cx="608.47" cy="142.60" r="4.95" fill="#0a1410"/>
+<circle cx="528.56" cy="163.30" r="4.95" fill="#0a1410"/>
+<circle cx="600.54" cy="118.47" r="4.50" fill="#0a1410"/>
+<circle cx="610.96" cy="180.70" r="4.95" fill="#0a1410"/>
+<text x="579.0" y="271.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">fm__lou</text>
+<circle cx="805.0" cy="157.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="805.0" cy="85.0" r="5.4" fill="#05080a"/>
+<line x1="828.64" y1="177.91" x2="809.80" y2="166.12" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="809.80" y1="166.12" x2="780.40" y2="160.16" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="780.40" y1="160.16" x2="809.45" y2="129.86" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="809.45" y1="129.86" x2="835.91" y2="135.45" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="835.91" y1="135.45" x2="781.66" y2="113.56" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="781.66" y1="113.56" x2="801.09" y2="198.83" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<circle cx="828.64" cy="177.91" r="4.95" fill="#0a1410"/>
+<circle cx="809.45" cy="129.86" r="4.50" fill="#0a1410"/>
+<circle cx="801.09" cy="198.83" r="4.05" fill="#0a1410"/>
+<circle cx="780.40" cy="160.16" r="4.50" fill="#0a1410"/>
+<circle cx="781.66" cy="113.56" r="4.50" fill="#0a1410"/>
+<circle cx="835.91" cy="135.45" r="4.05" fill="#0a1410"/>
+<circle cx="809.80" cy="166.12" r="4.05" fill="#0a1410"/>
+<text x="805.0" y="271.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">eddy_hart</text>
+<circle cx="127.0" cy="401.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="127.0" cy="329.0" r="5.4" fill="#05080a"/>
+<line x1="118.90" y1="426.22" x2="111.62" y2="405.36" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="111.62" y1="405.36" x2="91.04" y2="413.36" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="91.04" y1="413.36" x2="145.73" y2="401.67" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="145.73" y1="401.67" x2="174.51" y2="406.00" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="174.51" y1="406.00" x2="139.01" y2="444.55" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<circle cx="118.90" cy="426.22" r="4.95" fill="#0a1410"/>
+<circle cx="139.01" cy="444.55" r="4.05" fill="#0a1410"/>
+<circle cx="145.73" cy="401.67" r="4.95" fill="#0a1410"/>
+<circle cx="111.62" cy="405.36" r="4.05" fill="#0a1410"/>
+<circle cx="174.51" cy="406.00" r="4.95" fill="#0a1410"/>
+<circle cx="91.04" cy="413.36" r="4.05" fill="#0a1410"/>
+<text x="127.0" y="515.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">elli</text>
+<circle cx="353.0" cy="401.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="353.0" cy="329.0" r="5.4" fill="#05080a"/>
+<line x1="364.33" y1="389.36" x2="362.99" y2="357.78" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="362.99" y1="357.78" x2="386.02" y2="363.28" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="386.02" y1="363.28" x2="394.83" y2="420.43" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="394.83" y1="420.43" x2="358.03" y2="438.01" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="358.03" y1="438.01" x2="325.73" y2="406.62" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="325.73" y1="406.62" x2="327.62" y2="371.32" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<circle cx="364.33" cy="389.36" r="4.05" fill="#0a1410"/>
+<circle cx="327.62" cy="371.32" r="4.95" fill="#0a1410"/>
+<circle cx="362.99" cy="357.78" r="5.85" fill="#0a1410"/>
+<circle cx="358.03" cy="438.01" r="5.85" fill="#0a1410"/>
+<circle cx="325.73" cy="406.62" r="4.05" fill="#0a1410"/>
+<circle cx="386.02" cy="363.28" r="4.05" fill="#0a1410"/>
+<circle cx="394.83" cy="420.43" r="4.05" fill="#0a1410"/>
+<text x="353.0" y="515.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">redaphid</text>
+<circle cx="579.0" cy="401.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="579.0" cy="329.0" r="5.4" fill="#05080a"/>
+<line x1="552.93" y1="425.00" x2="567.32" y2="394.70" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="567.32" y1="394.70" x2="545.63" y2="389.88" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="545.63" y1="389.88" x2="593.16" y2="367.80" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="593.16" y1="367.80" x2="613.49" y2="377.62" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="613.49" y1="377.62" x2="602.90" y2="438.96" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<circle cx="552.93" cy="425.00" r="5.85" fill="#0a1410"/>
+<circle cx="593.16" cy="367.80" r="5.85" fill="#0a1410"/>
+<circle cx="567.32" cy="394.70" r="4.05" fill="#0a1410"/>
+<circle cx="602.90" cy="438.96" r="4.05" fill="#0a1410"/>
+<circle cx="613.49" cy="377.62" r="5.85" fill="#0a1410"/>
+<circle cx="545.63" cy="389.88" r="4.05" fill="#0a1410"/>
+<text x="579.0" y="515.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">jared</text>
+<circle cx="805.0" cy="401.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="805.0" cy="329.0" r="5.4" fill="#05080a"/>
+<line x1="812.47" y1="435.49" x2="775.66" y2="438.20" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="775.66" y1="438.20" x2="810.34" y2="393.75" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="810.34" y1="393.75" x2="803.39" y2="353.83" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<line x1="803.39" y1="353.83" x2="847.98" y2="377.66" stroke="#0a1410" stroke-width="7.20" stroke-linecap="round"/>
+<circle cx="812.47" cy="435.49" r="4.05" fill="#0a1410"/>
+<circle cx="803.39" cy="353.83" r="4.05" fill="#0a1410"/>
+<circle cx="847.98" cy="377.66" r="4.50" fill="#0a1410"/>
+<circle cx="810.34" cy="393.75" r="4.50" fill="#0a1410"/>
+<circle cx="775.66" cy="438.20" r="4.95" fill="#0a1410"/>
+<text x="805.0" y="515.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">virginia</text>
+<text x="14" y="548" font-size="15" font-family="monospace" fill="#e8f8ee">theme: groove</text>
+<circle cx="127.0" cy="675.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="127.0" cy="603.0" r="5.4" fill="#05080a"/>
+<circle cx="127.00" cy="675.00" r="16.65" fill="none" stroke="#0a1410" stroke-width="8.10"/>
+<circle cx="127.00" cy="675.00" r="29.70" fill="none" stroke="#0a1410" stroke-width="9.00"/>
+<circle cx="127.00" cy="675.00" r="45.45" fill="none" stroke="#0a1410" stroke-width="8.10"/>
+<circle cx="127.00" cy="675.00" r="5.40" fill="#0a1410"/>
+<text x="127.0" y="789.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">sterling</text>
+<circle cx="353.0" cy="675.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="353.0" cy="603.0" r="5.4" fill="#05080a"/>
+<circle cx="353.00" cy="675.00" r="16.20" fill="none" stroke="#0a1410" stroke-width="7.20"/>
+<circle cx="353.00" cy="675.00" r="28.35" fill="none" stroke="#0a1410" stroke-width="8.10"/>
+<circle cx="353.00" cy="675.00" r="41.40" fill="none" stroke="#0a1410" stroke-width="7.20"/>
+<circle cx="353.00" cy="675.00" r="5.40" fill="#0a1410"/>
+<text x="353.0" y="789.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">brycen</text>
+<circle cx="579.0" cy="675.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="579.0" cy="603.0" r="5.4" fill="#05080a"/>
+<circle cx="579.00" cy="675.00" r="16.65" fill="none" stroke="#0a1410" stroke-width="8.10"/>
+<circle cx="579.00" cy="675.00" r="28.80" fill="none" stroke="#0a1410" stroke-width="7.20"/>
+<circle cx="579.00" cy="675.00" r="44.10" fill="none" stroke="#0a1410" stroke-width="9.00"/>
+<circle cx="579.00" cy="675.00" r="5.40" fill="#0a1410"/>
+<text x="579.0" y="789.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">fm__lou</text>
+<circle cx="805.0" cy="675.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="805.0" cy="603.0" r="5.4" fill="#05080a"/>
+<circle cx="805.00" cy="675.00" r="14.85" fill="none" stroke="#0a1410" stroke-width="8.10"/>
+<circle cx="805.00" cy="675.00" r="28.80" fill="none" stroke="#0a1410" stroke-width="9.00"/>
+<circle cx="805.00" cy="675.00" r="42.75" fill="none" stroke="#0a1410" stroke-width="8.10"/>
+<circle cx="805.00" cy="675.00" r="5.40" fill="#0a1410"/>
+<text x="805.0" y="789.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">eddy_hart</text>
+<circle cx="127.0" cy="919.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="127.0" cy="847.0" r="5.4" fill="#05080a"/>
+<circle cx="127.00" cy="919.00" r="13.05" fill="none" stroke="#0a1410" stroke-width="8.10"/>
+<circle cx="127.00" cy="919.00" r="27.90" fill="none" stroke="#0a1410" stroke-width="7.20"/>
+<circle cx="127.00" cy="919.00" r="41.40" fill="none" stroke="#0a1410" stroke-width="9.00"/>
+<circle cx="127.00" cy="919.00" r="5.40" fill="#0a1410"/>
+<text x="127.0" y="1033.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">elli</text>
+<circle cx="353.0" cy="919.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="353.0" cy="847.0" r="5.4" fill="#05080a"/>
+<circle cx="353.00" cy="919.00" r="14.40" fill="none" stroke="#0a1410" stroke-width="7.20"/>
+<circle cx="353.00" cy="919.00" r="28.80" fill="none" stroke="#0a1410" stroke-width="7.20"/>
+<circle cx="353.00" cy="919.00" r="43.20" fill="none" stroke="#0a1410" stroke-width="7.20"/>
+<circle cx="353.00" cy="919.00" r="5.40" fill="#0a1410"/>
+<text x="353.0" y="1033.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">redaphid</text>
+<circle cx="579.0" cy="919.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="579.0" cy="847.0" r="5.4" fill="#05080a"/>
+<circle cx="579.00" cy="919.00" r="13.05" fill="none" stroke="#0a1410" stroke-width="8.10"/>
+<circle cx="579.00" cy="919.00" r="26.10" fill="none" stroke="#0a1410" stroke-width="9.00"/>
+<circle cx="579.00" cy="919.00" r="41.85" fill="none" stroke="#0a1410" stroke-width="8.10"/>
+<circle cx="579.00" cy="919.00" r="5.40" fill="#0a1410"/>
+<text x="579.0" y="1033.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">jared</text>
+<circle cx="805.0" cy="919.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="805.0" cy="847.0" r="5.4" fill="#05080a"/>
+<circle cx="805.00" cy="919.00" r="13.05" fill="none" stroke="#0a1410" stroke-width="8.10"/>
+<circle cx="805.00" cy="919.00" r="27.90" fill="none" stroke="#0a1410" stroke-width="7.20"/>
+<circle cx="805.00" cy="919.00" r="40.05" fill="none" stroke="#0a1410" stroke-width="8.10"/>
+<circle cx="805.00" cy="919.00" r="5.40" fill="#0a1410"/>
+<text x="805.0" y="1033.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">virginia</text>
+<text x="14" y="1066" font-size="15" font-family="monospace" fill="#e8f8ee">theme: sigil</text>
+<circle cx="127.0" cy="1193.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="127.0" cy="1121.0" r="5.4" fill="#05080a"/>
+<line x1="130.63" y1="1201.19" x2="150.43" y2="1201.19" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="150.43" y1="1201.19" x2="150.43" y2="1220.99" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="150.43" y1="1220.99" x2="130.63" y2="1220.99" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="130.63" y1="1220.99" x2="130.63" y2="1240.79" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<circle cx="130.63" cy="1201.19" r="5.40" fill="#0a1410"/>
+<text x="127.0" y="1307.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">sterling</text>
+<circle cx="353.0" cy="1193.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="353.0" cy="1121.0" r="5.4" fill="#05080a"/>
+<line x1="354.34" y1="1193.20" x2="354.34" y2="1176.10" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="354.34" y1="1176.10" x2="354.34" y2="1159.00" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="354.34" y1="1159.00" x2="337.24" y2="1159.00" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="337.24" y1="1159.00" x2="337.24" y2="1176.10" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="337.24" y1="1176.10" x2="320.14" y2="1176.10" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<circle cx="354.34" cy="1193.20" r="5.40" fill="#0a1410"/>
+<text x="353.0" y="1307.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">brycen</text>
+<circle cx="579.0" cy="1193.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="579.0" cy="1121.0" r="5.4" fill="#05080a"/>
+<line x1="583.68" y1="1193.91" x2="600.78" y2="1193.91" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="600.78" y1="1193.91" x2="600.78" y2="1211.01" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="600.78" y1="1211.01" x2="583.68" y2="1211.01" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="583.68" y1="1211.01" x2="583.68" y2="1193.91" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="583.68" y1="1193.91" x2="571.59" y2="1206.00" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="571.59" y1="1206.00" x2="554.49" y2="1206.00" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="554.49" y1="1206.00" x2="537.39" y2="1206.00" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<circle cx="583.68" cy="1193.91" r="5.40" fill="#0a1410"/>
+<text x="579.0" y="1307.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">fm__lou</text>
+<circle cx="805.0" cy="1193.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="805.0" cy="1121.0" r="5.4" fill="#05080a"/>
+<line x1="802.93" y1="1195.26" x2="825.43" y2="1195.26" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="825.43" y1="1195.26" x2="832.39" y2="1216.65" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="832.39" y1="1216.65" x2="814.18" y2="1229.88" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="814.18" y1="1229.88" x2="836.68" y2="1229.88" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="836.68" y1="1229.88" x2="818.48" y2="1216.65" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="818.48" y1="1216.65" x2="800.28" y2="1229.88" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<line x1="800.28" y1="1229.88" x2="782.08" y2="1216.65" stroke="#0a1410" stroke-width="11.70" stroke-linecap="round"/>
+<circle cx="802.93" cy="1195.26" r="5.40" fill="#0a1410"/>
+<text x="805.0" y="1307.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">eddy_hart</text>
+<circle cx="127.0" cy="1437.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="127.0" cy="1365.0" r="5.4" fill="#05080a"/>
+<line x1="122.24" y1="1429.06" x2="110.99" y2="1409.58" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="110.99" y1="1409.58" x2="122.24" y2="1390.09" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="122.24" y1="1390.09" x2="133.49" y2="1409.58" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="133.49" y1="1409.58" x2="110.99" y2="1409.58" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="110.99" y1="1409.58" x2="122.24" y2="1429.06" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="122.24" y1="1429.06" x2="99.74" y2="1429.06" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<circle cx="122.24" cy="1429.06" r="5.40" fill="#0a1410"/>
+<text x="127.0" y="1551.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">elli</text>
+<circle cx="353.0" cy="1437.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="353.0" cy="1365.0" r="5.4" fill="#05080a"/>
+<line x1="354.21" y1="1440.16" x2="337.11" y2="1440.16" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="337.11" y1="1440.16" x2="320.01" y2="1440.16" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="320.01" y1="1440.16" x2="328.56" y2="1425.36" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="328.56" y1="1425.36" x2="337.11" y2="1410.55" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="337.11" y1="1410.55" x2="345.66" y2="1395.74" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="345.66" y1="1395.74" x2="362.76" y2="1395.74" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="362.76" y1="1395.74" x2="354.21" y2="1410.55" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<circle cx="354.21" cy="1440.16" r="5.40" fill="#0a1410"/>
+<text x="353.0" y="1551.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">redaphid</text>
+<circle cx="579.0" cy="1437.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="579.0" cy="1365.0" r="5.4" fill="#05080a"/>
+<line x1="574.85" y1="1443.44" x2="592.67" y2="1425.62" stroke="#0a1410" stroke-width="9.00" stroke-linecap="round"/>
+<line x1="592.67" y1="1425.62" x2="574.85" y2="1407.80" stroke="#0a1410" stroke-width="9.00" stroke-linecap="round"/>
+<line x1="574.85" y1="1407.80" x2="592.67" y2="1389.98" stroke="#0a1410" stroke-width="9.00" stroke-linecap="round"/>
+<line x1="592.67" y1="1389.98" x2="610.49" y2="1407.80" stroke="#0a1410" stroke-width="9.00" stroke-linecap="round"/>
+<line x1="610.49" y1="1407.80" x2="585.29" y2="1407.80" stroke="#0a1410" stroke-width="9.00" stroke-linecap="round"/>
+<line x1="585.29" y1="1407.80" x2="603.11" y2="1425.62" stroke="#0a1410" stroke-width="9.00" stroke-linecap="round"/>
+<circle cx="574.85" cy="1443.44" r="5.40" fill="#0a1410"/>
+<text x="579.0" y="1551.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">jared</text>
+<circle cx="805.0" cy="1437.0" r="99.0" fill="url(#glow)" stroke="#0c1810" stroke-width="1"/>
+<circle cx="805.0" cy="1365.0" r="5.4" fill="#05080a"/>
+<line x1="806.76" y1="1437.89" x2="781.56" y2="1437.89" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="781.56" y1="1437.89" x2="763.74" y2="1455.71" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="763.74" y1="1455.71" x2="763.74" y2="1430.51" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="763.74" y1="1430.51" x2="781.56" y2="1412.69" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<line x1="781.56" y1="1412.69" x2="799.38" y2="1394.87" stroke="#0a1410" stroke-width="9.90" stroke-linecap="round"/>
+<circle cx="806.76" cy="1437.89" r="5.40" fill="#0a1410"/>
+<text x="805.0" y="1551.0" text-anchor="middle" font-size="11" font-family="monospace" fill="#7fe6a8">virginia</text>
+</svg>
