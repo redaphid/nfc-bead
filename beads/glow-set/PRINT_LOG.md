@@ -52,3 +52,38 @@ an early 0 as "no filament loaded".
   pocket. Snap-fit grip at `PEG_CLEAR` and the 10.5 mm pocket are both unproven
   on this shape — redaphid-portrait needed six iterations before the halves
   gripped, so do not assume this one is done.
+
+---
+
+## Known intermittent contaminant — cat hair on the plate
+
+Reported by the user 2026-09-02: he has washed the plate repeatedly and keeps
+finding stray cat hairs on it, and expects some are still there.
+
+This is worth writing down because it **mimics a geometry or calibration fault
+and is not one**. A hair is a point contaminant that lands somewhere different
+on every plate, so the printer "fails, gets fixed, then fails again" — a
+pattern that reads like a bad Z-offset but is really a fresh hair in a new
+spot. Do not re-derive a calibration theory from an intermittent first-layer
+failure on this machine until the plate has been checked.
+
+Which face gets hurt depends on the half, because the two print in opposite
+orientations (`.claude/skills/bead-stl-export/export.py`: `Bottom: 180`,
+Top unflipped):
+
+- **Top** prints with its **socket / mating face against the plate**. A hair
+  here lands on the surface that has to seat flat, in among the peg sockets.
+  The failure presents as *the halves will not grip* — which invites blaming
+  `PEG_CLEAR` and re-cutting geometry that was fine. Check the mating face
+  before touching peg clearance.
+- **Bottom** prints with its **silhouette / show face against the plate**, so a
+  hair there is a cosmetic divot on the face that is meant to glow.
+
+Practical notes: a solvent wipe lifts oils but not hair — hair needs tape, a
+lint roller, or a rinse under running water. Re-contamination happens while the
+plate air-dries or sits open, so the pass that matters is the one done
+immediately before starting the print, not at cleaning time. Keeping the
+enclosure shut between prints is the cheap mitigation.
+
+Because it is random, the honest hedge for a batch is to **print spares and
+inspect**, rather than trying to guarantee a clean plate.
