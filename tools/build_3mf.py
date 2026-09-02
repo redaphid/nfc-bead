@@ -258,14 +258,12 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
     for fname, dispname, extruder, _zoff in [(PARTS_BOTTOM[0])] + PARTS_TOP_ASSEMBLY:
         stl_path = TMP_LATEST / fname
         if not stl_path.is_file():
-            # NOTE: build_3mf's assembly layout assumes exactly Bottom+Top+
-            # Decoration (parts[2] is indexed directly in 6 places). For a
-            # SINGLE-FILAMENT bead use `nfc-make-3mf`, which handles a missing
-            # Decoration, and set the brim in the slicer. Making this path
-            # decoration-optional is worth doing when the black-inscription
-            # phase lands and the multi-part path gets revisited.
-            raise SystemExit(f"missing STL: {stl_path}  "
-                             f"(single-filament bead? use nfc-make-3mf)")
+            # Decoration is optional - a single-filament bead has no accent
+            # part. Bottom and Top remain required.
+            if fname == "Decoration.stl":
+                print(f"  {fname:<24} absent - single-filament bead")
+                continue
+            raise SystemExit(f"missing STL: {stl_path}")
         v, t = read_binary_stl(stl_path)
         print(f"  {fname:<24} {len(v):>5} verts  {len(t):>5} tris")
         parts.append({
@@ -287,18 +285,23 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
     #     child Bottom   (id 4, model file Bottom.model:4)
     bottom = parts[0]
     top    = parts[1]
-    decor  = parts[2]
+    decor  = parts[2] if len(parts) > 2 else None
 
     bottom["object_id"] = 4
     top["object_id"]    = 1
-    decor["object_id"]  = 2
     bottom["parent_id"] = 5
     top["parent_id"]    = 3   # shared parent
-    decor["parent_id"]  = 3   # shared parent
+    if decor is not None:
+        decor["object_id"]  = 2
+        decor["parent_id"]  = 3   # shared parent
+    # Everything downstream iterates top_children, so a two-part (single
+    # filament) bead and a three-part (body + inscription) bead share a path.
+    top_children = [top] if decor is None else [top, decor]
 
     bottom["model_path"] = "/3D/Objects/Bottom.model"
     top["model_path"]    = "/3D/Objects/top_assembly.model"
-    decor["model_path"]  = "/3D/Objects/top_assembly.model"   # same file, different objectid
+    if decor is not None:
+        decor["model_path"] = "/3D/Objects/top_assembly.model"  # same file, different objectid
 
     for p in parts:
         p["uuid"] = str(uuid.uuid4())
@@ -319,7 +322,7 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
                               'requiredextensions="p">\n')
     top_assembly_model.write(' <metadata name="BambuStudio:3mfVersion">1</metadata>\n')
     top_assembly_model.write(' <resources>\n')
-    for p in (top, decor):
+    for p in top_children:
         top_assembly_model.write(f'  <object id="{p["object_id"]}" p:UUID="{p["uuid"]}" type="model">\n')
         top_assembly_model.write('   <mesh>\n')
         top_assembly_model.write('    <vertices>\n')
@@ -342,10 +345,8 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
     # Top assembly parent: Top body at z=0, Decoration at z=0 (geometry already has z=2.5..3.0)
     top_parent_xml = build_object_model_xml(
         top["parent_id"],
-        [
-            (top["model_path"],   top["object_id"],   identity_with_translation(0, 0, 0), str(uuid.uuid4())),
-            (decor["model_path"], decor["object_id"], identity_with_translation(0, 0, 0), str(uuid.uuid4())),
-        ],
+        [(p["model_path"], p["object_id"], identity_with_translation(0, 0, 0),
+          str(uuid.uuid4())) for p in top_children],
     )
     parent_chunks.append(top_parent_xml)
 
@@ -383,10 +384,8 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False):
     #   Decoration is at z=2.5..3.0 (per the export's shared-shift fix)
     top_assembly_meta = (
         top["parent_id"],
-        [
-            (top["object_id"],   top["name"],   str(top["stl_path"]),   identity_with_translation(0, 0, 0), top["extruder"]),
-            (decor["object_id"], decor["name"], str(decor["stl_path"]), identity_with_translation(0, 0, 0), decor["extruder"]),
-        ],
+        [(p["object_id"], p["name"], str(p["stl_path"]),
+          identity_with_translation(0, 0, 0), p["extruder"]) for p in top_children],
     )
     bottom_meta = (
         bottom["parent_id"],

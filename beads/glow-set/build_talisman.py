@@ -32,6 +32,29 @@ if HERE not in sys.path:
 
 import shapes as S          # noqa: E402
 import talismans as T       # noqa: E402
+import foils as FO          # noqa: E402
+
+
+def _resample(pts, step_mm=0.35):
+    """Foils are sampled at 600 points; at 32mm that is 0.17mm per segment,
+    finer than the nozzle can resolve and just bloat in the STL. Drop points
+    that are closer together than step_mm."""
+    out = [pts[0]]
+    for q in pts[1:]:
+        if math.hypot(q[0] - out[-1][0], q[1] - out[-1][1]) >= step_mm:
+            out.append(q)
+    if math.hypot(out[0][0] - out[-1][0], out[0][1] - out[-1][1]) < step_mm:
+        out.pop()
+    return out
+
+
+def get_outline():
+    """BEAD_SHAPE selects the source: "foil:quatrefoil" or "talisman:<seed>"."""
+    spec = os.environ.get("BEAD_SHAPE", "talisman:" + SEED)
+    kind, _, which = spec.partition(":")
+    if kind == "foil":
+        return _resample(FO.build(which, r=R_OUT))
+    return T.talisman(which or SEED, r_out=R_OUT)
 
 # CONFIG ====================================================================
 NAME   = os.environ.get("BEAD_NAME", "shield")   # which talisman to build
@@ -133,7 +156,7 @@ def main():
     print("=" * 64)
     wipe()
 
-    pts = T.talisman(SEED, r_out=R_OUT)
+    pts = get_outline()
     fit = S.fit_report(pts)
     if not fit["ok"]:
         raise RuntimeError("%s: silhouette does not fit the hardware" % NAME)
