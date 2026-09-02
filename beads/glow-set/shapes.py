@@ -110,10 +110,15 @@ def place_pocket(pts, step=0.4):
     return (bx, by, best)
 
 
-def place_pegs(pts, pocket, peg_r=PEG_R, wall=0.55, n=3):
+def place_pegs(pts, pocket, peg_r=PEG_R, wall=0.9, n=3, hole_y=None):
     """Pick n peg positions in solid material, clear of the pocket and the
-    outline, maximising spread. Mirrors how redaphid-portrait actually placed
-    its ear + chin pegs at different radii."""
+    outline. Mirrors how redaphid-portrait placed its ear + chin pegs.
+
+    wall=0.9 (not 0.55): PRINT_LOG v5b records jaw pegs that PASSED the
+    perimeter raycast yet left a wall thinner than one perimeter width, which
+    printed as voids and stringing around the socket. Maximising spread alone
+    actively pushes pegs toward the boundary, so spread is now maximised only
+    among candidates that already clear the wall."""
     px0, py0, _ = pocket
     cands = []
     for ring in [r * 0.35 for r in range(18, 46)]:        # 6.3 .. 15.7 mm
@@ -123,6 +128,12 @@ def place_pegs(pts, pocket, peg_r=PEG_R, wall=0.55, n=3):
             if clearance(pts, x, y) < peg_r + wall:
                 continue
             if math.hypot(x - px0, y - py0) < POCKET_R + peg_r + 0.5:
+                continue
+            # the string hole is a tube along X at y=hole_y, living in the SAME
+            # half as the peg sockets. A socket that lands within its band
+            # breaches the cord tube - caught by a raycast reporting a socket
+            # floor 0.3mm off from its siblings.
+            if hole_y is not None and abs(y - hole_y) < HOLE_R + peg_r + 0.6:
                 continue
             cands.append((x, y))
     if len(cands) < n:
@@ -174,8 +185,9 @@ def fit_report(pts):
     """Can this silhouette actually be a bead? Returns a dict."""
     pocket = place_pocket(pts)
     pocket_ok = pocket[2] >= POCKET_R + WALL
-    pegs = place_pegs(pts, pocket) if pocket_ok else None
     hole = place_hole(pts)
+    pegs = (place_pegs(pts, pocket, hole_y=hole[0] if hole else None)
+            if pocket_ok else None)
     w, h = extent(pts)
     return {
         "pocket": pocket, "pocket_ok": pocket_ok,
