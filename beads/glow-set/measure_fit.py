@@ -1,56 +1,125 @@
-import sys, numpy as np, trimesh
-PEG = (7.67, 0.67)
+"""Measure the snap fit off the EXPORTED STLs, not off the CONFIG constants.
+
+Recipe gotcha #40: the socket lead-in and the peg tip chamfer both eat into the
+length over which the peg is actually held, and hand-estimating that from
+PEG_HEIGHT / SOCKET_LEADIN / PEG_CHAMFER got it wrong by about 2x. So measure:
+cross-section both halves at 0.1mm steps and compare the socket bore radius to
+the peg radius at the same seated height.
+
+ENGAGEMENT is the answer - the total height over which the gap is at or below
+the design clearance. On this bead family ~1.0mm snaps and holds; 0.50mm was
+audibly loose no matter what PEG_CLEAR said.
+
+Peg positions are DISCOVERED, not assumed. An earlier version hardcoded one
+silhouette's peg coordinates and then reported a confident 0.00mm on every
+other shape, because it was probing empty plastic - a measurement tool that
+returns a plausible number for the wrong place is worse than no tool. The pegs
+are the only islands standing above the mating face, so they can simply be
+found.
+
+Usage:
+    python beads/glow-set/measure_fit.py <bead-dir-name> [...]
+"""
+import pathlib
+import sys
+
+import numpy as np
+import trimesh
+from shapely.geometry import Point, Polygon
+
+REPO = pathlib.Path(__file__).resolve().parents[2]
+PRINT = REPO / "beads" / "glow-set" / "print"
+STEP = 0.1
+MAX_H = 2.6
+
 
 def polys(mesh, z):
-    s = mesh.section(plane_origin=[0,0,z], plane_normal=[0,0,1])
-    if s is None: return []
+    s = mesh.section(plane_origin=[0, 0, z], plane_normal=[0, 0, 1])
+    if s is None:
+        return []
     p, _ = s.to_planar(to_2D=np.eye(4))
     return list(p.polygons_full)
 
-def peg_radius(bot, h):
-    """radius of the peg column at height h above the mating face"""
-    z = MATE_B + h
-    best = None
-    for poly in polys(bot, z):
-        d = poly.distance(__import__('shapely.geometry', fromlist=['Point']).Point(*PEG))
-        if d < 1e-9 and poly.area < 40:          # small island = a peg
-            best = poly.area
-    return None if best is None else (best/np.pi)**0.5
 
-def socket_radius(top, h):
-    """radius of the socket bore at depth h below the mating face plane"""
-    from shapely.geometry import Point
-    z = MATE_T + h
-    pt = Point(*PEG)
-    for poly in polys(top, z):
-        for ring in poly.interiors:
-            from shapely.geometry import Polygon
-            r = Polygon(ring)
-            if r.contains(pt) or r.distance(pt) < 1.5:
-                return (r.area/np.pi)**0.5
+def mating_face(bottom):
+    """z of the face the pegs stand on: the highest z where the body is still
+    a single large cross-section rather than a few peg islands."""
+    lo, hi = bottom.bounds[0][2], bottom.bounds[1][2]
+    for z in np.arange(hi - 0.02, lo, -0.05):
+        if sum(p.area for p in polys(bottom, z)) > 60:
+            return float(z)
     return None
 
-for name in sys.argv[1:]:
-    bot = trimesh.load(f"beads/glow-set/print/{name}/Bottom.stl")
-    top = trimesh.load(f"beads/glow-set/print/{name}/Top.stl")
-    # Bottom: mating face = where the bulk ends (pegs stick up above it)
-    zb = bot.bounds[:,2]
-    MATE_B = None
-    for z in np.arange(zb[1]-0.02, zb[0], -0.05):
-        a = sum(p.area for p in polys(bot, z))
-        if a > 60:                                # bulk body cross-section
-            MATE_B = z; break
-    MATE_T = top.bounds[0,2]
-    print(f"\n=== {name} ===")
-    print(f"  Bottom z {zb[0]:.2f}..{zb[1]:.2f}   mating face z={MATE_B:.2f}  peg protrusion={zb[1]-MATE_B:.2f}mm")
-    print(f"  {'h(mm)':>7} {'peg r':>8} {'socket r':>9} {'gap':>7}")
-    eng = 0.0
-    hs = np.arange(0.0, 2.31, 0.1)
-    for h in hs:
-        pr = peg_radius(bot, h); sr = socket_radius(top, h)
-        if pr is None and sr is None: continue
-        gap = (sr-pr) if (pr and sr) else None
-        if gap is not None and gap <= 0.08: eng += 0.1
-        print(f"  {h:7.2f} {('%.3f'%pr) if pr else '   -  ':>8} "
-              f"{('%.3f'%sr) if sr else '   -  ':>9} {('%.3f'%gap) if gap is not None else '  -  ':>7}")
-    print(f"  ENGAGEMENT (gap<=0.08mm): {eng:.2f} mm")
+
+def find_pegs(bottom, mate_z):
+    """Peg centres, taken just above the mating face where only pegs remain."""
+    out = []
+    for p in polys(bottom, mate_z + 0.25):
+        if p.area < 40:                       # an island, not the body
+            c = p.centroid
+            out.append((c.x, c.y))
+    return out
+
+
+def peg_radius(bottom, xy, z):
+    for p in polys(bottom, z):
+        if p.area < 40 and p.distance(Point(*xy)) < 1e-9:
+            return (p.area / np.pi) ** 0.5
+    return None
+
+
+def socket_radius(top, xy, z):
+    pt = Point(*xy)
+    for p in polys(top, z):
+        for ring in p.interiors:
+            r = Polygon(ring)
+            if r.contains(pt) or r.distance(pt) < 1.5:
+                return (r.area / np.pi) ** 0.5
+    return None
+
+
+def report(name):
+    d = PRINT / name
+    bottom = trimesh.load(d / "Bottom.stl", process=False)
+    top = trimesh.load(d / "Top.stl", process=False)
+    mate_b = mating_face(bottom)
+    mate_t = float(top.bounds[0][2])
+    if mate_b is None:
+        print(f"{name}: could not locate the mating face"); return None
+
+    pegs = find_pegs(bottom, mate_b)
+    if not pegs:
+        print(f"{name}: found NO pegs above the mating face"); return None
+
+    per_peg = []
+    for xy in pegs:
+        eng = 0.0
+        gaps = []
+        for h in np.arange(0.0, MAX_H, STEP):
+            pr = peg_radius(bottom, xy, mate_b + h)
+            sr = socket_radius(top, xy, mate_t + h)
+            if pr is None or sr is None:
+                continue
+            gap = sr - pr
+            gaps.append(gap)
+            if gap <= 0.08:
+                eng += STEP
+        per_peg.append((xy, eng, min(gaps) if gaps else float("nan")))
+
+    worst = min(e for _, e, _ in per_peg)
+    print(f"{name:<28} pegs={len(pegs)}  "
+          f"engagement min={worst:.2f}mm "
+          f"[{', '.join('%.2f' % e for _, e, _ in per_peg)}]  "
+          f"gap={min(g for _, _, g in per_peg):.3f}mm")
+    return worst
+
+
+if __name__ == "__main__":
+    names = sys.argv[1:]
+    if not names:
+        raise SystemExit(__doc__)
+    worst = [report(n) for n in names]
+    bad = [n for n, w in zip(names, worst) if w is None or w < 0.9]
+    if bad:
+        raise SystemExit(f"\nFAIL: engagement under 0.9mm on {', '.join(bad)}")
+    print("\nFIT OK - every peg engages >= 0.9mm")

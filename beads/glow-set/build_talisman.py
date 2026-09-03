@@ -57,15 +57,36 @@ def _resample(pts, step_mm=0.35):
     return out
 
 
+VOIDS = []      # interior holes; filled in by get_outline for json: sources
+
+
 def get_outline():
-    """BEAD_SHAPE selects the source: "foil:quatrefoil", "shape:skull" or
-    "talisman:<seed>".
+    """BEAD_SHAPE selects the source: "foil:quatrefoil", "shape:skull",
+    "talisman:<seed>" or "json:<path>".
+
+    json: is a motif outline exported by motif_outline.py. It exists because
+    japanese.py / chinese.py / adinkra.py trace their glyphs from an SDF with
+    scikit-image, and Blender's bundled Python has numpy but NOT scikit-image -
+    those libraries cannot even be imported in here. So the polygon is solved
+    on the host and handed over as plain points; this process needs nothing
+    beyond bpy. The JSON doubles as the audit record of exactly which polygon
+    was extruded.
 
     shapes.SHAPES are drawn at their final size in absolute mm, so BEAD_R does
     NOT apply to them - a skull is the size its author drew it.
     """
+    global VOIDS
     spec = os.environ.get("BEAD_SHAPE", "talisman:" + SEED)
     kind, _, which = spec.partition(":")
+    if kind == "json":
+        import json
+        with open(which) as fh:
+            doc = json.load(fh)
+        VOIDS = [[(float(x), float(y)) for x, y in v]
+                 for v in doc.get("voids", [])]
+        print("  source    : %s/%s (%s)"
+              % (doc.get("lib"), doc.get("name"), os.path.basename(which)))
+        return [(float(x), float(y)) for x, y in doc["outer"]]
     if kind == "foil":
         return _resample(FO.build(which, r=R_OUT))
     if kind == "shape":
@@ -198,6 +219,19 @@ def main():
 
     full = extrude_polygon(pts, BODY)
     print("  extruded  : non-manifold=%d" % nonmanifold(full))
+
+    # Interior holes are cut as real solids rather than keyhole-bridged into
+    # the outer ring. A keyhole leaves two coincident edges, which clean_mesh's
+    # remove_doubles welds into non-manifold geometry, and opening the hop into
+    # a slit puts a feature below what a 0.4mm nozzle can resolve. The cutter
+    # overshoots the body in Z so there are no coplanar faces for the solver.
+    for _i, _v in enumerate(VOIDS):
+        _cut = extrude_polygon(_v, BODY + 4.0, name="Void%d" % _i)
+        boolean_op(full, _cut, 'DIFFERENCE', "Void%d" % _i)
+    if VOIDS:
+        clean_mesh(full)
+        print("  voids     : %d cut, non-manifold=%d"
+              % (len(VOIDS), nonmanifold(full)))
 
     z_min, z_max = -BODY / 2.0, BODY / 2.0
     z_split = z_min + BOTTOM_THICK                  # asymmetric seam, gotcha #31
