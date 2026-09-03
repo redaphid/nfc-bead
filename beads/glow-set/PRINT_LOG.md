@@ -6,7 +6,59 @@ propagating to the recipe.
 
 ---
 
-## test20-red, 20 mm solid red — 2026-09-02 — SLICED HEADLESSLY AND PRINTED
+## test20, 20 mm — 2026-09-02 — PRINTED ON SLOT 1; SOCKET FUNNEL WORKS
+
+Second attempt, and the one that produced parts. Both halves, black, slot 1.
+
+### The first attempt printed NOTHING, and reported success
+
+`test20red.gcode` targeted **slot 2**, which had no filament in it. The job ran
+all 15 layers with a dry extruder and finished with **`task_status: 1`**,
+`CurrentTicks == TotalTicks`, empty `exception_status`. I reported it as a
+successful print. He looked at the machine: *"looks like nothing printed at
+all."*
+
+**`task_status: 1` means the gcode ran. It is not evidence that a part
+exists.** Every check available in the API is a check on the JOB, and they all
+stay green when nothing is extruded.
+
+**The tell was `filament_detected`, and it was there the whole time.** It read
+**0 for the entire dry job** — including mid-print at layers 10 and 13, with
+`filament_detect_enable: 1`. This log's own earlier entry says that flag reads
+0 through the preamble and flips to 1 once loading completes, so a 0 at layer
+13 contradicted the note outright; it got explained away instead of read. On
+the successful slot-1 run it read **1** by layer 1. That is the check to watch.
+
+Cheap prior for next time: every recent successful job draws from `t:0`
+(slot 1). A job aimed at another slot is the unusual one — confirm the filament
+before starting, since the API exposes no slot inventory at all.
+
+### The socket funnel works
+
+Before, each socket was ringed by a **raised crater of curled extrudate**
+standing proud of the mating face, with the bore ovalised and partly occluded.
+
+After, with `SOCKET_LEADIN = 0.4`: the sockets are **round, open, and flush** —
+no raised rim at all, the surrounding face is flat, and the countersink shows
+as clean concentric steps (the 45° chamfer stepped at 0.2 mm layers). Pegs came
+out formed with their tip taper intact. Both halves lay flat; no obvious lift,
+so the brim and the delayed cooling look right, though neither was isolated.
+
+Caveat worth keeping: this print changed **four** things at once relative to
+the photographed one — funnel, `seam_position=random`, brim, delayed cooling.
+The old part was made from a pre-sliced gcode predating all of them. So the
+funnel is not independently proven; it is only consistent with the improvement.
+
+**Still unproven: the snap fit.** Neither half has been test-fitted and no NFC
+tag has been seated. redaphid-portrait needed six iterations before the halves
+gripped.
+
+Minor: a small ooze blob with whiskers fused to the Top half's rim at one
+point. Cosmetic, trims off.
+
+---
+
+## test20-red, 20 mm solid red — 2026-09-02 — first attempt, printed nothing
 
 **The box has a slicer after all, and it slices from the command line.** It is
 `D:\tools\elegooslicer\elegoo-slicer.exe` — *with a hyphen*. Searching for
