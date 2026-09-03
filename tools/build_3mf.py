@@ -254,8 +254,31 @@ def build_model_settings(top_assembly, bottom, body_extruder=2):
 
 
 # ─── Main builder ─────────────────────────────────────────────────────
+def _patch_array_element(text, key, index, value, label):
+    """Replace ONE element of a per-filament array, preserving the others.
+
+    Used for filament_colour, where the point is to make a slot's colour
+    visible in the slicer preview. A silent no-op here would ship a preview
+    showing the template's colour while the log claims otherwise, so a miss is
+    fatal rather than ignored.
+    """
+    m = re.search(rf'"{key}"\s*:\s*\[([^\]]*)\]', text)
+    if not m:
+        raise SystemExit(f"[3mf] {label}: key {key!r} not found in template.")
+    elems = re.findall(r'"([^"]*)"', m.group(1))
+    if index >= len(elems):
+        raise SystemExit(
+            f"[3mf] {label}: slot {index + 1} is out of range - the template "
+            f"profile only defines {len(elems)} filament slots. Load the "
+            f"filament in the slicer and re-save the reference 3MF.")
+    elems[index] = value
+    body = ",\n        ".join(f'"{e}"' for e in elems)
+    return text[:m.start()] + f'"{key}": [\n        {body}\n    ]' + text[m.end():]
+
+
 def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
-          body_extruder=2, keep_cooling=False):
+          body_extruder=2, keep_cooling=False, decoration_extruder=1,
+          body_colour=None):
     if not template_dir.is_dir():
         raise SystemExit(f"Template dir missing: {template_dir}\n"
                          f"  Drop a reference .3mf into tmp/latest/ and extract it there, "
@@ -270,6 +293,16 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
         if _m:
             PRODUCER = _m.group(1).strip()
             print(f"[3mf] producer adopted from template: {PRODUCER}")
+
+    # A two-colour bead whose two parts name the SAME slot prints as one
+    # colour, and nothing downstream would complain - the 3MF is valid, it just
+    # silently loses the decoration. Catch it here.
+    if (TMP_LATEST / "Decoration.stl").is_file() \
+            and body_extruder == decoration_extruder:
+        raise SystemExit(
+            f"[3mf] body and decoration are both on slot {body_extruder}. This "
+            f"bead has a Decoration.stl, so that would print it as a single "
+            f"colour. Pass --body-extruder / --decoration-extruder.")
 
     # 1. Read STL geometry
     print(f"[3mf] reading STLs from {TMP_LATEST}")
@@ -288,10 +321,11 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
         parts.append({
             "filename":  fname,
             "name":      dispname,
-            # Decoration keeps its own accent slot; the body follows
-            # --body-extruder so a single-filament bead lands on the slot
-            # actually loaded with that colour (see below).
-            "extruder":  extruder if dispname == "Decoration" else body_extruder,
+            # Decoration takes the accent slot and the body takes its own, so
+            # each names the slot actually loaded with that colour. The
+            # per-part default in PARTS_* is only a fallback.
+            "extruder":  (decoration_extruder if dispname == "Decoration"
+                          else body_extruder),
             "stl_path":  stl_path,
             "verts":     v,
             "tris":      t,
@@ -544,6 +578,20 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
                                 + project_settings[m.end():])
 
         allk = list(patches) + list(array_patches)
+
+        # BODY COLOUR. The saved profile describes four Elegoo PLA slots as
+        # black / red / white / blue - it has no entry for glow filament. A
+        # glow bead therefore points at a slot whose recorded colour is a lie,
+        # and the slicer preview would render the body red (or blue) while the
+        # log claims glow. Rewriting the slot's colour makes the intent visible
+        # in the preview, so a wrong slot is something you SEE rather than
+        # something you discover after the print.
+        if body_colour:
+            project_settings = _patch_array_element(
+                project_settings, "filament_colour", body_extruder - 1,
+                body_colour, "body colour")
+            allk.append(f"filament_colour[{body_extruder}]={body_colour}")
+
         print(f"[3mf] patched project_settings: {', '.join(allk)}")
 
     slice_info = (
@@ -640,10 +688,21 @@ def main():
                         "single-colour bead must name the slot actually holding "
                         "that filament - 1 is black in the saved profile - or "
                         "it prints in the wrong colour.")
+    p.add_argument("--decoration-extruder", type=int, default=1, metavar="N",
+                   help="filament slot for the Decoration part (default 1, "
+                        "black in the saved profile). Ignored for a bead with "
+                        "no Decoration.stl.")
+    p.add_argument("--body-colour", default=None, metavar="HEX",
+                   help="rewrite the body slot's colour in the profile, e.g. "
+                        "#7CFC00 for glow-green. The saved profile has no glow "
+                        "slot, so without this the preview shows the body in "
+                        "whatever colour that slot was last saved as.")
     args = p.parse_args()
     build(out_path=Path(args.out), template_dir=Path(args.template_dir),
           no_brim=args.no_brim, body_extruder=args.body_extruder,
-          keep_cooling=args.keep_cooling)
+          keep_cooling=args.keep_cooling,
+          decoration_extruder=args.decoration_extruder,
+          body_colour=args.body_colour)
 
 
 if __name__ == "__main__":
