@@ -23,10 +23,67 @@ That writes `tmp/latest/bead_multicolor.3mf` with:
 
 - **`Bottom`** as one object on the plate, assigned to **Filament 2** (red body)
 - **`Top` + `Decoration`** as a single multi-part object on the plate; **`Top`** on Filament 2 (red), **`Decoration`** on Filament 1 (black). Already merged — no manual "Combine into one object" step needed.
-- **`brim_type=no_brim`, `raft_layers=0`** patched into the project settings (no extra raft/brim around the parts).
+- **`brim_type=auto_brim`, `brim_width=5`, `raft_layers=0`** patched into the project settings.
+  **This guide used to say `no_brim`, and that was wrong** — a 3MF that reached the plate
+  without a brim smeared its first layer, and the 3MF that printed cleanly carried
+  `auto_brim` at 5 mm. A missing printer profile is the usual way the brim goes absent
+  (see recipe gotcha #33). Keep the brim; it is the adhesion fix, not clutter.
 - **Centauri Carbon 2 printer profile** preserved from the reference 3MF in `tmp/latest/slicer_template/` — process preset, machine config, filament slots all match what's on your slicer.
 
 Drag `tmp/latest/bead_multicolor.3mf` into Elegoo Slicer, verify the layer preview shows red body + black spiral at the right Z, and press slice.
+
+
+## Printing autonomously over the MCP (no GUI)
+
+The whole path is scriptable — this box has a **headless slicer** at
+`D:	ools\elegooslicer\elegoo-slicer.exe` (note the hyphen; searching for
+`ElegooSlicer.exe` finds nothing and two sessions wrongly concluded there was no
+slicer here). It is a GUI-subsystem binary that prints nothing to the console,
+so judge it by the artifact it writes, not by its output:
+
+```sh
+# 3MF -> gcode; emits plate_1.gcode into the output dir
+/d/tools/elegooslicer/elegoo-slicer.exe --slice 0     --outputdir "D:\path	o\out" "D:\path	o\project.3mf"
+
+# the MCP server runs in a container and cannot see host paths -
+# stage the file into it first, then upload by its CONTAINER path
+docker cp "D:\path	o\out\plate_1.gcode" centauri-mcp:/tmp/job.gcode
+```
+
+Then `upload_file(local_path="/tmp/job.gcode")` and `start_print(...)`.
+
+### Pre-flight — do not skip these, each one has burned a real print
+
+1. **`filament_detected` must read 1 once layers are advancing.** A dry extruder
+   runs the whole job and still reports `task_status: 1` — recipe gotcha #41,
+   two phantom prints so far. It reads 0 *legitimately* through preheat, bed
+   mesh, nozzle wipe and load, so poll until `CurrentLayer >= 1` and judge it
+   there; if layers are climbing with the flag at 0, `stop_print`.
+   **Do not gate on the idle reading** — a print that sat at idle-0 loaded fine
+   and produced a real part, so that test only yields false negatives.
+2. **Check the gcode draws from the slot you think it does.**
+   `grep -a "^; filament used \[g\]"` shows usage per slot *in position order*,
+   and `grep -a "M6211 A1 L[0-9]* T[0-9]*"` shows which tool it loads.
+   **Black is the FIRST slot (`T0`); red is the SECOND (`T1`).** Every job drawn
+   from `T0` has succeeded here; `T1` has failed to auto-load twice.
+3. **Confirm the uploaded file is really gcode.** `list_files` shows a real job
+   with populated `layer` / `print_time` / `color_map`. A `.3mf` uploads happily
+   and sits inert at `layer: 0` — see gotcha #35.
+4. **`Ack: 0` from `start_print` is not proof.** Confirm `state: 2` with a
+   non-empty `TaskId`.
+
+### Judging the result
+
+`task_status: 1` only means the gcode ran to the end. **The chamber camera
+cannot see the plate centre** — it looks across the front lip, so a snapshot
+reads empty both before and after a good print. A human has to look. Ask them
+about the **purge line** specifically: no purge line means filament never
+reached the nozzle; a purge line with no part means adhesion.
+
+Watch the flag *during* the run too, not just at the start — poll rather than
+sleeping until the end, because a warm bed collapses the ~12 minute preamble to
+about 3 and it is easy to sleep straight past the window where aborting would
+still have saved the filament.
 
 ## Reference 3MF template (one-time setup)
 

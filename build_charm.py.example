@@ -47,8 +47,16 @@ NFC_POS = (0.0, -1.0)    # (X, Y) center
 # (gotcha #29): 2.0 mm/0.1 mm was too narrow + loose to grip. 2.6 mm dia at
 # 0.05 mm radial clearance holds firmly on the Centauri Carbon 2.
 PEG_DIAMETER = 2.6        # mm
-PEG_HEIGHT = 1.5          # mm
-PEG_CLEARANCE = 0.05      # mm radial gap for peg holes
+PEG_HEIGHT = 1.5          # mm — see gotcha #40: size this from ENGAGEMENT, not
+                          # by copying. Aim for ~1.0mm of FULL-DIAMETER peg
+                          # inside the socket. The chamfer costs
+                          # PEG_CHAMFER+0.15, and a socket lead-in (if you add
+                          # one) costs its full depth on top. 1.5 here gives
+                          # ~1.0mm because this pipeline has no lead-in; the
+                          # glow-set build, which does, needs 1.8.
+PEG_CLEARANCE = 0.02      # mm radial gap for peg holes. 0.05 printed a bead
+                          # that snapped audibly but would NOT hold; 0.02 was
+                          # perfect. Measured on hardware — gotcha #40.
 PEG_CHAMFER = 0.35        # mm — lead-in taper on the peg TIP (gotcha #30). Blunt
                           # tips catch on the socket rim and must be forced;
                           # tapering the tip lets each peg self-start. 0 = none.
