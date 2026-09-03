@@ -322,7 +322,7 @@ This is the general shape of the worst bugs in this repo. When you change someth
 - **Decoration** (raised spiral / emboss / etc.): flat side on the build plate.
 - Settings: PLA or PETG, 0.12–0.16 mm layer height, 100% infill (these are tiny), no supports.
 
-### 33. Blender 5.0 headless hangs unless you pass `--gpu-backend opengl`
+### 38. Blender 5.0 headless hangs unless you pass `--gpu-backend opengl`
 
 `blender.exe -b --python build_<charm>.py` **hangs forever** in a headless/agent shell. Blender 5.0 defaults to the **Vulkan** backend and Vulkan context creation blocks when there is no desktop session. Always run:
 
@@ -332,7 +332,7 @@ blender.exe -b --gpu-backend opengl --python beads/<name>/build_<name>.py
 
 The hang is easy to misread as a slow boolean solve. It isn't: the process sits at **~0.03 s CPU and ~18 MB working set** with **zero output**, having never reached your script. Check CPU time, not the log — Python's stdout is block-buffered when redirected, so a *working* run also shows an empty log for a long while. `blender --version` returns instantly even while `-b` hangs (it exits before app init), so a working `--version` proves nothing; probe with `-b --gpu-backend opengl --python-expr "print('OK')"`.
 
-### 34. UNIONing decoration primitives: never let them share a face or a tangent
+### 39. UNIONing decoration primitives: never let them share a face or a tangent
 
 Building a raised decoration by UNIONing per-stroke solids (bars, end-caps, rings) is the natural approach and it *silently* produces non-manifold garbage — 1020 non-manifold edges on a 7-stroke sigil. The EXACT solver is fine with solids that cross transversally and bad at the two degenerate contacts, both of which this construction creates by default:
 
