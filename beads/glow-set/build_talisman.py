@@ -109,7 +109,10 @@ NFC_DIAMETER = 10.5
 NFC_DEPTH    = 0.8
 PEG_DIAMETER = 2.6       # gotcha #29 - 2.0mm does NOT grip
 PEG_HEIGHT   = 1.8       # gotcha #40 - funnel + tip chamfer eat 0.9mm of it
-PEG_CLEAR    = 0.02      # radial; 0.05 snapped but would not hold (gotcha #40)
+PEG_CLEAR    = 0.01      # radial. 0.05 snapped but slid apart; 0.02 still read
+                         # slightly loose in the hand. Depth is maxed out - the
+                         # socket already eats 2.05 of the Top's 3.0mm - so the
+                         # socket is what tightens from here (gotcha #40).
 PEG_CHAMFER  = 0.35      # gotcha #30 - cone tip must OVERLAP the shaft
 SOCKET_LEADIN = 0.4      # 45-deg funnel at the socket MOUTH - see below
 HOLE_D       = 1.2       # medallion gauge
