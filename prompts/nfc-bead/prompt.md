@@ -346,6 +346,101 @@ Reference implementation with all four handled: `beads/glow-set/deco.py`.
 
 **Build vs print orientation:** build scripts (`build_<charm>.py`) typically lay out the geometry in *build orientation* — the natural pose for boolean operations and inspection. The actual rotation to print orientation happens at export-time via `.claude/skills/bead-stl-export/export.py`, which has an `EXPORT_FLIP_X_DEG` dict that applies a deterministic per-part flip just before writing each STL. The live scene is unchanged; only the STL on disk is print-ready. This means the slicer should never need an auto-orient step.
 
+### 40. The socket funnel and the peg chamfer both eat the ENGAGEMENT — measure it
+
+A peg is not gripped along its whole height. `SOCKET_LEADIN` opens the socket
+mouth into a 45-degree funnel, and `PEG_CHAMFER` tapers the peg tip; between
+them they can consume most of a short peg. Measured on a real 1.2 mm peg with
+`SOCKET_LEADIN = 0.4` and `PEG_CHAMFER = 0.35`, only **0.50 mm** ever sat at the
+design clearance:
+
+| depth into socket | socket r | peg r | radial gap |
+|---|---|---|---|
+| 0.0 mm (mating face) | 1.749 | — | — |
+| 0.2 mm | 1.549 | 1.299 | 0.250 |
+| 0.4 mm | 1.349 | 1.299 | **0.050** |
+| 0.8 mm | 1.349 | 1.299 | **0.050** |
+| 1.0 mm | 1.349 | 1.103 | 0.246 |
+
+The bead read as "close, but too loose", and the instinct is to reach for
+`PEG_CLEAR`. That is the wrong knob first: the clearance was fine, there was
+just almost no length at which it applied. **`PEG_HEIGHT` is the first knob;
+`PEG_CLEAR` is the second.**
+
+Never estimate this from the constants — the interaction is easy to get wrong by
+2x. Cross-section both exported STLs and compare bore radius to peg radius at
+the same seated height. `beads/glow-set/measure_fit.py` does exactly that and
+prints the table above; run it after any change to peg or socket geometry, and
+treat the printed **ENGAGEMENT** figure as the number that matters.
+
+Deepening the peg has a second benefit: it moves the gripping band up out of the
+first two squished layers, where the bore is least round (see #42).
+
+### 41. `task_status: 1` means the GCODE RAN — it is not evidence a part exists
+
+The printer will happily execute an entire job with a dry extruder and report
+success: `task_status: 1`, `CurrentTicks == TotalTicks`, empty
+`exception_status`. **Every check the SDCP API exposes is a check on the JOB,
+and they all stay green when nothing comes out of the nozzle.** This has
+produced phantom "successful" prints more than once.
+
+**The gate, checked while the printer is IDLE and before `start_print`:**
+
+```
+get_status() -> raw._cc2.filament_detected == 1
+```
+
+Record from this repo, and the flag called every one:
+
+| run | idle `filament_detected` | outcome |
+|---|---|---|
+| `17e2cd47` | 0 | nothing |
+| `c0aa169a` | 1 | real parts |
+| `86fbb0e6` | 0 | nothing, not even a purge line |
+
+The trap is that `filament_detected` reads 0 *legitimately* during preheat and
+loading on a perfectly good run — the `M6211` load only fires once the nozzle is
+at temperature. That excuse is exactly what let two phantom prints through. So
+gate on the **idle** reading, where the value is unambiguous, and if a job is
+already running, only treat 0 as fatal once layers are advancing.
+
+The gcode is not the variable: the *same file* both failed and succeeded, and it
+carries a real load macro (`M6211 A1 L200 T<n>`). A file asking for filament
+proves nothing, because that macro can fail silently.
+
+**Confirming a print afterwards needs a human**, because the chamber camera
+looks across the front lip and cannot see the plate centre — it reads empty
+before and after a successful print. Ask specifically about the **purge line**:
+no purge line means filament never reached the nozzle; a purge line with no part
+means adhesion. See also #34 (slot numbering) and #35 (a `.3mf` is not a job).
+
+### 42. The mating face is a tolerance surface — don't print it as layer 1
+
+**Status: observed and diagnosed, not yet proven by a comparison print.**
+
+The Top half currently prints mating-face-down, so the socket mouths — the one
+set of features that has to hold a fit — are drawn in the first, most-squished
+layers. The consequences show up under magnification and both hurt the snap fit:
+
+- **The bore goes out of round.** The funnel's concentric steps form cleanly on
+  one side while extrudate encroaches from the other, so clearance stops being
+  uniform. A peg can be loose overall and still bind on one axis.
+- **The face goes ridged**, with valleys between adjacent beads. Two halves then
+  rest on high spots and never fully seat, stealing engagement on top of what
+  #40 already spent.
+
+The proof is available in any single print: the *Bottom* half's mating face is a
+**top surface** and comes out visibly smoother than the Top's, same filament,
+same run. Glitter-loaded filaments make it worse — they resolve small features
+noticeably less well than plain PLA.
+
+**Candidate fix:** flip the Top in `EXPORT_FLIP_X_DEG` so its mating face prints
+as a top surface. The Top's outer face is the *back* of the bead, so nothing
+cosmetic is lost by putting that against the plate, and the sockets become blind
+holes drilled down from a smooth surface — which also removes the reason
+`SOCKET_LEADIN` exists. This changes print orientation for every bead in a set,
+so prove it on one part before adopting it.
+
 ---
 
 ## What the user supplies per charm
