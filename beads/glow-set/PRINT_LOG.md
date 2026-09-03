@@ -6,6 +6,72 @@ propagating to the recipe.
 
 ---
 
+## tray3blk — 2026-09-03 — ADHESION DID NOT REPRODUCE IN BLACK. Stopped for a different mess.
+
+Job `af01d730`, `tray3blk.gcode`, 3 beads, black `T0`, 16 layers, 882s, 3.9g.
+**A deliberate single-variable twin of the failed `tray3.gcode`**: identical layer
+count, print time and filament mass, differing only in `color_map`
+(`#000000` t:0 vs `#FF0000` t:1). Same geometry, same layout, same everything else.
+
+He stopped it around layer 6-8 because it was making a mess.
+
+### THE RESULT THAT MATTERS: the parts STUCK
+
+Every part on the plate was firmly adhered and had built up real height. That is a
+categorical difference from the red runs, where his description was *"an oozing,
+undifferentiated mass stuck to the print head with nothing layed."*
+
+- A clean, well-formed **purge line** went down and stayed down.
+- **No blob formed on the nozzle.**
+- `filament_detected == 1` with `CurrentLayer >= 1`, the check that actually means
+  something.
+
+**Slot tally is now black `T0` 6/6, red `T1` 1/4.** The slot correlation has survived
+every test all session and nothing else has. Red / `T1` is implicated; colour is no
+longer a live explanation for the ADHESION failure.
+
+### Verify the slot from the machine, not from memory
+
+`get_canvas_status` reports it directly and settles it before a run:
+
+    tray 0  #000000 black  status 2  <- active_tray_id
+    tray 1  #F72221 red    status 1
+    tray 2/3 white / blue  status 0  (empty)
+
+That is a 10-second check that removes the single most expensive trap in this project.
+Do it instead of asking whether the right spool is loaded.
+
+### The NEW failure, which is not adhesion
+
+From the photograph:
+
+- Heavy **grey-white smeared material** on two of the parts - deposited or dragged, not
+  those parts' own extrusion.
+- Two adjacent parts **merged at their boundary**.
+- A long trailing strand whose **root is visibly REDDISH**.
+- One part (the hexagon) comparatively clean.
+
+**[!] THE RED ROOT IS THE EVIDENCE: THE MELT ZONE WAS NEVER CLEARED.** The blob was
+peeled off the OUTSIDE only. The previous entry already said a cold pull belonged in
+the cleanup and it was skipped. Old red plus thermally degraded PLA is still upstream
+and dumping intermittently onto whatever part sits underneath - which fits damage that
+is **irregular and part-specific** rather than uniform.
+
+**[?] NOT SEPARATED YET:** edge-curl being struck by the nozzle explains edge-heavy
+damage too, and the damage IS edge-heavy on the triangles. One photograph cannot
+distinguish these. Contamination dumping is random across parts; curl-strike repeats in
+the same places on the same edges. **Do not commit to one of these from this run** -
+that is the mistake this log has now recorded three times in one day.
+
+### Next: cold pull, then the BASELINE, not the tray
+
+`test20c02.gcode` - one bead, 6 min, 1.64g, black `T0`, the exact file that produced the
+bead he called perfect. Clean result means the melt zone was it. Same smearing means it
+is mechanical - nozzle height or curl - and the new 0.6mm nozzle is the next move rather
+than another print.
+
+---
+
 ## tray3 FAILED THE SAME WAY — 2026-09-03 — it is the machine, not the batch
 
 Job `9b064b8f`, 3 beads, centred, red `T1`, clean nozzle, no cancel in front of
