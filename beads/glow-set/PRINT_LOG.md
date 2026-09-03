@@ -6,6 +6,34 @@ propagating to the recipe.
 
 ---
 
+## test20-peg18c02, 20 mm black — 2026-09-03 — SNAP FIT SOLVED
+
+Job `f9878112`, `T0`, 16/16 layers, `filament_detected` 1 confirmed at layer 4.
+
+**User's verdict: "that one was perfect!"** The snap fit is solved. The numbers
+that did it, and the two-step path that found them:
+
+| step | `PEG_HEIGHT` | `PEG_CLEAR` | engagement | result |
+|---|---|---|---|---|
+| start | 1.2 | 0.05 | 0.50 mm | plainly too loose |
+| depth | **1.8** | 0.05 | **1.00 mm** | *snaps* audibly, still won't hold |
+| clearance | **1.8** | **0.02** | 1.00 mm | **perfect** |
+
+**Canonical constants for this bead family: `PEG_HEIGHT = 1.8`,
+`PEG_CLEAR = 0.02`, with `SOCKET_LEADIN = 0.4` and `PEG_CHAMFER = 0.35`.**
+
+The ordering is the lesson. Depth first: at 0.50 mm engagement no clearance
+value would have saved it, because there was almost no length over which any
+clearance applied. Clearance second, and only once the part already snapped.
+Doing them in the other order — or together — would have produced a fit that
+worked without anyone knowing which change earned it.
+
+Every one of the 30 bead sets on `japanese-mon` / `chinese-glow` / `adinkra` was
+built at `PEG_HEIGHT` 1.2. **None of them would have snapped.** They need
+rebuilding at 1.8 / 0.02 before the fest.
+
+---
+
 ## test20-peg18 BLACK, 20 mm — 2026-09-03 — PRINTED; the idle gate was wrong
 
 Job `21da0e21`, `test20peg18blk.gcode`, 16 layers, 1.64 g on **T0 (black)**.

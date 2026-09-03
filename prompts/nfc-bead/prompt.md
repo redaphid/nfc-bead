@@ -367,11 +367,28 @@ The bead read as "close, but too loose", and the instinct is to reach for
 just almost no length at which it applied. **`PEG_HEIGHT` is the first knob;
 `PEG_CLEAR` is the second.**
 
-**Confirmed on hardware.** `PEG_HEIGHT` 1.2 -> 1.8 took measured engagement
-0.50 -> 1.00 mm at unchanged 0.050 mm clearance, and the printed pair went from
-plainly loose to **audibly snapping** — just barely too loose to hold. Depth did
-all of that. Only then is clearance worth touching (0.05 -> 0.02 radial). Change
-one at a time: had both moved together, neither result would mean anything.
+**Solved on hardware, in two single-variable steps:**
+
+| step | `PEG_HEIGHT` | `PEG_CLEAR` | engagement | result |
+|---|---|---|---|---|
+| start | 1.2 | 0.05 | 0.50 mm | plainly too loose |
+| depth | **1.8** | 0.05 | **1.00 mm** | *snaps*, still won't hold |
+| clearance | **1.8** | **0.02** | 1.00 mm | **perfect** |
+
+**Use `PEG_HEIGHT = 1.8` and `PEG_CLEAR = 0.02`** alongside `SOCKET_LEADIN = 0.4`
+and `PEG_CHAMFER = 0.35`.
+
+The ordering is the whole lesson. At 0.50 mm engagement **no clearance value
+would have rescued it**, because there was scarcely any length over which
+clearance applied — so tuning `PEG_CLEAR` first is motion without information.
+Move one at a time: had both changed together, the working fit would not have
+said which change earned it, and the constants would not transfer to the next
+silhouette.
+
+**Target roughly 1.0 mm of full-diameter engagement.** Derive `PEG_HEIGHT` from
+that rather than copying 1.8 — it must cover the engagement you want *plus*
+`SOCKET_LEADIN` plus the chamfer's effective loss. A build with no socket
+lead-in loses only the chamfer and reaches 1.0 mm at a shorter peg.
 
 Never estimate this from the constants — the interaction is easy to get wrong by
 2x. Cross-section both exported STLs and compare bore radius to peg radius at
