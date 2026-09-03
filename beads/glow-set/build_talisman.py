@@ -33,10 +33,58 @@ if HERE not in sys.path:
 import shapes as S          # noqa: E402
 import talismans as T       # noqa: E402
 
+
+def _resample(pts, step_mm=0.35):
+    """Foils are sampled at 600 points; at 32mm that is 0.17mm per segment,
+    finer than the nozzle can resolve and just bloat in the STL. Drop points
+    that are closer together than step_mm."""
+    out = [pts[0]]
+    for q in pts[1:]:
+        if math.hypot(q[0] - out[-1][0], q[1] - out[-1][1]) >= step_mm:
+            out.append(q)
+    if math.hypot(out[0][0] - out[-1][0], out[0][1] - out[-1][1]) < step_mm:
+        out.pop()
+    return out
+
+
+VOIDS = []      # interior holes; filled in by get_outline for json: sources
+
+
+def get_outline():
+    """BEAD_SHAPE selects the source:
+
+        foil:<preset>     - foils.py rosette (only on branches that have it)
+        talisman:<seed>   - talismans.py procedural silhouette
+        json:<path>       - a motif outline exported by tools/motif_outline.py
+
+    The json: source exists because japanese.py / chinese.py / adinkra.py trace
+    their glyphs from an SDF with scikit-image, and Blender's bundled Python
+    has numpy but NOT scikit-image - the libraries cannot even be imported in
+    here. So the polygon is solved on the host and handed over as plain points;
+    this process needs nothing beyond bpy. The JSON is also the audit record of
+    exactly which polygon was extruded.
+    """
+    global VOIDS
+    spec = os.environ.get("BEAD_SHAPE", "talisman:" + SEED)
+    kind, _, which = spec.partition(":")
+    if kind == "json":
+        import json
+        with open(which) as fh:
+            doc = json.load(fh)
+        VOIDS = [[(float(x), float(y)) for x, y in v]
+                 for v in doc.get("voids", [])]
+        print("  source    : %s/%s (%s)"
+              % (doc.get("lib"), doc.get("name"), os.path.basename(which)))
+        return [(float(x), float(y)) for x, y in doc["outer"]]
+    if kind == "foil":
+        import foils as FO           # lazy: absent on the motif branches
+        return _resample(FO.build(which, r=R_OUT))
+    return T.talisman(which or SEED, r_out=R_OUT)
+
 # CONFIG ====================================================================
 NAME   = os.environ.get("BEAD_NAME", "shield")   # which talisman to build
 SEED   = os.environ.get("BEAD_SEED", "virginia")  # seeds the proportions
-R_OUT  = 16.0            # circumscribed radius -> ~32mm pendant
+R_OUT  = float(os.environ.get("BEAD_R", "12.0"))   # circumscribed radius; 12 -> 24mm
 
 BOTTOM_THICK = 1.5       # NFC pocket + peg bases
 TOP_THICK    = 3.0       # sockets + string hole; thicker = brighter glow
@@ -133,7 +181,7 @@ def main():
     print("=" * 64)
     wipe()
 
-    pts = T.talisman(SEED, r_out=R_OUT)
+    pts = get_outline()
     fit = S.fit_report(pts)
     if not fit["ok"]:
         raise RuntimeError("%s: silhouette does not fit the hardware" % NAME)
@@ -150,6 +198,19 @@ def main():
 
     full = extrude_polygon(pts, BODY)
     print("  extruded  : non-manifold=%d" % nonmanifold(full))
+
+    # Interior holes are cut as real solids rather than keyhole-bridged into
+    # the outer ring. A keyhole leaves two coincident edges, which clean_mesh's
+    # remove_doubles welds into non-manifold geometry, and opening the hop into
+    # a slit puts a feature below what a 0.4mm nozzle can resolve. The cutter
+    # overshoots the body in Z so there are no coplanar faces for the solver.
+    for i, v in enumerate(VOIDS):
+        cutter = extrude_polygon(v, BODY + 4.0, name="Void%d" % i)
+        boolean_op(full, cutter, 'DIFFERENCE', "Void%d" % i)
+    if VOIDS:
+        clean_mesh(full)
+        print("  voids     : %d cut, non-manifold=%d"
+              % (len(VOIDS), nonmanifold(full)))
 
     z_min, z_max = -BODY / 2.0, BODY / 2.0
     z_split = z_min + BOTTOM_THICK                  # asymmetric seam, gotcha #31
@@ -190,7 +251,7 @@ def main():
     hr = (PEG_DIAMETER + PEG_CLEAR * 2) / 2.0
     for i, (gx, gy) in enumerate(pegs):
         lo, hi = tz - 1.0, tz + PEG_HEIGHT + 0.3
-        c = cyl(hr, hi - lo, (gx, gy, (lo + hi) / 2.0), verts=32)
+        c = cyl(hr, hi - lo, (gx, gy, (lo + hi) / 2.0), verts=64)
         boolean_op(top, c, 'DIFFERENCE', "PH%d" % i)
     clean_mesh(top)
 
@@ -199,11 +260,11 @@ def main():
     pr = PEG_DIAMETER / 2.0
     shaft = PEG_HEIGHT - PEG_CHAMFER
     for i, (gx, gy) in enumerate(pegs):
-        c = cyl(pr, shaft, (gx, gy, bz + shaft / 2.0), verts=32)
+        c = cyl(pr, shaft, (gx, gy, bz + shaft / 2.0), verts=64)
         boolean_op(bottom, c, 'UNION', "Peg%d" % i)
         ov = 0.15
         bpy.ops.mesh.primitive_cone_add(
-            vertices=32, radius1=pr, radius2=max(pr - PEG_CHAMFER, 0.2),
+            vertices=64, radius1=pr, radius2=max(pr - PEG_CHAMFER, 0.2),
             depth=PEG_CHAMFER + ov,
             location=(gx, gy, bz + shaft - ov + (PEG_CHAMFER + ov) / 2.0))
         boolean_op(bottom, bpy.context.active_object, 'UNION', "Tip%d" % i)
