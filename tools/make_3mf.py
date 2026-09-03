@@ -103,13 +103,13 @@ def make_3mf(stl_dir: str, out_path: str, half: str = "both") -> int:
 
     bottom_path = os.path.join(stl_dir, "Bottom.stl")
     top_path    = os.path.join(stl_dir, "Top.stl")
-    deco_path   = os.path.join(stl_dir, "Decoration.stl")
+    deco_path   = os.path.join(stl_dir, "Decoration.stl")     # optional
     hair_path   = os.path.join(stl_dir, "Hair.stl")           # optional
     needed = []
     if half in ("both", "bottom"):
         needed.append(bottom_path)
     if half in ("both", "top"):
-        needed.extend([top_path, deco_path])
+        needed.append(top_path)
     for p in needed:
         if not os.path.isfile(p):
             print(f"missing: {p}", file=sys.stderr)
@@ -117,10 +117,14 @@ def make_3mf(stl_dir: str, out_path: str, half: str = "both") -> int:
     want_top = half in ("both", "top")
     want_bottom = half in ("both", "bottom")
     has_hair = want_top and os.path.isfile(hair_path)
+    # Decoration is optional: a single-filament bead (e.g. a solid glow-PLA
+    # talisman) legitimately has no accent part at all. Requiring it forced
+    # callers to fake an empty STL.
+    has_deco = want_top and os.path.isfile(deco_path)
 
     bottom = _load_stl(bottom_path) if want_bottom else None
     top    = _load_stl(top_path)    if want_top    else None
-    deco   = _load_stl(deco_path)   if want_top    else None
+    deco   = _load_stl(deco_path)   if has_deco    else None
     hair   = _load_stl(hair_path)   if has_hair    else None
 
     wrapper = lib3mf.Wrapper()
@@ -133,16 +137,23 @@ def make_3mf(stl_dir: str, out_path: str, half: str = "both") -> int:
     hair_obj   = _add_mesh(model, lib3mf, "Hair", hair)       if hair is not None else None
 
     asm = None
-    if want_top:
+    if want_top and not (has_deco or has_hair):
+        # Nothing to merge - the Top IS the whole assembly. Adding it directly
+        # avoids a single-child ComponentsObject and the numeric-suffix rename
+        # the slicer applies to component children (gotcha #28).
+        asm = top_obj
+    elif want_top:
         # Bundle Top + Hair + Decoration as a single ComponentsObject so the
         # slicer treats them as ONE OBJECT WITH PARTS. Hair + Decoration
         # coords are already in Top's frame (Z above Top's outer face).
         asm = model.AddComponentsObject()
-        asm.SetName("Top_with_Decoration" + ("_and_Hair" if has_hair else ""))
+        asm.SetName("Top" + ("_with_Decoration" if has_deco else "")
+                    + ("_and_Hair" if has_hair else ""))
         asm.AddComponent(top_obj,  _identity_transform(lib3mf))
         if hair_obj is not None:
             asm.AddComponent(hair_obj, _identity_transform(lib3mf))
-        asm.AddComponent(deco_obj, _identity_transform(lib3mf))
+        if deco_obj is not None:
+            asm.AddComponent(deco_obj, _identity_transform(lib3mf))
 
     # Place build items on the plate. Single-half exports park at origin so
     # the slicer's auto-arrange doesn't fight the offset.
@@ -180,12 +191,14 @@ def make_3mf(stl_dir: str, out_path: str, half: str = "both") -> int:
         print(f"  Bottom: {len(bottom.vertices)} verts / {len(bottom.faces)} faces  -> placed at {place}")
     if want_top:
         place = PLATE_TOPASM_OFFSET if half == "both" else (0.0, 0.0, 0.0)
-        label = "Top + Hair + Decoration" if has_hair else "Top + Decoration"
+        label = " + ".join(["Top"] + (["Hair"] if has_hair else [])
+                           + (["Decoration"] if has_deco else []))
         print(f"  {label} (merged components):")
         print(f"    Top:        {len(top.vertices)} verts / {len(top.faces)} faces")
         if has_hair:
             print(f"    Hair:       {len(hair.vertices)} verts / {len(hair.faces)} faces")
-        print(f"    Decoration: {len(deco.vertices)} verts / {len(deco.faces)} faces")
+        if has_deco:
+            print(f"    Decoration: {len(deco.vertices)} verts / {len(deco.faces)} faces")
         print(f"    -> placed at {place}")
     return 0
 

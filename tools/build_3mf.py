@@ -38,6 +38,14 @@ from xml.sax.saxutils import escape as xml_escape
 REPO_ROOT      = Path(__file__).resolve().parent.parent
 TMP_LATEST     = REPO_ROOT / "tmp" / "latest"
 TEMPLATE_DIR   = TMP_LATEST / "slicer_template"     # extracted reference 3MF
+
+# Producer string the slicer sees. Elegoo Slicer warns "the 3mf file you are
+# importing may be incompatible" when this names a tool it does not recognise -
+# and a package it treats as foreign may also ignore the embedded
+# project_settings, silently dropping the brim and reproducing the very failure
+# the template mechanism exists to prevent. So adopt the template's own
+# Application string when one is available.
+PRODUCER = "nfc-bead-3mf-builder/1.0"
 DEFAULT_OUT    = TMP_LATEST / "bead_multicolor.3mf"
 
 # ─── Per-bead config ──────────────────────────────────────────────────
@@ -171,7 +179,7 @@ def build_3dmodel_model(parent_objects, build_items):
                 "CreationDate", "Description", "Designer", "DesignerCover",
                 "DesignerUserId", "License", "ModificationDate", "Origin", "Title"):
         if tag == "Application":
-            out.write(f' <metadata name="{tag}">nfc-bead-3mf-builder/1.0</metadata>\n')
+            out.write(f' <metadata name="{tag}">{PRODUCER}</metadata>\n')
         elif tag == "BambuStudio:3mfVersion":
             out.write(f' <metadata name="{tag}">1</metadata>\n')
         elif tag == "CreationDate":
@@ -192,7 +200,7 @@ def build_3dmodel_model(parent_objects, build_items):
     return out.getvalue()
 
 
-def build_model_settings(top_assembly, bottom):
+def build_model_settings(top_assembly, bottom, body_extruder=2):
     """Build Metadata/model_settings.config — per-part extruder + matrix."""
     out = io.StringIO()
     out.write('<?xml version="1.0" encoding="UTF-8"?>\n<config>\n')
@@ -201,7 +209,7 @@ def build_model_settings(top_assembly, bottom):
     obj_id, parts = top_assembly
     out.write(f'  <object id="{obj_id}">\n')
     out.write('    <metadata key="name" value="top_assembly"/>\n')
-    out.write('    <metadata key="extruder" value="2"/>\n')   # default; overridden per part
+    out.write(f'    <metadata key="extruder" value="{body_extruder}"/>\n')   # default; overridden per part
     for part_id, name, source_file, matrix_12f, extruder in parts:
         out.write(f'    <part id="{part_id}" subtype="normal_part">\n')
         out.write(f'      <metadata key="name" value="{xml_escape(name)}"/>\n')
@@ -217,7 +225,7 @@ def build_model_settings(top_assembly, bottom):
     obj_id_b, parts_b = bottom
     out.write(f'  <object id="{obj_id_b}">\n')
     out.write('    <metadata key="name" value="Bottom"/>\n')
-    out.write('    <metadata key="extruder" value="2"/>\n')
+    out.write(f'    <metadata key="extruder" value="{body_extruder}"/>\n')
     for part_id, name, source_file, matrix_12f, extruder in parts_b:
         out.write(f'    <part id="{part_id}" subtype="normal_part">\n')
         out.write(f'      <metadata key="name" value="{xml_escape(name)}"/>\n')
@@ -246,11 +254,22 @@ def build_model_settings(top_assembly, bottom):
 
 
 # ─── Main builder ─────────────────────────────────────────────────────
-def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
+def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
+          body_extruder=2, keep_cooling=False):
     if not template_dir.is_dir():
         raise SystemExit(f"Template dir missing: {template_dir}\n"
                          f"  Drop a reference .3mf into tmp/latest/ and extract it there, "
                          f"OR adjust TEMPLATE_DIR in build_3mf.py.")
+
+    # 0. Adopt the reference slicer's producer string (see PRODUCER above).
+    global PRODUCER
+    _tmpl_model = template_dir / "3D" / "3dmodel.model"
+    if _tmpl_model.is_file():
+        _m = re.search(r'<metadata name="Application">([^<]+)</metadata>',
+                       _tmpl_model.read_text(encoding="utf-8", errors="replace"))
+        if _m:
+            PRODUCER = _m.group(1).strip()
+            print(f"[3mf] producer adopted from template: {PRODUCER}")
 
     # 1. Read STL geometry
     print(f"[3mf] reading STLs from {TMP_LATEST}")
@@ -258,13 +277,21 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
     for fname, dispname, extruder, _zoff in [(PARTS_BOTTOM[0])] + PARTS_TOP_ASSEMBLY:
         stl_path = TMP_LATEST / fname
         if not stl_path.is_file():
+            # Decoration is optional - a single-filament bead has no accent
+            # part. Bottom and Top remain required.
+            if fname == "Decoration.stl":
+                print(f"  {fname:<24} absent - single-filament bead")
+                continue
             raise SystemExit(f"missing STL: {stl_path}")
         v, t = read_binary_stl(stl_path)
         print(f"  {fname:<24} {len(v):>5} verts  {len(t):>5} tris")
         parts.append({
             "filename":  fname,
             "name":      dispname,
-            "extruder":  extruder,
+            # Decoration keeps its own accent slot; the body follows
+            # --body-extruder so a single-filament bead lands on the slot
+            # actually loaded with that colour (see below).
+            "extruder":  extruder if dispname == "Decoration" else body_extruder,
             "stl_path":  stl_path,
             "verts":     v,
             "tris":      t,
@@ -280,18 +307,23 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
     #     child Bottom   (id 4, model file Bottom.model:4)
     bottom = parts[0]
     top    = parts[1]
-    decor  = parts[2]
+    decor  = parts[2] if len(parts) > 2 else None
 
     bottom["object_id"] = 4
     top["object_id"]    = 1
-    decor["object_id"]  = 2
     bottom["parent_id"] = 5
     top["parent_id"]    = 3   # shared parent
-    decor["parent_id"]  = 3   # shared parent
+    if decor is not None:
+        decor["object_id"]  = 2
+        decor["parent_id"]  = 3   # shared parent
+    # Everything downstream iterates top_children, so a two-part (single
+    # filament) bead and a three-part (body + inscription) bead share a path.
+    top_children = [top] if decor is None else [top, decor]
 
     bottom["model_path"] = "/3D/Objects/Bottom.model"
     top["model_path"]    = "/3D/Objects/top_assembly.model"
-    decor["model_path"]  = "/3D/Objects/top_assembly.model"   # same file, different objectid
+    if decor is not None:
+        decor["model_path"] = "/3D/Objects/top_assembly.model"  # same file, different objectid
 
     for p in parts:
         p["uuid"] = str(uuid.uuid4())
@@ -312,7 +344,7 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
                               'requiredextensions="p">\n')
     top_assembly_model.write(' <metadata name="BambuStudio:3mfVersion">1</metadata>\n')
     top_assembly_model.write(' <resources>\n')
-    for p in (top, decor):
+    for p in top_children:
         top_assembly_model.write(f'  <object id="{p["object_id"]}" p:UUID="{p["uuid"]}" type="model">\n')
         top_assembly_model.write('   <mesh>\n')
         top_assembly_model.write('    <vertices>\n')
@@ -335,10 +367,8 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
     # Top assembly parent: Top body at z=0, Decoration at z=0 (geometry already has z=2.5..3.0)
     top_parent_xml = build_object_model_xml(
         top["parent_id"],
-        [
-            (top["model_path"],   top["object_id"],   identity_with_translation(0, 0, 0), str(uuid.uuid4())),
-            (decor["model_path"], decor["object_id"], identity_with_translation(0, 0, 0), str(uuid.uuid4())),
-        ],
+        [(p["model_path"], p["object_id"], identity_with_translation(0, 0, 0),
+          str(uuid.uuid4())) for p in top_children],
     )
     parent_chunks.append(top_parent_xml)
 
@@ -376,10 +406,8 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
     #   Decoration is at z=2.5..3.0 (per the export's shared-shift fix)
     top_assembly_meta = (
         top["parent_id"],
-        [
-            (top["object_id"],   top["name"],   str(top["stl_path"]),   identity_with_translation(0, 0, 0), top["extruder"]),
-            (decor["object_id"], decor["name"], str(decor["stl_path"]), identity_with_translation(0, 0, 0), decor["extruder"]),
-        ],
+        [(p["object_id"], p["name"], str(p["stl_path"]),
+          identity_with_translation(0, 0, 0), p["extruder"]) for p in top_children],
     )
     bottom_meta = (
         bottom["parent_id"],
@@ -387,7 +415,8 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
             (bottom["object_id"], bottom["name"], str(bottom["stl_path"]), identity_with_translation(0, 0, 0), bottom["extruder"]),
         ],
     )
-    model_settings = build_model_settings(top_assembly_meta, bottom_meta)
+    model_settings = build_model_settings(top_assembly_meta, bottom_meta,
+                                          body_extruder=body_extruder)
 
     # 7. plate_1.json — minimal valid placement
     bottom_xy_min = (bxy[0] - 12.5, bxy[1] - 12.5)
@@ -420,37 +449,102 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
         ' <Default Extension="gcode" ContentType="text/x.gcode"/>\n'
         '</Types>\n'
     )
+    # The slicer's own packages carry plate previews and reference them from
+    # _rels/.rels. Shipping them (copied from the template) keeps the package
+    # shaped like slicer output rather than like a foreign file.
+    thumbs = []
+    for _fn, _rid, _rt in (
+        ("plate_1.png", "rel-2",
+         "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"),
+        ("plate_1.png", "rel-4",
+         "http://schemas.bambulab.com/package/2021/cover-thumbnail-middle"),
+        ("plate_1_small.png", "rel-5",
+         "http://schemas.bambulab.com/package/2021/cover-thumbnail-small"),
+    ):
+        if (template_dir / "Metadata" / _fn).is_file():
+            thumbs.append((_fn, _rid, _rt))
+
     pkg_rels = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
         ' <Relationship Target="/3D/3dmodel.model" Id="rel-1" '
         'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n'
-        '</Relationships>\n'
+        + ''.join(' <Relationship Target="/Metadata/%s" Id="%s" Type="%s"/>\n'
+                  % (fn, rid, rt) for fn, rid, rt in thumbs)
+        + '</Relationships>\n'
     )
 
     # Pull printer/process settings from the template, then patch them.
-    # The user reported "raft" appearance — that's actually the BRIM
-    # (auto_brim, 5mm wide) the user's saved profile has. Disable brim and
-    # raft for these tiny press-fit parts; the Centauri Carbon's textured
-    # plate has plenty of bed adhesion at this footprint.
+    # BRIM POLICY. This used to force no_brim, on the reasoning that the brim
+    # merely looked like an unwanted raft and the textured plate had adhesion
+    # to spare. That was a cosmetic judgement and the evidence went the other
+    # way: on 2026-09-02 a ~30mm single-filament talisman sliced WITHOUT a brim
+    # lifted, was dragged by the nozzle and smeared, while the medallion
+    # printed from a profile carrying auto_brim/5mm came out clean. The vault
+    # had this logged as an unresolved conflict ("add a brim" vs the
+    # PRINT_GUIDE's "no brim"); this is the resolution.
+    # Default is now to KEEP whatever the reference template used. Pass
+    # --no-brim to force it off.
     project_settings = None
     proj_path = template_dir / "Metadata" / "project_settings.config"
     if proj_path.is_file():
         project_settings = proj_path.read_text(encoding="utf-8")
         # Patch settings via simple regex (the file is JSON-formatted but with
         # comments/extras in places, safer than full-parse for now).
-        patches = {
-            "brim_type":    "no_brim",
-            "brim_width":   "0",
-            "raft_layers":  "0",
-        }
+        # Z-SEAM. PRINT_LOG v5c: with seam_position=aligned the slicer put the
+        # seam on the same XY every layer and compounded it into a visible
+        # stringy mass around ONE peg socket - deformed bores that will not
+        # take a peg at 0.05mm clearance. Random spreads the artefact around
+        # the perimeter. The log calls this the single setting most likely to
+        # ruin a print, so it is forced here rather than left to the template.
+        patches = {"raft_layers": "0", "seam_position": "random"}
+
+        # COOLING. The template ships close_fan_the_first_x_layers=1 and
+        # full_fan_speed_layer=0, so part cooling jumps straight to 100% from
+        # layer 2 - confirmed live on the quatrefoil print, where ModelFan read
+        # 232-250 of 255 from layer 2 on. On a small flat PLA slab that is a
+        # textbook edge-curl driver: the upper layers contract hard while the
+        # first layer is still pinned to the plate, and the edges lift. These
+        # beads are flat slabs with no real overhangs, so the aggressive early
+        # cooling buys nothing; overhang_fan_speed still covers the string-hole
+        # bridge. Hold the fan off for 3 layers, then ramp to full by layer 5.
+        array_patches = {}
+        if not keep_cooling:
+            array_patches["close_fan_the_first_x_layers"] = "3"
+            array_patches["full_fan_speed_layer"] = "5"
+
+        if no_brim:
+            patches["brim_type"] = "no_brim"
+            patches["brim_width"] = "0"
         for key, value in patches.items():
-            project_settings = re.sub(
+            project_settings, n = re.subn(
                 rf'"{key}"\s*:\s*"[^"]*"',
                 f'"{key}": "{value}"',
                 project_settings,
             )
-        print(f"[3mf] patched project_settings: {', '.join(patches.keys())}")
+            if n == 0:
+                raise SystemExit(
+                    f"[3mf] patch {key!r} matched NOTHING. It is probably an "
+                    f"array-valued key - put it in array_patches, not patches. "
+                    f"A silent no-op here ships the template's value while the "
+                    f"log claims it was patched.")
+
+        # Array-valued keys are per-filament: "key": [ "v", "v", "v", "v" ].
+        # The scalar regex above cannot touch them - it matches nothing and
+        # exits cleanly, which would report a patch that never happened. These
+        # are rewritten separately, preserving the element count.
+        for key, value in array_patches.items():
+            m = re.search(rf'"{key}"\s*:\s*\[([^\]]*)\]', project_settings)
+            if not m:
+                raise SystemExit(f"[3mf] array patch {key!r} matched NOTHING.")
+            count = len(re.findall(r'"[^"]*"', m.group(1))) or 1
+            body = ",\n        ".join([f'"{value}"'] * count)
+            project_settings = (project_settings[:m.start()]
+                                + f'"{key}": [\n        {body}\n    ]'
+                                + project_settings[m.end():])
+
+        allk = list(patches) + list(array_patches)
+        print(f"[3mf] patched project_settings: {', '.join(allk)}")
 
     slice_info = (
         '<?xml version="1.0" encoding="UTF-8"?>\n<config>\n  <header>\n'
@@ -477,6 +571,9 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR):
         z.writestr("Metadata/slice_info.config", slice_info)
         if project_settings:
             z.writestr("Metadata/project_settings.config", project_settings)
+        for _fn in sorted({t[0] for t in thumbs}):
+            z.writestr("Metadata/" + _fn,
+                       (template_dir / "Metadata" / _fn).read_bytes())
 
     # 10. Verify by re-reading the zip + parsing the model files
     print(f"\n[3mf] wrote {out_path} ({out_path.stat().st_size} bytes)")
@@ -514,8 +611,9 @@ def verify(path, parts):
         content = z.read("3D/Objects/top_assembly.model").decode("utf-8")
         v_total = len(re.findall(r"<vertex\s", content))
         t_total = len(re.findall(r"<triangle\s", content))
-        exp_v = expected_counts["Top.stl"][0] + expected_counts["Decoration.stl"][0]
-        exp_t = expected_counts["Top.stl"][1] + expected_counts["Decoration.stl"][1]
+        deco = expected_counts.get("Decoration.stl", (0, 0))
+        exp_v = expected_counts["Top.stl"][0] + deco[0]
+        exp_t = expected_counts["Top.stl"][1] + deco[1]
         ok = (v_total == exp_v and t_total == exp_t)
         print(f"  3D/Objects/top_assembly.model: {v_total} verts, {t_total} tris  "
               f"(expect {exp_v}/{exp_t})  {'OK' if ok else 'MISMATCH'}")
@@ -529,8 +627,23 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("-o", "--out", default=str(DEFAULT_OUT))
     p.add_argument("-t", "--template-dir", default=str(TEMPLATE_DIR))
+    p.add_argument("--no-brim", action="store_true",
+                   help="force brim off (default: keep the template's brim - "
+                        "a missing brim caused a dragged/smeared print)")
+    p.add_argument("--keep-cooling", action="store_true",
+                   help="keep the template's 100%%-from-layer-2 part cooling "
+                        "(default: hold the fan off 3 layers, full by 5 - "
+                        "the aggressive default curls the edges of a flat slab)")
+    p.add_argument("--body-extruder", type=int, default=2, metavar="N",
+                   help="filament slot for the bead body (default 2, the red "
+                        "slot the multi-colour recipe was built around). A "
+                        "single-colour bead must name the slot actually holding "
+                        "that filament - 1 is black in the saved profile - or "
+                        "it prints in the wrong colour.")
     args = p.parse_args()
-    build(out_path=Path(args.out), template_dir=Path(args.template_dir))
+    build(out_path=Path(args.out), template_dir=Path(args.template_dir),
+          no_brim=args.no_brim, body_extruder=args.body_extruder,
+          keep_cooling=args.keep_cooling)
 
 
 if __name__ == "__main__":
