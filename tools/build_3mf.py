@@ -255,7 +255,7 @@ def build_model_settings(top_assembly, bottom, body_extruder=2):
 
 # ─── Main builder ─────────────────────────────────────────────────────
 def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
-          body_extruder=2):
+          body_extruder=2, keep_cooling=False):
     if not template_dir.is_dir():
         raise SystemExit(f"Template dir missing: {template_dir}\n"
                          f"  Drop a reference .3mf into tmp/latest/ and extract it there, "
@@ -498,16 +498,53 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
         # the perimeter. The log calls this the single setting most likely to
         # ruin a print, so it is forced here rather than left to the template.
         patches = {"raft_layers": "0", "seam_position": "random"}
+
+        # COOLING. The template ships close_fan_the_first_x_layers=1 and
+        # full_fan_speed_layer=0, so part cooling jumps straight to 100% from
+        # layer 2 - confirmed live on the quatrefoil print, where ModelFan read
+        # 232-250 of 255 from layer 2 on. On a small flat PLA slab that is a
+        # textbook edge-curl driver: the upper layers contract hard while the
+        # first layer is still pinned to the plate, and the edges lift. These
+        # beads are flat slabs with no real overhangs, so the aggressive early
+        # cooling buys nothing; overhang_fan_speed still covers the string-hole
+        # bridge. Hold the fan off for 3 layers, then ramp to full by layer 5.
+        array_patches = {}
+        if not keep_cooling:
+            array_patches["close_fan_the_first_x_layers"] = "3"
+            array_patches["full_fan_speed_layer"] = "5"
+
         if no_brim:
             patches["brim_type"] = "no_brim"
             patches["brim_width"] = "0"
         for key, value in patches.items():
-            project_settings = re.sub(
+            project_settings, n = re.subn(
                 rf'"{key}"\s*:\s*"[^"]*"',
                 f'"{key}": "{value}"',
                 project_settings,
             )
-        print(f"[3mf] patched project_settings: {', '.join(patches.keys())}")
+            if n == 0:
+                raise SystemExit(
+                    f"[3mf] patch {key!r} matched NOTHING. It is probably an "
+                    f"array-valued key - put it in array_patches, not patches. "
+                    f"A silent no-op here ships the template's value while the "
+                    f"log claims it was patched.")
+
+        # Array-valued keys are per-filament: "key": [ "v", "v", "v", "v" ].
+        # The scalar regex above cannot touch them - it matches nothing and
+        # exits cleanly, which would report a patch that never happened. These
+        # are rewritten separately, preserving the element count.
+        for key, value in array_patches.items():
+            m = re.search(rf'"{key}"\s*:\s*\[([^\]]*)\]', project_settings)
+            if not m:
+                raise SystemExit(f"[3mf] array patch {key!r} matched NOTHING.")
+            count = len(re.findall(r'"[^"]*"', m.group(1))) or 1
+            body = ",\n        ".join([f'"{value}"'] * count)
+            project_settings = (project_settings[:m.start()]
+                                + f'"{key}": [\n        {body}\n    ]'
+                                + project_settings[m.end():])
+
+        allk = list(patches) + list(array_patches)
+        print(f"[3mf] patched project_settings: {', '.join(allk)}")
 
     slice_info = (
         '<?xml version="1.0" encoding="UTF-8"?>\n<config>\n  <header>\n'
@@ -593,6 +630,10 @@ def main():
     p.add_argument("--no-brim", action="store_true",
                    help="force brim off (default: keep the template's brim - "
                         "a missing brim caused a dragged/smeared print)")
+    p.add_argument("--keep-cooling", action="store_true",
+                   help="keep the template's 100%%-from-layer-2 part cooling "
+                        "(default: hold the fan off 3 layers, full by 5 - "
+                        "the aggressive default curls the edges of a flat slab)")
     p.add_argument("--body-extruder", type=int, default=2, metavar="N",
                    help="filament slot for the bead body (default 2, the red "
                         "slot the multi-colour recipe was built around). A "
@@ -601,7 +642,8 @@ def main():
                         "it prints in the wrong colour.")
     args = p.parse_args()
     build(out_path=Path(args.out), template_dir=Path(args.template_dir),
-          no_brim=args.no_brim, body_extruder=args.body_extruder)
+          no_brim=args.no_brim, body_extruder=args.body_extruder,
+          keep_cooling=args.keep_cooling)
 
 
 if __name__ == "__main__":
