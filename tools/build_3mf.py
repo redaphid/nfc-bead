@@ -26,6 +26,7 @@ Usage:
 
 import argparse
 import io
+import json
 import re
 import struct
 import time
@@ -276,9 +277,34 @@ def _patch_array_element(text, key, index, value, label):
     return text[:m.start()] + f'"{key}": [\n        {body}\n    ]' + text[m.end():]
 
 
+def _template_nozzle(template_dir):
+    """Nozzle diameter recorded in the template's project_settings, or None.
+
+    plate_1.json carries its OWN nozzle_diameter, separate from
+    project_settings. It was hardcoded 0.4 here, which meant that dropping in a
+    correct 0.6mm template still emitted a 0.4mm plate and handed the slicer two
+    different answers inside one package. Read it from the template so the two
+    always agree, and let --nozzle-diameter override when they must not.
+    """
+    f = template_dir / "Metadata" / "project_settings.config"
+    if not f.is_file():
+        return None
+    try:
+        v = json.loads(f.read_text(encoding="utf-8")).get("nozzle_diameter")
+    except Exception:
+        return None
+    if isinstance(v, list):
+        v = v[0] if v else None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
           body_extruder=2, keep_cooling=False, decoration_extruder=1,
-          body_colour=None, bottom_xy=None, top_xy=None):
+          body_colour=None, bottom_xy=None, top_xy=None,
+          nozzle_diameter=None):
     if not template_dir.is_dir():
         raise SystemExit(f"Template dir missing: {template_dir}\n"
                          f"  Drop a reference .3mf into tmp/latest/ and extract it there, "
@@ -461,13 +487,15 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
     bottom_xy_max = (bxy[0] + 12.5, bxy[1] + 12.5)
     top_xy_min    = (txy[0] - 12.5, txy[1] - 12.5)
     top_xy_max    = (txy[0] + 12.5, txy[1] + 12.5)
+    nozzle_d = nozzle_diameter or _template_nozzle(template_dir) or 0.4
+
     plate_json = (
         '{\n'
         '  "version": 2,\n'
         '  "bed_type": "textured_plate",\n'
         '  "first_extruder": 0,\n'
         '  "is_seq_print": false,\n'
-        '  "nozzle_diameter": 0.4,\n'
+        f'  "nozzle_diameter": {nozzle_d},\n'
         '  "filament_colors": [],\n'
         '  "filament_ids": [],\n'
         '  "bbox_objects": [\n'
@@ -704,6 +732,11 @@ def main():
     p.add_argument("--top-xy", default=None, metavar="X,Y",
                    help="plate centre for the Top assembly, mm (default "
                         "%.1f,%.1f)." % PLATE_TOP_XY)
+    p.add_argument("--nozzle-diameter", type=float, default=None, metavar="D",
+                   help="Nozzle diameter written into plate_1.json. Default: read it "
+                        "from the template's project_settings, else 0.4. plate_1.json "
+                        "keeps its own copy, so a 0.6 template with a stale 0.4 here "
+                        "puts two answers in one package.")
     p.add_argument("--body-colour", default=None, metavar="HEX",
                    help="rewrite the body slot's colour in the profile, e.g. "
                         "#7CFC00 for glow-green. The saved profile has no glow "
@@ -724,7 +757,8 @@ def main():
           no_brim=args.no_brim, body_extruder=args.body_extruder,
           keep_cooling=args.keep_cooling,
           decoration_extruder=args.decoration_extruder,
-          body_colour=args.body_colour)
+          body_colour=args.body_colour,
+          nozzle_diameter=args.nozzle_diameter)
 
 
 if __name__ == "__main__":
