@@ -6,6 +6,64 @@ propagating to the recipe.
 
 ---
 
+## tray3 FAILED THE SAME WAY — 2026-09-03 — it is the machine, not the batch
+
+Job `9b064b8f`, 3 beads, centred, red `T1`, clean nozzle, no cancel in front of
+it. Same outcome: *"I see it trying to print, but I don't see any plastic
+layed."* Stopped at layer 4.
+
+### Two theories I wrote down today, both wrong
+
+1. **"The cancel before it left a blob."** Killed by this run: the nozzle was
+   cleaned first and it failed identically.
+2. **"The red glitter is clogging the nozzle."** Killed by the photograph of the
+   removed blob - it is a large mass of plastic. **A clog starves; it does not
+   produce that much material.** I asserted it with more confidence than one
+   colour-correlation deserved.
+
+Both were single-explanation guesses reached before the evidence could support
+them. What has actually held up all session is the boring tally: **black on `T0`
+is 5/5, red on `T1` is 1/4**, and the one red success came straight after a
+hand-load.
+
+### The failure is ADHESION, and it is self-reinforcing
+
+Plastic extrudes normally and never sticks; it curls up onto the nozzle. The
+reason it repeats after cleaning is the feedback loop: **this machine levels by
+touching the nozzle tip to the bed.** Any film left on that tip makes the probe
+read the bed as closer than it is, so the nozzle parks too high, so nothing
+sticks, so more plastic collects on the tip. Every run since the first blob has
+probed with a fouled tip, which means the stored mesh is suspect too.
+
+So cleaning flow is not enough - **the outside flat face of the tip has to be
+bare metal, and the bed must be re-levelled afterwards.**
+
+### Reading the blob
+
+It carried fine dark streaks marbled through the red plus a grey-brown patch.
+Two different things, worth telling apart:
+
+- **Marbled dark streaks: unpurged BLACK filament**, not burning. The `T0`->`T1`
+  colour change flushes 200mm (`M6211 A1 L200 T1`), and transition material
+  looks exactly like this, following the flow lines.
+- **Grey-brown patch: thermally degraded PLA.** That blob sat wrapped around a
+  block at 210 degC, then 240 degC during cleaning, for the better part of an hour.
+
+In the hand: unpurged black stretches like the red does; burnt PLA is brittle,
+crumbles to hard specks and smells acrid. The consequence either way is that
+degraded material is probably still in the melt zone, so a **cold pull** belongs
+in the cleanup, not just an external peel.
+
+### Next step is a BASELINE, not another experiment
+
+`test20c02.gcode` is still on the printer - the exact file that produced the
+bead that fit perfectly (black, `T0`, 1.64g, 6 min). Clean the tip, re-level,
+print that one file. It prints -> the machine is fine and the batch work can
+resume in black. It fails -> the machine is the problem and no amount of
+geometry work matters until levelling is fixed.
+
+---
+
 ## tray6red FAILED — 2026-09-03 — nothing laid down; and the brim lesson is WRONG
 
 Job `66b3d718`, 6 motifs in red on `T1`. Outcome, in the user's words: *"an
