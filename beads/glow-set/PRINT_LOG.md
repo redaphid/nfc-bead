@@ -6,6 +6,49 @@ propagating to the recipe.
 
 ---
 
+## test20-peg18 BLACK, 20 mm — 2026-09-03 — PRINTED; the idle gate was wrong
+
+Job `21da0e21`, `test20peg18blk.gcode`, 16 layers, 1.64 g on **T0 (black)**.
+Verified the honest way: `filament_detected` read **1 at layer 1 and still 1 at
+layer 4**, with layers advancing — the two phantom runs read 0 throughout.
+Finished `CurrentTicks == TotalTicks` (346/346).
+
+### The rule I wrote an hour earlier was falsified by this print
+
+After the second phantom print I wrote "require `filament_detected == 1` while
+IDLE before `start_print`". **This job sat at idle 0, loaded normally at 210 °C,
+and printed.** That gate would have blocked a good print. The user said *fire it
+anyway* and was right.
+
+Re-sorted by slot, the record stops being about the flag:
+
+| slot | runs | outcome |
+|---|---|---|
+| `T0` (black, FIRST slot) | `5e5a8e33`, `21da0e21` | 2/2 produced parts |
+| `T1` (red, SECOND slot) | `17e2cd47`, `86fbb0e6` | printed nothing |
+| `T1` (red) | `c0aa169a` | parts, but hand-loaded first |
+
+**`T1`'s auto-load is the thing that fails.** Every `T1` failure also happened to
+show idle-0, which is how the idle flag looked causal across three runs until a
+fourth broke it. Worth naming as a shape of bad inference, not just deleting:
+the correlation was inherited from the confound.
+
+Surviving rule: `filament_detected` must read **1 once `CurrentLayer >= 1`**;
+if layers climb with it at 0, `stop_print`. Prefer `T0` for single-colour jobs.
+
+Second phantom print, for the record: `86fbb0e6` (red, `T1`) ran all 16 layers,
+reported `task_status: 1`, and left a **completely clean plate — not even a purge
+line.** "No purge line" is the question to ask, because it separates *never
+loaded* from *loaded but did not stick*.
+
+Also: a warm bed collapses the ~12 min preamble to ~3. A single sleep-until-done
+sails past the abort window; poll instead.
+
+**Still unproven: the snap fit.** This is the first part carrying `PEG_HEIGHT`
+1.8 (engagement 0.50 -> 1.00 mm measured, clearance held at 0.050).
+
+---
+
 ## test20-peg18, 20 mm red — 2026-09-03 — PEG HEIGHT 1.2 -> 1.8
 
 ### The red reprint worked, and gave the first real fit data
