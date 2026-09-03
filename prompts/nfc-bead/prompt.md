@@ -322,6 +322,28 @@ This is the general shape of the worst bugs in this repo. When you change someth
 - **Decoration** (raised spiral / emboss / etc.): flat side on the build plate.
 - Settings: PLA or PETG, 0.12–0.16 mm layer height, 100% infill (these are tiny), no supports.
 
+### 33. Blender 5.0 headless hangs unless you pass `--gpu-backend opengl`
+
+`blender.exe -b --python build_<charm>.py` **hangs forever** in a headless/agent shell. Blender 5.0 defaults to the **Vulkan** backend and Vulkan context creation blocks when there is no desktop session. Always run:
+
+```
+blender.exe -b --gpu-backend opengl --python beads/<name>/build_<name>.py
+```
+
+The hang is easy to misread as a slow boolean solve. It isn't: the process sits at **~0.03 s CPU and ~18 MB working set** with **zero output**, having never reached your script. Check CPU time, not the log — Python's stdout is block-buffered when redirected, so a *working* run also shows an empty log for a long while. `blender --version` returns instantly even while `-b` hangs (it exits before app init), so a working `--version` proves nothing; probe with `-b --gpu-backend opengl --python-expr "print('OK')"`.
+
+### 34. UNIONing decoration primitives: never let them share a face or a tangent
+
+Building a raised decoration by UNIONing per-stroke solids (bars, end-caps, rings) is the natural approach and it *silently* produces non-manifold garbage — 1020 non-manifold edges on a 7-stroke sigil. The EXACT solver is fine with solids that cross transversally and bad at the two degenerate contacts, both of which this construction creates by default:
+
+- **Coplanar faces.** If every bar and cap spans the same `z_lo..z_hi`, all their top and bottom faces are coplanar. Fix: union them **oversized in Z with a per-primitive jitter**, then let the final crop INTERSECT cut the exact slab. The cut planes then pass through solid material instead of lying tangent to a face.
+- **Tangency.** A round end-cap of radius exactly `w/2` is precisely tangent to its bar's side faces — the same hazard as gotcha #9. Oversize the cap by ~2 µm so the surfaces cross.
+- **Exact duplicates.** A connected stroke path (a sigil) shares endpoints, so consecutive segments each emit an *identical* cap at the joint. UNIONing a solid with a copy of itself is degenerate; emit each cap once.
+
+Also drop the weld threshold for decorations: the pipeline's usual `remove_doubles` at **0.005 tears 0.8 mm strokes apart**. Boolean output is already welded — use `1e-5`.
+
+Reference implementation with all four handled: `beads/glow-set/deco.py`.
+
 **Build vs print orientation:** build scripts (`build_<charm>.py`) typically lay out the geometry in *build orientation* — the natural pose for boolean operations and inspection. The actual rotation to print orientation happens at export-time via `.claude/skills/bead-stl-export/export.py`, which has an `EXPORT_FLIP_X_DEG` dict that applies a deterministic per-part flip just before writing each STL. The live scene is unchanged; only the STL on disk is print-ready. This means the slicer should never need an auto-orient step.
 
 ---
