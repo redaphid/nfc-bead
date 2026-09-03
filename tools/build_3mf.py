@@ -278,7 +278,7 @@ def _patch_array_element(text, key, index, value, label):
 
 def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
           body_extruder=2, keep_cooling=False, decoration_extruder=1,
-          body_colour=None):
+          body_colour=None, bottom_xy=None, top_xy=None):
     if not template_dir.is_dir():
         raise SystemExit(f"Template dir missing: {template_dir}\n"
                          f"  Drop a reference .3mf into tmp/latest/ and extract it there, "
@@ -416,8 +416,12 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
     parent_chunks.append(bottom_parent_xml)
 
     # Build items: place each parent on the plate at its desired XY
-    bxy = PLATE_BOTTOM_XY
-    txy = PLATE_TOP_XY
+    # Defaults park a single bead's two halves side by side. A ganged plate
+    # from make_plate.py hands us two ROWS instead, which are far wider than
+    # that 36mm gap, so those callers pass explicit centres.
+    bxy = bottom_xy or PLATE_BOTTOM_XY
+    txy = top_xy or PLATE_TOP_XY
+    print(f"[3mf] placing Bottom at {bxy}, Top assembly at {txy}")
     build_items = [
         (top["parent_id"],    identity_with_translation(txy[0], txy[1], 0), str(uuid.uuid4())),
         (bottom["parent_id"], identity_with_translation(bxy[0], bxy[1], 0), str(uuid.uuid4())),
@@ -692,13 +696,31 @@ def main():
                    help="filament slot for the Decoration part (default 1, "
                         "black in the saved profile). Ignored for a bead with "
                         "no Decoration.stl.")
+    p.add_argument("--bottom-xy", default=None, metavar="X,Y",
+                   help="plate centre for the Bottom object, mm (default "
+                        "%.1f,%.1f). Needed when plating several beads at "
+                        "once - the default gap only suits one bead."
+                        % PLATE_BOTTOM_XY)
+    p.add_argument("--top-xy", default=None, metavar="X,Y",
+                   help="plate centre for the Top assembly, mm (default "
+                        "%.1f,%.1f)." % PLATE_TOP_XY)
     p.add_argument("--body-colour", default=None, metavar="HEX",
                    help="rewrite the body slot's colour in the profile, e.g. "
                         "#7CFC00 for glow-green. The saved profile has no glow "
                         "slot, so without this the preview shows the body in "
                         "whatever colour that slot was last saved as.")
     args = p.parse_args()
-    build(out_path=Path(args.out), template_dir=Path(args.template_dir),
+    def _xy(v):
+        if not v:
+            return None
+        try:
+            x, y = (float(t) for t in v.replace(" ", "").split(","))
+        except ValueError:
+            raise SystemExit(f"--bottom-xy/--top-xy want 'X,Y' in mm, got {v!r}")
+        return (x, y)
+
+    build(bottom_xy=_xy(args.bottom_xy), top_xy=_xy(args.top_xy),
+          out_path=Path(args.out), template_dir=Path(args.template_dir),
           no_brim=args.no_brim, body_extruder=args.body_extruder,
           keep_cooling=args.keep_cooling,
           decoration_extruder=args.decoration_extruder,
