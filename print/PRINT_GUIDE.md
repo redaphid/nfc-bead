@@ -54,10 +54,13 @@ Then `upload_file(local_path="/tmp/job.gcode")` and `start_print(...)`.
 
 ### Pre-flight — do not skip these, each one has burned a real print
 
-1. **`filament_detected` must read 1 while the printer is IDLE.** A dry extruder
-   runs the whole job and still reports `task_status: 1`. This is recipe gotcha
-   #41 and it has produced two phantom prints. Note it reads 0 *legitimately*
-   during preheat, mesh, wipe and load — gate on the idle value.
+1. **`filament_detected` must read 1 once layers are advancing.** A dry extruder
+   runs the whole job and still reports `task_status: 1` — recipe gotcha #41,
+   two phantom prints so far. It reads 0 *legitimately* through preheat, bed
+   mesh, nozzle wipe and load, so poll until `CurrentLayer >= 1` and judge it
+   there; if layers are climbing with the flag at 0, `stop_print`.
+   **Do not gate on the idle reading** — a print that sat at idle-0 loaded fine
+   and produced a real part, so that test only yields false negatives.
 2. **Check the gcode draws from the slot you think it does.**
    `grep -a "^; filament used \[g\]"` shows usage per slot *in position order*,
    and `grep -a "M6211 A1 L[0-9]* T[0-9]*"` shows which tool it loads.

@@ -384,29 +384,34 @@ success: `task_status: 1`, `CurrentTicks == TotalTicks`, empty
 and they all stay green when nothing comes out of the nozzle.** This has
 produced phantom "successful" prints more than once.
 
-**The gate, checked while the printer is IDLE and before `start_print`:**
+**The check that actually decides it:** `raw._cc2.filament_detected` must read
+**1 once layers are advancing** (`PrintInfo.CurrentLayer >= 1`). If layers are
+climbing and that flag is 0, the extruder is dry — call `stop_print` rather than
+let it paint air for the rest of the job.
 
-```
-get_status() -> raw._cc2.filament_detected == 1
-```
+**Do NOT gate on the idle reading.** An earlier version of this gotcha said to
+require 1 while idle, and that rule is wrong: run `21da0e21` sat at idle
+`filament_detected: 0`, loaded normally once the nozzle hit 210, and printed a
+real part. Blocking on the idle value produces false negatives, because 0 at
+idle just means nothing is parked at the sensor between jobs.
 
-Record from this repo, and the flag called every one:
+**The real discriminator is the SLOT.** Sorted that way the record is blunt:
 
-| run | idle `filament_detected` | outcome |
+| slot | runs | outcome |
 |---|---|---|
-| `17e2cd47` | 0 | nothing |
-| `c0aa169a` | 1 | real parts |
-| `86fbb0e6` | 0 | nothing, not even a purge line |
+| `T0` (black, FIRST slot) | `5e5a8e33`, `21da0e21` | 2/2 produced parts |
+| `T1` (red, SECOND slot) | `17e2cd47`, `86fbb0e6` | printed nothing |
+| `T1` (red) | `c0aa169a` | parts, but only after a hand-load |
 
-The trap is that `filament_detected` reads 0 *legitimately* during preheat and
-loading on a perfectly good run — the `M6211` load only fires once the nozzle is
-at temperature. That excuse is exactly what let two phantom prints through. So
-gate on the **idle** reading, where the value is unambiguous, and if a job is
-already running, only treat 0 as fatal once layers are advancing.
+`T1`'s auto-load is what fails. Every `T1` failure also happened to show idle-0,
+which is how the idle flag looked causal when it was only riding along — a
+correlation drawn from three runs that a fourth broke. **Prefer `T0` for
+single-colour jobs**, and if a job must draw from `T1`, have the user hand-feed
+that spool first.
 
-The gcode is not the variable: the *same file* both failed and succeeded, and it
-carries a real load macro (`M6211 A1 L200 T<n>`). A file asking for filament
-proves nothing, because that macro can fail silently.
+The gcode is not the variable either: the *same file* both failed and succeeded,
+and it carries a real load macro (`M6211 A1 L200 T<n>`). A file asking for
+filament proves nothing, because that macro can fail silently.
 
 **Confirming a print afterwards needs a human**, because the chamber camera
 looks across the front lip and cannot see the plate centre — it reads empty
