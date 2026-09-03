@@ -44,8 +44,20 @@ loaded* from *loaded but did not stick*.
 Also: a warm bed collapses the ~12 min preamble to ~3. A single sleep-until-done
 sails past the abort window; poll instead.
 
-**Still unproven: the snap fit.** This is the first part carrying `PEG_HEIGHT`
-1.8 (engagement 0.50 -> 1.00 mm measured, clearance held at 0.050).
+### FIT VERDICT: it snaps. Barely too loose to hold.
+
+User, on the printed pair: *"almost perfect! It makes the 'snapping' noise.
+Barely, barely too loose for sticking together."*
+
+**This confirms #40's diagnosis.** At 0.50 mm engagement the halves were plainly
+loose; at **1.00 mm they snap** — same 0.050 mm radial clearance, so the whole
+change came from depth. Engagement length was the fault, not clearance, and
+reaching for `PEG_CLEAR` first would have chased the wrong number.
+
+Now, and only now, clearance is the right knob: **`PEG_CLEAR` 0.05 -> 0.02**
+(radial; 0.10 -> 0.04 mm diametral). Peg height stays 1.8 so this remains a
+single-variable step. If it overshoots to too-tight that is the recoverable
+direction — the funnel and the chamfered tip both help it start.
 
 ---
 

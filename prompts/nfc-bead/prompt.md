@@ -367,6 +367,12 @@ The bead read as "close, but too loose", and the instinct is to reach for
 just almost no length at which it applied. **`PEG_HEIGHT` is the first knob;
 `PEG_CLEAR` is the second.**
 
+**Confirmed on hardware.** `PEG_HEIGHT` 1.2 -> 1.8 took measured engagement
+0.50 -> 1.00 mm at unchanged 0.050 mm clearance, and the printed pair went from
+plainly loose to **audibly snapping** — just barely too loose to hold. Depth did
+all of that. Only then is clearance worth touching (0.05 -> 0.02 radial). Change
+one at a time: had both moved together, neither result would mean anything.
+
 Never estimate this from the constants — the interaction is easy to get wrong by
 2x. Cross-section both exported STLs and compare bore radius to peg radius at
 the same seated height. `beads/glow-set/measure_fit.py` does exactly that and
