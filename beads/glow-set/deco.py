@@ -190,12 +190,31 @@ def fit_glyph(glyph, r_target, max_stroke=2.2):
     that actually matters (glyphs.py caps line art at 2.2mm) rather than an
     arbitrary scale factor. The glyph is only ever enlarged, never shrunk.
 
-    Ring/arc glyphs are returned untouched: they are concentric about the
-    origin by construction, so they are already centred and already sized to
-    the envelope.
+    Ring/arc glyphs are already centred (concentric about the origin by
+    construction) so they are never moved, but they ARE shrunk to fit: a
+    concentric groove drawn to a fixed radius gets sliced into fragments by any
+    silhouette narrower than it - the crescent bite of `moon`, the branch
+    notches of `pine` - and cropped ring fragments read as a mistake rather
+    than a design.
     """
-    if any(p[0] in ("ring", "arc") for p in glyph):
-        return glyph
+    bands = [p for p in glyph if p[0] in ("ring", "arc")]
+    if bands:
+        ro_max = max(p[2] for p in bands)
+        if ro_max <= r_target:
+            return glyph
+        k = r_target / ro_max
+        out = []
+        for p in glyph:
+            if p[0] == "dot":
+                out.append(("dot", p[1] * k, p[2] * k, p[3] * k))
+            elif p[0] == "line":
+                out.append(("line", p[1] * k, p[2] * k, p[3] * k, p[4] * k,
+                            p[5] * k))
+            elif p[0] == "ring":
+                out.append(("ring", p[1] * k, p[2] * k))
+            else:
+                out.append(("arc", p[1] * k, p[2] * k, p[3], p[4]))
+        return out
 
     xs, ys = [], []
     for p in glyph:
@@ -262,7 +281,8 @@ def fit_glyph(glyph, r_target, max_stroke=2.2):
 
 
 def build_decoration(glyph, outline, show_z, relief=RELIEF, eps=EPS,
-                     inset=EDGE_INSET, name="Decoration", verbose=True):
+                     inset=EDGE_INSET, name="Decoration", verbose=True,
+                     centre=(0.0, 0.0)):
     """Solid black figure standing on the Top show face.
 
     `outline` is the bead silhouette in mm (same coords as the body). Returns
@@ -363,6 +383,18 @@ def build_decoration(glyph, outline, show_z, relief=RELIEF, eps=EPS,
 
     if acc is None:
         raise ValueError("empty glyph - nothing to decorate with")
+
+    # Offset the built mesh rather than the glyph primitives: ring and arc are
+    # concentric about the origin by construction and carry no centre of their
+    # own, so there is nothing to translate on them. Moving the finished solid
+    # relocates every primitive type uniformly.
+    if centre != (0.0, 0.0):
+        acc.location.x += centre[0]
+        acc.location.y += centre[1]
+        bpy.ops.object.select_all(action='DESELECT')
+        acc.select_set(True)
+        bpy.context.view_layer.objects.active = acc
+        bpy.ops.object.transform_apply(location=True)
     # Weld at 1e-5, NOT the pipeline's usual 0.005. EXACT boolean output is
     # already welded; at 0.005 it collapses genuinely distinct vertices on the
     # 0.8mm-wide strokes into each other and TEARS the mesh - that alone took

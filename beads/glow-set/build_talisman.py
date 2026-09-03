@@ -96,7 +96,6 @@ HOLE_D       = 1.2       # medallion gauge
 # Empty -> single-filament bead with no Decoration.stl, the default.
 GLYPH_SPEC  = os.environ.get("BEAD_GLYPH", "")
 RELIEF      = float(os.environ.get("BEAD_RELIEF", "0.5"))
-GLYPH_R_MAX = 6.2        # must match glyphs.R_MAX - clears pegs AND string hole
 
 PRINT_DIR = os.path.join(HERE, "print", NAME)
 
@@ -264,15 +263,34 @@ def main():
         who = who or SEED
         glyph = GL.build(theme, who)
         raw = D.glyph_extent(glyph)
-        glyph = D.fit_glyph(glyph, GLYPH_R_MAX * 0.92)
+        # The envelope is the SMALLER of the hardware limit (clears the peg
+        # sockets and the string hole) and how much room the silhouette
+        # actually has at its centre. A fixed 6.2 overhangs any narrow or
+        # concave shape and the crop then slices the figure into fragments.
+        # WHERE the figure sits. Centring on the origin is wrong for a concave
+        # shape: on `moon` the crescent bite reaches the origin, leaving 0.75mm
+        # of room there, so an origin-centred glyph is sliced into fragments by
+        # the crop. Keep the origin when it has room to spare - most shapes
+        # look best centred - and otherwise fall back to the silhouette's
+        # best interior point, which place_pocket already solves for.
+        gx, gy = 0.0, 0.0
+        if S.clearance(pts, 0.0, 0.0) < 5.0:
+            gx, gy = px, py
+        room = S.clearance(pts, gx, gy) - D.EDGE_INSET - 0.4
+
+        # No GLYPH_R_MAX here. That 6.2mm cap exists for CARVED glyphs, which
+        # cut 1.2mm into the show face and so had to clear the peg sockets and
+        # the string hole underneath. A raised figure removes no material and
+        # sits entirely above the show face, so the only real limit is the
+        # silhouette itself.
+        r_env = max(room, 2.0)
+        glyph = D.fit_glyph(glyph, r_env * 0.92)
         ext = D.glyph_extent(glyph)
         print("  glyph     : %s/%s, %d primitives, extent r=%.2f -> %.2f "
-              "(max %.1f)" % (theme, who, len(glyph), raw, ext, GLYPH_R_MAX))
-        if ext > GLYPH_R_MAX:
-            raise RuntimeError(
-                "glyph extent %.2fmm exceeds GLYPH_R_MAX %.2fmm - it would sit "
-                "over the peg sockets or the string hole" % (ext, GLYPH_R_MAX))
-        decoration = D.build_decoration(glyph, pts, z_max, relief=RELIEF)
+              "(envelope %.2f at %+.1f,%+.1f)"
+              % (theme, who, len(glyph), raw, ext, r_env, gx, gy))
+        decoration = D.build_decoration(glyph, pts, z_max, relief=RELIEF,
+                                        centre=(gx, gy))
 
     # verify (gotcha #8)
     nb, nt = nonmanifold(bottom), nonmanifold(top)

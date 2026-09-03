@@ -47,6 +47,34 @@ speck when raised.
 - The pipeline's usual `remove_doubles` at 0.005 **tears 0.8 mm strokes apart**.
   Use 1e-5 on decorations.
 
+**Extended to the whole `shapes.py` family.** `BEAD_SHAPE="shape:<name>"` now
+builds the 14 silhouettes in `shapes.py` (they are drawn at final size in
+absolute mm, so `BEAD_R` does not apply to them). 13 of 14 built; themes are
+cycled and seeded per shape so each bead is unique and reproducible.
+
+**`heart` is excluded and it is not this work's fault** — it fails identically
+with no decoration at all, `Bottom=553 Top=553` non-manifold, so the silhouette
+breaks the body pipeline. Verified by building it single-colour. Worth fixing
+separately; it is a good shape to have in a trade batch.
+
+Building the whole set rather than one bead is what exposed the remaining
+bugs, and two of them were design errors rather than solver quirks:
+
+- **The 6.2 mm glyph envelope was inherited from the wrong problem.**
+  `GLYPH_R_MAX` exists for *carved* glyphs, which cut 1.2 mm into the show face
+  and therefore had to clear the peg sockets and the string hole underneath. A
+  **raised** figure removes no material and sits entirely above the show face,
+  so those features are irrelevant to it. The only real limit is the
+  silhouette. Dropping the cap lets the figures be bolder.
+- **Centring on the origin is wrong for a concave shape.** On `moon` the
+  crescent bite reaches the origin — clearance there is 0.75 mm — so an
+  origin-centred groove was sliced into fragments by the silhouette crop, which
+  reads as a mistake rather than a design. The figure is now placed at the
+  origin only when it has room to spare, and otherwise at the silhouette's best
+  interior point, which `place_pocket` already solves for. Ring glyphs are also
+  shrunk to fit (`pine` lost its rings into the branch notches for the same
+  reason).
+
 **Open — do not read this entry as "done":**
 
 - **Never sliced, never printed.** Same wall as every other bead here: the
