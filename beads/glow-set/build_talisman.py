@@ -90,6 +90,7 @@ PEG_DIAMETER = 2.6       # gotcha #29 - 2.0mm does NOT grip
 PEG_HEIGHT   = 1.2
 PEG_CLEAR    = 0.05      # radial
 PEG_CHAMFER  = 0.35      # gotcha #30 - cone tip must OVERLAP the shaft
+SOCKET_LEADIN = 0.4      # 45-deg funnel at the socket MOUTH - see below
 HOLE_D       = 1.2       # medallion gauge
 
 # TWO-COLOUR: "<theme>:<name>" from glyphs.py (star / groove / sigil).
@@ -239,6 +240,25 @@ def main():
         lo, hi = tz - 1.0, tz + PEG_HEIGHT + 0.3
         c = cyl(hr, hi - lo, (gx, gy, (lo + hi) / 2.0), verts=64)
         boolean_op(top, c, 'DIFFERENCE', "PH%d" % i)
+        # FUNNEL THE MOUTH. tz is the mating face, which is the face that goes
+        # against the PLATE, so the socket opening is drawn in the very first
+        # layers - the ones that get squished. A 2.7mm bore is already the
+        # hardest thing on the layer to trace cleanly, and first-layer squish
+        # then pushes material into it: the printed bores came out ovalised
+        # with a curled rim of extrudate standing proud around them.
+        # A 45-degree lead-in means the first layers trace a LARGER circle and
+        # the squeeze-out has somewhere to go, and it doubles as the entry
+        # taper for the peg - the counterpart to the chamfered peg tip in
+        # gotcha #30. The cutter starts BELOW tz so its wide end is fully
+        # outside the solid rather than coplanar with the mating face.
+        d = SOCKET_LEADIN + 0.2
+        bpy.ops.mesh.primitive_cone_add(
+            vertices=64,
+            radius1=hr + SOCKET_LEADIN + 0.2,     # wide end, below the face
+            radius2=hr,                            # meets the bore
+            depth=d,
+            location=(gx, gy, tz - 0.2 + d / 2.0))
+        boolean_op(top, bpy.context.active_object, 'DIFFERENCE', "PF%d" % i)
     clean_mesh(top)
 
     # pegs on Bottom (gotcha #14): shaft + OVERLAPPING chamfer cone (gotcha #30)

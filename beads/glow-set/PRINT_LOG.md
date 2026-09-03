@@ -6,6 +6,60 @@ propagating to the recipe.
 
 ---
 
+## test20-red, 20 mm solid red — 2026-09-02 — SLICED HEADLESSLY AND PRINTED
+
+**The box has a slicer after all, and it slices from the command line.** It is
+`D:\tools\elegooslicer\elegoo-slicer.exe` — *with a hyphen*. Searching for
+`ElegooSlicer.exe` finds nothing, which is exactly how this log and the vault
+both came to say "no slicer is installed on this box". He corrected it.
+
+    D:\tools\elegooslicer\elegoo-slicer.exe --slice 0 \
+        --outputdir <dir> <project.3mf>          # -> <dir>\plate_1.gcode
+
+It is a GUI-subsystem binary and prints **nothing** to the console — `--help`
+returns zero bytes. Judge it by whether `plate_1.gcode` appeared, never by the
+log. The 3MF's embedded `project_settings` are honoured, so the brim, seam and
+cooling patches survive into the gcode and can be grepped there.
+
+**Every "cannot print without a human slicing once" note in this repo is now
+stale.** The 3MF → gcode → upload → print path is autonomous.
+
+What printed: the quatrefoil at **20 mm** (`BEAD_R=10`), single filament, on
+**slot 2 (#FF0000 red)**. 20 mm is the floor — at 19 mm `place_pegs` fails, so
+there is no smaller version of this shape. 15 layers, 5m57s, 1.64 g.
+
+This is the **first print carrying the three fixes**, all confirmed present in
+the gcode itself rather than assumed: `brim_type=auto_brim` / `brim_width=5`,
+`seam_position=random`, and `close_fan_the_first_x_layers=3` with
+`full_fan_speed_layer=5`. Filament draw was `0.00, 546.04, 0.00, 0.00` — slot 2
+only, so the single-colour assignment is right.
+
+### The socket defect this was built to fix
+
+From the photo of the 32 mm black print: the three peg sockets came out
+**ovalised, not round**, each ringed by a curled rim of extrudate standing
+proud of the face, with loops of stringing around the bore.
+
+`tz` — the plane the sockets open onto — is the **mating face, and that face
+goes against the plate**. So the socket mouth is drawn in the very first
+layers, the ones that get squished. A 2.7 mm bore is already the hardest thing
+on the layer to trace cleanly, and first-layer squish then pushes material into
+it. That is the ovalisation and the raised rim.
+
+Fix: a **45° lead-in funnel at the socket mouth**, `SOCKET_LEADIN = 0.4`.
+Measured on the exported STL — **3.49 mm at the mouth tapering to the nominal
+2.69 mm bore by z=0.4** — so the two most-squished layers now trace a
+noticeably larger circle and the squeeze-out has somewhere to go. It doubles as
+the entry taper for the peg, the counterpart to the chamfered peg tip in
+gotcha #30.
+
+Note the old print was made from a **pre-sliced gcode that predates all three
+fixes**, so its stringy socket masses are also the `seam_position=aligned`
+failure this log already described. Do not read the new print as testing the
+funnel alone — it changes four things at once.
+
+---
+
 ## two-colour variants — 2026-09-02 — built + verified, NOT sliced, NOT printed
 
 Glow-green body with a **black figure raised on the show face**. Adds a third
