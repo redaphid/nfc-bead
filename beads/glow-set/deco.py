@@ -236,16 +236,28 @@ def fit_glyph(glyph, r_target, max_stroke=2.2):
     w_max = max([p[3] * 2 if p[0] == "dot" else p[5] for p in centred] or [0.0])
     if w_max > 1e-6:
         sw = min(sw, max(max_stroke / w_max, 1.0))
-    if abs(s - 1.0) < 1e-6 and abs(sw - 1.0) < 1e-6:
-        return centred
+    def scaled(g, sxy, swid):
+        out = []
+        for p in g:
+            if p[0] == "dot":
+                out.append(("dot", p[1] * sxy, p[2] * sxy, p[3] * swid))
+            else:
+                out.append(("line", p[1] * sxy, p[2] * sxy, p[3] * sxy,
+                            p[4] * sxy, p[5] * swid))
+        return out
 
-    out = []
-    for p in centred:
-        if p[0] == "dot":
-            out.append(("dot", p[1] * s, p[2] * s, p[3] * sw))
-        else:
-            out.append(("line", p[1] * s, p[2] * s, p[3] * s, p[4] * s,
-                        p[5] * sw))
+    out = centred if (abs(s - 1.0) < 1e-6 and abs(sw - 1.0) < 1e-6) \
+        else scaled(centred, s, sw)
+
+    # Guarantee the envelope. Re-centring minimises the bounding box, not the
+    # max radius, so it can push the furthest point slightly FURTHER from the
+    # origin - and then the caller's GLYPH_R_MAX gate rejects the bead outright
+    # (it killed saucer and tent). Fitting must never hand back something the
+    # gate refuses, so clamp down to the target if that happened.
+    r_out = glyph_extent(out)
+    if r_out > r_target:
+        k = r_target / r_out
+        out = scaled(out, k, k)
     return out
 
 
@@ -274,11 +286,41 @@ def build_decoration(glyph, outline, show_z, relief=RELIEF, eps=EPS,
         return H_BUILD + _n[0] * 0.007
 
     acc = None
-    # A sigil is a connected stroke path, so consecutive segments share an
-    # endpoint and would each contribute an IDENTICAL cap cylinder there.
-    # UNIONing a solid with an exact duplicate of itself is degenerate and the
-    # EXACT solver returns non-manifold geometry, so emit each cap once.
-    seen_caps = set()
+
+    # Collect every round primitive by POSITION and keep only the largest at
+    # each spot, rather than unioning them all. Two things land on the same
+    # centre: a connected stroke path shares endpoints, so consecutive
+    # segments each want a cap there; and `sigil` drops a dot on the path's
+    # start point, which already has one. Concentric cylinders of nearly equal
+    # radius are degenerate under the EXACT solver - that pair alone left owl
+    # with 11 non-manifold edges. Concentric discs are also trivially
+    # redundant: the larger one contains the smaller exactly, so keeping the
+    # max is not an approximation.
+    discs = {}
+    bars = []
+    bands = []
+
+    def _disc(x, y, r):
+        k = (round(x, 3), round(y, 3))
+        if k not in discs or r > discs[k][2]:
+            discs[k] = (x, y, r)
+
+    for p in glyph:
+        k = p[0]
+        if k == "dot":
+            _disc(p[1], p[2], p[3])
+        elif k == "line":
+            _, x1, y1, x2, y2, w = p
+            bars.append((x1, y1, x2, y2, w))
+            # Radius exactly w/2 would make the cap TANGENT to the bar's two
+            # side faces - the cylinder-tangent-to-plane arrangement gotcha #9
+            # warns collapses. Oversize by 2um so the surfaces cross.
+            _disc(x1, y1, w / 2.0 + 0.002)
+            _disc(x2, y2, w / 2.0 + 0.002)
+        elif k in ("ring", "arc"):
+            bands.append(p)
+        else:
+            raise ValueError("unknown glyph primitive %r" % (k,))
 
     def add(obj):
         nonlocal acc
@@ -288,51 +330,36 @@ def build_decoration(glyph, outline, show_z, relief=RELIEF, eps=EPS,
         else:
             _boolean(acc, obj, 'UNION', "U%d" % id(obj))
 
-    for p in glyph:
-        k = p[0]
-        if k == "dot":
-            _, x, y, r = p
-            add(_cyl(r, _h(), (x, y, z_c), verts=48))
-        elif k == "line":
-            _, x1, y1, x2, y2, w = p
-            dx, dy = x2 - x1, y2 - y1
-            ln = math.hypot(dx, dy)
-            bpy.ops.mesh.primitive_cube_add(
-                size=1, location=((x1 + x2) / 2, (y1 + y2) / 2, z_c))
-            bar = bpy.context.active_object
-            # Jitter the width by microns as well as the height: a sigil may
-            # run two collinear strokes in a row, and at identical widths their
-            # side faces are coplanar - the same union hazard as above. Far
-            # below what a 0.4mm nozzle can resolve.
-            bar.scale = (ln, w + _n[0] * 0.0011, _h())
-            bar.rotation_euler = (0, 0, math.atan2(dy, dx))
-            bpy.ops.object.transform_apply(scale=True, rotation=True)
-            add(bar)
-            # round caps so strokes join cleanly instead of leaving notches
-            for (cx, cy) in ((x1, y1), (x2, y2)):
-                key = (round(cx, 3), round(cy, 3), round(w, 3))
-                if key in seen_caps:
-                    continue
-                seen_caps.add(key)
-                # Radius w/2 would make the cap exactly TANGENT to the bar's
-                # two side faces - a cylinder tangent to a plane is the
-                # arrangement gotcha #9 warns collapses under the EXACT solver.
-                # Oversize it by 2um so the surfaces cross cleanly instead.
-                add(_cyl(w / 2.0 + 0.002, _h(), (cx, cy, z_c), verts=24))
-        elif k in ("ring", "arc"):
-            ri, ro = p[1], p[2]
-            bh = _h()
-            band = _cyl(ro, bh, (0, 0, z_c), verts=128)
-            if ri > 1e-6:
-                _boolean(band, _cyl(ri, bh * 3, (0, 0, z_c), verts=128),
-                         'DIFFERENCE', "Hollow")
-            if k == "arc":
-                _boolean(band, _wedge(ro * 1.5, z_c - bh, z_c + bh,
-                                      math.radians(p[3]), math.radians(p[4])),
-                         'INTERSECT', "Wedge")
-            add(band)
-        else:
-            raise ValueError("unknown glyph primitive %r" % (k,))
+    for (x1, y1, x2, y2, w) in bars:
+        dx, dy = x2 - x1, y2 - y1
+        ln = math.hypot(dx, dy)
+        bpy.ops.mesh.primitive_cube_add(
+            size=1, location=((x1 + x2) / 2, (y1 + y2) / 2, z_c))
+        bar = bpy.context.active_object
+        # Jitter the width by microns as well as the height: a sigil may run
+        # two collinear strokes in a row, and at identical widths their side
+        # faces are coplanar - the same union hazard as above. Far below what
+        # a 0.4mm nozzle can resolve.
+        bar.scale = (ln, w + _n[0] * 0.0011, _h())
+        bar.rotation_euler = (0, 0, math.atan2(dy, dx))
+        bpy.ops.object.transform_apply(scale=True, rotation=True)
+        add(bar)
+
+    for (x, y, r) in discs.values():
+        add(_cyl(r, _h(), (x, y, z_c), verts=48))
+
+    for p in bands:
+        ri, ro = p[1], p[2]
+        bh = _h()
+        band = _cyl(ro, bh, (0, 0, z_c), verts=128)
+        if ri > 1e-6:
+            _boolean(band, _cyl(ri, bh * 3, (0, 0, z_c), verts=128),
+                     'DIFFERENCE', "Hollow")
+        if p[0] == "arc":
+            _boolean(band, _wedge(ro * 1.5, z_c - bh, z_c + bh,
+                                  math.radians(p[3]), math.radians(p[4])),
+                     'INTERSECT', "Wedge")
+        add(band)
 
     if acc is None:
         raise ValueError("empty glyph - nothing to decorate with")

@@ -58,11 +58,21 @@ def _resample(pts, step_mm=0.35):
 
 
 def get_outline():
-    """BEAD_SHAPE selects the source: "foil:quatrefoil" or "talisman:<seed>"."""
+    """BEAD_SHAPE selects the source: "foil:quatrefoil", "shape:skull" or
+    "talisman:<seed>".
+
+    shapes.SHAPES are drawn at their final size in absolute mm, so BEAD_R does
+    NOT apply to them - a skull is the size its author drew it.
+    """
     spec = os.environ.get("BEAD_SHAPE", "talisman:" + SEED)
     kind, _, which = spec.partition(":")
     if kind == "foil":
         return _resample(FO.build(which, r=R_OUT))
+    if kind == "shape":
+        if which not in S.SHAPES:
+            raise SystemExit("unknown shape %r - pick one of %s"
+                             % (which, sorted(S.SHAPES)))
+        return S.SHAPES[which]()
     return T.talisman(which or SEED, r_out=R_OUT)
 
 # CONFIG ====================================================================
