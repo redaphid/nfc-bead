@@ -19,9 +19,15 @@ Each generator returns a closed list of (x, y) vertices in mm, wound CCW, with
 the core centred on the origin.
 """
 import math
+import os
+import sys
+
+if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import nozzle as NZ      # noqa: E402  - nozzle-dependent constants live there
 
 PEG_RING = 7.1        # min: pocket_r 5.25 + peg_r 1.3 + 0.55 wall
-PEG_R = 1.3
+PEG_R = NZ.P["PEG_DIAMETER"] / 2.0
 CORE_R = PEG_RING + PEG_R + 1.2      # 9.6mm - solid disc every shape must hold
 
 
@@ -79,7 +85,9 @@ def extent(pts):
 
 
 POCKET_R = 5.25       # NTAG215 10.5mm pocket
-WALL = 0.6            # min material between a feature and the outline
+WALL = NZ.P["WALL"]   # min material between a feature and the outline. NOZZLE
+                      # DEPENDENT: it has to hold two perimeters back to back,
+                      # so 0.6 at a 0.42 line width becomes 1.2 at 0.63.
 
 
 def place_pocket(pts, step=0.4):
@@ -150,8 +158,11 @@ def place_pegs(pts, pocket, peg_r=PEG_R, wall=0.9, n=3, hole_y=None):
     return chosen
 
 
-HOLE_R = 0.6          # 1.2mm string hole (medallion gauge)
-HOLE_CROWN = 2.5      # min material ABOVE the hole. black-rainbow shipped 1.6mm
+HOLE_R = NZ.P["HOLE_R"]   # string hole; 0.6 (1.2mm bore) at a 0.4mm nozzle,
+                          # 0.9 (1.8mm) at 0.6 - a 1.2mm bore is under two
+                          # 0.63mm line widths and prints ragged or closed.
+HOLE_CROWN = NZ.P["HOLE_CROWN"]
+                      # min material ABOVE the hole. black-rainbow shipped 1.6mm
                       # and is flagged in the vault as liable to snap off a
                       # bracelet - this is that lesson encoded as a gate.
 

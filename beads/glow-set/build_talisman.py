@@ -37,6 +37,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() \
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
+import nozzle as NZ         # noqa: E402
 import shapes as S          # noqa: E402
 import talismans as T       # noqa: E402
 import foils as FO          # noqa: E402
@@ -101,21 +102,32 @@ NAME   = os.environ.get("BEAD_NAME", "shield")   # which talisman to build
 SEED   = os.environ.get("BEAD_SEED", "virginia")  # seeds the proportions
 R_OUT  = float(os.environ.get("BEAD_R", "12.0"))   # circumscribed radius; 12 -> 24mm
 
+# Nozzle-INDEPENDENT. Both are exact multiples of 0.20 and of 0.30, so they
+# quantise cleanly at either nozzle and there is nothing to swap.
 BOTTOM_THICK = 1.5       # NFC pocket + peg bases
 TOP_THICK    = 3.0       # sockets + string hole; thicker = brighter glow
 BODY         = BOTTOM_THICK + TOP_THICK          # 4.5mm
 
-NFC_DIAMETER = 10.5
-NFC_DEPTH    = 0.8
-PEG_DIAMETER = 2.6       # gotcha #29 - 2.0mm does NOT grip
-PEG_HEIGHT   = 1.8       # gotcha #40 - funnel + tip chamfer eat 0.9mm of it
-PEG_CLEAR    = 0.01      # radial. 0.05 snapped but slid apart; 0.02 still read
-                         # slightly loose in the hand. Depth is maxed out - the
-                         # socket already eats 2.05 of the Top's 3.0mm - so the
-                         # socket is what tightens from here (gotcha #40).
+NFC_DIAMETER = 10.5      # the tag's own diameter, not a printed feature
+PEG_HEIGHT   = 1.8       # gotcha #40 - funnel + tip chamfer eat into it. 6 x
+                         # 0.30 and 9 x 0.20, so it needs no nozzle variant.
 PEG_CHAMFER  = 0.35      # gotcha #30 - cone tip must OVERLAP the shaft
-SOCKET_LEADIN = 0.4      # 45-deg funnel at the socket MOUTH - see below
-HOLE_D       = 1.2       # medallion gauge
+
+# Nozzle-DEPENDENT - see nozzle.py, which carries the per-constant reasoning.
+# BEAD_NOZZLE defaults to "0.4", so these are exactly the values that were
+# printed and proven; BEAD_NOZZLE=0.6 swaps in the wider-line set.
+NFC_DEPTH     = NZ.P["NFC_DEPTH"]
+PEG_DIAMETER  = NZ.P["PEG_DIAMETER"]   # gotcha #29 - 2.0mm does NOT grip
+PEG_CLEAR     = NZ.P["PEG_CLEAR"]      # radial. At 0.4: 0.05 snapped but slid
+                                       # apart, 0.02 still read slightly loose,
+                                       # 0.01 shipped. At 0.6 it is unsettled -
+                                       # a wider line pushes more material into
+                                       # a bore, so the socket should come out
+                                       # TIGHTER than nominal and the value
+                                       # should go UP. That is what the fit
+                                       # ladder in NOZZLE_06.md is for.
+SOCKET_LEADIN = NZ.P["SOCKET_LEADIN"]  # 45-deg funnel at the socket MOUTH
+HOLE_D        = NZ.P["HOLE_D"]         # medallion gauge at 0.4
 
 # TWO-COLOUR: "<theme>:<name>" from glyphs.py (star / groove / sigil).
 # Empty -> single-filament bead with no Decoration.stl, the default.
@@ -202,6 +214,11 @@ def wipe():
 def main():
     print("=" * 64)
     print("glow-set talisman: %s (seed %r)" % (NAME, SEED))
+    print("  %s" % NZ.banner())
+    print("  hole d=%.2f  nfc depth=%.2f  peg d=%.2f clear=%.3f h=%.2f  "
+          "leadin=%.2f  wall=%.2f"
+          % (HOLE_D, NFC_DEPTH, PEG_DIAMETER, PEG_CLEAR, PEG_HEIGHT,
+             SOCKET_LEADIN, S.WALL))
     print("=" * 64)
     wipe()
 

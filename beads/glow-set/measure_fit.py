@@ -17,11 +17,24 @@ returns a plausible number for the wrong place is worse than no tool. The pegs
 are the only islands standing above the mating face, so they can simply be
 found.
 
+--gap-max IS NOT COSMETIC. "At or below the design clearance" was written into
+this file as the literal 0.08, which is only meaningful while the design
+clearance is one of the 0.4mm-nozzle values (0.01 - 0.05). Measuring a fit
+LADDER breaks that assumption by construction: a rung built at PEG_CLEAR=0.10
+has a uniform 0.100mm gap down the whole engaged length, every sample lands
+above 0.08, and the tool reports engagement 0.00mm - "the peg is never gripped"
+- for geometry that is exactly as engaged as the tight rungs. That is the same
+class of error the docstring above already warns about: a confident number for
+the wrong question. So the threshold is now an argument, defaulting to 0.08 so
+every existing invocation is unchanged, and a ladder rung is measured against
+its OWN design clearance plus a little slack.
+
 Usage:
     python beads/glow-set/measure_fit.py <bead-dir-name> [...]
+    python beads/glow-set/measure_fit.py n06-c010-yaxing --gap-max 0.13
 """
+import argparse
 import pathlib
-import sys
 
 import numpy as np
 import trimesh
@@ -31,6 +44,7 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 PRINT = REPO / "beads" / "glow-set" / "print"
 STEP = 0.1
 MAX_H = 2.6
+GAP_MAX = 0.08
 
 
 def polys(mesh, z):
@@ -102,7 +116,7 @@ def report(name):
                 continue
             gap = sr - pr
             gaps.append(gap)
-            if gap <= 0.08:
+            if gap <= GAP_MAX + 1e-9:
                 eng += STEP
         per_peg.append((xy, eng, min(gaps) if gaps else float("nan")))
 
@@ -115,11 +129,25 @@ def report(name):
 
 
 if __name__ == "__main__":
-    names = sys.argv[1:]
-    if not names:
-        raise SystemExit(__doc__)
-    worst = [report(n) for n in names]
-    bad = [n for n, w in zip(names, worst) if w is None or w < 0.9]
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("names", nargs="+", help="bead dir names under print/")
+    ap.add_argument("--gap-max", type=float, default=GAP_MAX,
+                    help="radial gap (mm) still counted as engaged. Default "
+                         "0.08 suits the 0.4mm-nozzle clearances; on a fit "
+                         "ladder pass the rung's own PEG_CLEAR plus ~0.03.")
+    ap.add_argument("--min", type=float, default=0.9,
+                    help="engagement (mm) below which this exits non-zero")
+    a = ap.parse_args()
+    GAP_MAX = a.gap_max
+
+    worst = [report(n) for n in a.names]
+    # 1e-6 slack: engagement is a sum of 0.1 steps, so an exact 0.9 arrives as
+    # 0.8999999999999999 and a bare `< 0.9` failed a bead that passed.
+    bad = [n for n, w in zip(a.names, worst)
+           if w is None or w < a.min - 1e-6]
     if bad:
-        raise SystemExit(f"\nFAIL: engagement under 0.9mm on {', '.join(bad)}")
-    print("\nFIT OK - every peg engages >= 0.9mm")
+        raise SystemExit(f"\nFAIL: engagement under {a.min}mm on "
+                         f"{', '.join(bad)}")
+    print(f"\nFIT OK - every peg engages >= {a.min}mm "
+          f"(gap <= {a.gap_max}mm)")

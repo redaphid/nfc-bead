@@ -190,11 +190,16 @@ def _check_decoration_stacking(top: trimesh.Trimesh, deco: trimesh.Trimesh) -> l
 # ─── Driver ────────────────────────────────────────────────────────────
 def verify(stl_dir: str) -> int:
     """Returns 0 on full pass, 1 on any failure."""
+    # Decoration is OPTIONAL. A single-filament bead exports exactly Bottom +
+    # Top - that is build_talisman.py's documented default, and the whole glow
+    # set prints that way - so demanding a Decoration.stl refused to check the
+    # commonest bead in the repo at all. Bottom and Top are still required.
     paths = {p: os.path.join(stl_dir, f"{p}.stl") for p in CANONICAL_PARTS}
-    missing = [p for p, path in paths.items() if not os.path.isfile(path)]
+    missing = [p for p in ("Bottom", "Top") if not os.path.isfile(paths[p])]
     if missing:
         print(f"missing STL(s) in {stl_dir}: {missing}", file=sys.stderr)
         return 1
+    paths = {p: path for p, path in paths.items() if os.path.isfile(path)}
 
     print(f"verifying STLs in {stl_dir}\n")
     all_checks: list[tuple[str, list[Check]]] = []
