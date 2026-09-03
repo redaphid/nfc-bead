@@ -6,6 +6,64 @@ propagating to the recipe.
 
 ---
 
+## tray6red FAILED — 2026-09-03 — nothing laid down; and the brim lesson is WRONG
+
+Job `66b3d718`, 6 motifs in red on `T1`. Outcome, in the user's words: *"an
+oozing, undifferentiated mass stuck to the print head with nothing layed down."*
+
+**Nothing adhered at all.** That rules out the obvious story (a part detaches
+mid-print and the nozzle drags it) — material was extruded, `filament_detected`
+read 1, layers advanced to 2 and beyond, and none of it ever reached the plate.
+This is a FIRST-LAYER failure, not a batch-size failure, and the signature is
+worth naming because the two look identical in the API and opposite on the bed:
+
+- **parts on the plate, one missing, blob** -> adhesion of one part failed
+- **plate bare, everything on the nozzle** -> the first layer never took at all
+
+### The most likely cause is the CANCEL that preceded it
+
+The previous job (`plate3`, wrong shapes) was cancelled mid-print at the machine,
+and this print was started **immediately afterwards without inspecting the
+nozzle**. A cancel parks a hot nozzle carrying molten plastic; if a blob forms
+there, the next print cannot lay a first layer and simply feeds the blob. Not
+proven, but it fits "nothing laid down" better than anything geometric, and the
+geometry had already printed fine at one bead.
+
+**Rule: after ANY cancelled print, clean the nozzle and confirm the plate before
+starting the next job.** Do not chain a start onto a cancel.
+
+### `auto_brim` produces NO BRIM. The "brim wins" entry below is wrong.
+
+Measured in the sliced gcode, not inferred from settings:
+
+    brim_type = auto_brim    brim_width = 5    skirt_loops = 0
+    TYPE:Brim  extrusions: 0        TYPE:Skirt extrusions: 0
+
+And the same is true of `test20-peg18c02` — **the bead that fit perfectly and
+printed cleanly also had zero brim.** So a brim has never actually been tested
+on this bead family, and whatever fixed the earlier smeared print, it was not
+the brim. `auto_brim` means *the slicer decides*, and here it decides none.
+
+This matters beyond the brim: the earlier entry verified `brim_type=auto_brim`
+in the 3MF and treated that as proof a brim existed. **A setting being present
+in the project file is not evidence the slicer acted on it** — the same class of
+error as reading `task_status: 1` as proof a part exists. Check the gcode for the
+extrusions, not the config for the intent.
+
+### Also worth recording: five variables moved at once
+
+Against the last good print this changed part count (2 -> 12), bed spread
+(centred -> x 43.6..212.8), duration (6 -> 28 min), silhouette (quatrefoil -> 6
+motifs) and filament (black `T0` -> red glitter `T1`). Even with a clean result
+that proves nothing, and with a failure it makes attribution impossible. The
+same mistake this log already records against the funnel print, repeated while
+scaling up.
+
+Re-proving at THREE beads, centred (x 82..167, y 101..152), red, everything else
+as the bead that printed perfectly.
+
+---
+
 ## test20-peg18c02, 20 mm black — 2026-09-03 — SNAP FIT SOLVED
 
 Job `f9878112`, `T0`, 16/16 layers, `filament_detected` 1 confirmed at layer 4.
