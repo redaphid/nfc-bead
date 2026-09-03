@@ -6,6 +6,72 @@ propagating to the recipe.
 
 ---
 
+## test20-peg18, 20 mm red — 2026-09-03 — PEG HEIGHT 1.2 -> 1.8
+
+### The red reprint worked, and gave the first real fit data
+
+`test20red.gcode` reprinted once red was loaded in **tray 1** (`t:1`, the slot
+the file was always keyed to — it was empty the first time). Job
+`c0aa169a`, `task_status: 1`, 608 s, `filament_detected: 1` from layer 1.
+Parts came out.
+
+**Verdict from the user: close, but TOO LOOSE.**
+
+### The funnel ate the grip — measured, not guessed
+
+Measured off the exported STLs by cross-sectioning both halves at 0.1 mm steps
+and comparing socket bore radius against peg radius at the same seated height:
+
+| depth into socket | socket r | peg r | radial gap |
+|---|---|---|---|
+| 0.0 mm (mating face) | 1.749 | — | — |
+| 0.2 mm | 1.549 | 1.299 | 0.250 |
+| 0.4 mm | 1.349 | 1.299 | **0.050** |
+| 0.8 mm | 1.349 | 1.299 | **0.050** |
+| 1.0 mm | 1.349 | 1.103 | 0.246 |
+
+Only **0.50 mm** of the peg ever sat at the design clearance. `SOCKET_LEADIN`
+(0.4 mm of funnel) and `PEG_CHAMFER` (0.5 mm of tip taper) between them consume
+most of a 1.2 mm peg. The funnel was added to fix ovalised socket mouths and it
+worked, but it bought that by spending the grip.
+
+**`PEG_HEIGHT` 1.2 -> 1.8** restores it: measured engagement **0.50 -> 1.00 mm**,
+with the radial gap held at 0.050 mm so this is a single-variable change.
+Bottom half grows 2.70 -> 3.30 mm tall; the plate goes 15 -> 16 layers.
+
+### Fill quality on the mating face is inferior, and it is not cosmetic
+
+The user zoomed in on the socket face and called it: the fill there is visibly
+worse than on the other half, and he asked whether that makes the tolerance
+imprecise. **It does.**
+
+- The bore is **not round.** The funnel's concentric steps form cleanly on one
+  side; the other side has a smooth mass of material encroaching into the
+  opening. So the clearance is not uniform — a peg can be loose overall and
+  still only touch on one axis.
+- The face is **ridged**, with valleys between adjacent beads and small pits.
+  Two halves resting on high spots never seat flush, which steals engagement
+  on top of the little the geometry allowed.
+
+**Root cause is orientation.** That face is the **first layer** — the Top half
+prints mating-face-down against the plate, so the precision face is drawn in
+the most-squished layers. The proof is in the same photo: the *Bottom* half's
+mating face is a **top surface** and is visibly smoother. Same print, same
+filament, opposite quality.
+
+The red filament is **glitter-loaded PLA** (the sparkle is in the material),
+which resolves small features worse than the black did — so the black print's
+"round, open and flush" sockets did not transfer to this one.
+
+**Candidate next lever, NOT yet done:** flip the Top half in the export so its
+mating face is a top surface instead of the first layer. The Top's outer face
+is the back of the bead, so nothing cosmetic is lost by putting it on the
+plate, and the sockets become blind holes drilled downward from a top surface —
+which also removes the reason the funnel exists. This changes shared export
+orientation for all 30 bead sets, so it wants a deliberate decision.
+
+---
+
 ## test20, 20 mm — 2026-09-02 — PRINTED ON SLOT 1; SOCKET FUNNEL WORKS
 
 Second attempt, and the one that produced parts. Both halves, black, slot 1.
