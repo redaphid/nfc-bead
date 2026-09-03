@@ -275,6 +275,44 @@ For a round bead with a figure (not a spiral) raised on the show face — like `
 - **The decoration is a plain extruded silhouette polygon** (figure → ngon → extrude `RELIEF_HEIGHT`), placed on the Top show face + ε. The rezz "flat ribbon" workaround (gotcha #9) is only for tube-section curves; a *filled* figure extrudes cleanly. Thin limbs are fine on a relief — they sit on the solid show face.
 - **Mass-center the relief on its area centroid, NOT its bbox center.** A figure with a long thin limb (an extended leg, a pointed toe) has a bbox center far from its visual mass; centering on the bbox leaves it looking shoved to one side. Use the shoelace area-centroid, then **scale by max radial extent** (`FIT_RADIUS / max_dist_from_centroid`) so the whole figure — including the sprawling limb — sits inside the circle with no clipped edges. Centering on the bbox or scaling by "longest side" both clip or off-center it.
 
+### 33. A 3MF without a printer profile silently loses the brim
+
+The `shield` bead failed to print and the geometry was never the problem. Its 3MF was three files — geometry only, **no `Metadata/project_settings.config`** — so Elegoo Slicer fell back to whatever preset happened to be loaded, which had no brim. The medallion that printed clean carried a 34 KB `project_settings` with `auto_brim`/5 mm.
+
+**The brim wins.** `print/PRINT_GUIDE.md` says no brim; the first-layer adhesion diagnosis says use one. Resolve it in favour of the brim: a bead is a small flat slab with little plate contact, and it lifts without one.
+
+Related: the package must also *look* like the slicer's own output. Elegoo Slicer warns "the 3mf file you are importing may be incompatible" when the `Application` metadata names a tool it doesn't recognise, and a package it treats as foreign may **also ignore the embedded `project_settings`** — dropping the brim and reproducing the exact failure the template exists to prevent. `tools/build_3mf.py` adopts the template's own producer string and plate thumbnails for this reason.
+
+### 34. Filament slot 2 is RED — a single-colour bead must say slot 1
+
+`build_3mf.py` historically hardcoded every part to extruder 2, a leftover from the multi-colour redaphid recipe where the body was red and the decoration black. **A single-colour bead built to print black printed RED, silently.** Nothing caught it, because every check in the pipeline is a geometry check and this is not a geometry problem.
+
+Pass `--body-extruder 1` for single-colour beads, and verify by reading the artifact back rather than trusting the log:
+
+```
+python -c "import zipfile,re; z=zipfile.ZipFile(P); print(re.findall(r'key=.extruder. value=.(\d+).', z.read('Metadata/model_settings.config').decode()))"
+```
+
+All `1` for a black/glow bead. Any `2` is this bug.
+
+### 35. A `.3mf` is a project file, not a print job
+
+The printer only runs sliced `.gcode`. A generated 3MF uploads happily and then sits inert — it lists with `layer: 0`, `print_time: 0`, `color_map: []`, against populated values on every file that has really printed. **Check those fields before starting a print.**
+
+There is no slicer installed on the build machine, so **3MF → gcode cannot be done headlessly**. An agent can rebuild geometry and bundles unattended but cannot get a *new* design onto the plate; that step needs a human in Elegoo Slicer once. Only an already-sliced gcode can be started remotely.
+
+### 36. Back the part cooling off for the first layers, or the edges curl
+
+The stock profile ships `close_fan_the_first_x_layers=1` and `full_fan_speed_layer=0`, so cooling hits 100% from layer 2 — observed live at 232–250 of 255. On a small flat PLA slab that is a textbook edge-curl driver: the upper layers contract hard while the first layer is still pinned to the plate. These beads have no real overhangs, so the aggressive early cooling buys nothing; `overhang_fan_speed` still covers the string-hole bridge. `build_3mf.py` now holds the fan off 3 layers and ramps to full by 5.
+
+**Also worth knowing before diagnosing a "hung" print:** there are ~12 minutes of preamble before layer 1 (preheat, home, a long dense bed-level mesh, nozzle wipe, second heat, filament load/purge). During the load the job clock ticks up while `remaining_time_sec` stays pinned and the head parks, and `filament_detected` reads 0 for the whole preamble, only flipping to 1 when loading finishes. None of that is a hang.
+
+### 37. A settings patch that matches nothing exits 0
+
+`build_3mf.py`'s patcher matched only scalar `"key": "value"`. The per-filament settings — cooling, temperatures — are **arrays**. Adding one to `patches` matched nothing, exited cleanly, and printed `patched project_settings: <key>` while shipping the template's value unchanged: a fix that existed only in the log. Array-valued keys now go through `array_patches`, and a scalar patch that matches nothing is a **hard failure**.
+
+This is the general shape of the worst bugs in this repo. When you change something, **read the artifact back and prove it changed.** Never trust a log line.
+
 ---
 
 ## Print orientation
@@ -284,7 +322,7 @@ For a round bead with a figure (not a spiral) raised on the show face — like `
 - **Decoration** (raised spiral / emboss / etc.): flat side on the build plate.
 - Settings: PLA or PETG, 0.12–0.16 mm layer height, 100% infill (these are tiny), no supports.
 
-### 33. Blender 5.0 headless hangs unless you pass `--gpu-backend opengl`
+### 38. Blender 5.0 headless hangs unless you pass `--gpu-backend opengl`
 
 `blender.exe -b --python build_<charm>.py` **hangs forever** in a headless/agent shell. Blender 5.0 defaults to the **Vulkan** backend and Vulkan context creation blocks when there is no desktop session. Always run:
 
@@ -294,7 +332,7 @@ blender.exe -b --gpu-backend opengl --python beads/<name>/build_<name>.py
 
 The hang is easy to misread as a slow boolean solve. It isn't: the process sits at **~0.03 s CPU and ~18 MB working set** with **zero output**, having never reached your script. Check CPU time, not the log — Python's stdout is block-buffered when redirected, so a *working* run also shows an empty log for a long while. `blender --version` returns instantly even while `-b` hangs (it exits before app init), so a working `--version` proves nothing; probe with `-b --gpu-backend opengl --python-expr "print('OK')"`.
 
-### 34. UNIONing decoration primitives: never let them share a face or a tangent
+### 39. UNIONing decoration primitives: never let them share a face or a tangent
 
 Building a raised decoration by UNIONing per-stroke solids (bars, end-caps, rings) is the natural approach and it *silently* produces non-manifold garbage — 1020 non-manifold edges on a 7-stroke sigil. The EXACT solver is fine with solids that cross transversally and bad at the two degenerate contacts, both of which this construction creates by default:
 

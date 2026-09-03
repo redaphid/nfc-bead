@@ -34,7 +34,7 @@ them; they were written for a 22 mm round medallion carved as a recess, and a
 small off-centre mark that reads fine as a self-shadowing groove reads as a
 speck when raised.
 
-**Lessons captured** (now recipe gotchas #33 and #34):
+**Lessons captured** (now recipe gotchas #38 and #39):
 
 - **Blender 5.0 headless needs `--gpu-backend opengl`.** Without it `-b` hangs
   forever on Vulkan context creation — ~0.03 s CPU, ~18 MB, zero output, never

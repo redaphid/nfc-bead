@@ -24,6 +24,7 @@ import trimesh.path.polygons
 # ─── Tunables ────────────────────────────────────────────────────────────
 MIN_WALL_ABOVE_HOLE_MM   = 2.0     # recipe ideal >= 2.5 mm; hard fail below 1.5
 SOFT_WALL_ABOVE_HOLE_MM  = 1.5
+HOLE_D_NOMINAL           = 1.2     # medallion cord hole; classic beads use 2.0
 MAX_CANTILEVER_RATIO     = 5.0
 PEG_EDGE_TOLERANCE_MM    = 0.1
 MIN_BED_CONTACT_MM2      = 80.0
@@ -99,6 +100,69 @@ def _section_area(mesh: trimesh.Trimesh, z: float) -> float:
 
 
 # ─── Checks ──────────────────────────────────────────────────────────────
+def _wall_above_hole_in_top(top: trimesh.Trimesh) -> int:
+    """Measure the cord wall on beads whose string hole lives entirely in Top.
+
+    The recipe (gotcha #23) puts the hole fully inside the Top half so neither
+    inner face carries a half-circle groove. On those beads the Bottom-notch
+    detection above finds nothing to measure, and used to return ok/warn - so
+    the cord wall, the reason HOLE_CROWN exists and the failure that snapped a
+    bead off a bracelet, was never actually checked on this whole bead family.
+
+    The hole is a tube along X at x=0, so the x=0 plane cuts it squarely and it
+    appears as an interior ring of that section. The crown is how much further
+    the silhouette reaches in +Y beyond the top of that ring.
+
+    Deliberately NOT trimesh.contains: without an embree backend it reports
+    "solid" for points demonstrably inside the cord tube, which reads as a
+    missing string hole on beads that have one. Cross-sections are exact.
+    """
+    from shapely.geometry import Polygon  # noqa: PLC0415
+
+    sec = top.section(plane_origin=[0, 0, 0], plane_normal=[1, 0, 0])
+    if sec is None:
+        return warn("wall above hole", "no x=0 cross-section of Top to measure")
+
+    rings = []
+    for loop in sec.discrete:
+        if len(loop) < 4:
+            continue
+        p = Polygon(loop[:, 1:])          # drop X -> (Y, Z)
+        if p.is_valid and p.area > 1e-6:
+            rings.append(p)
+    if not rings:
+        return warn("wall above hole", "no closed loops in Top's x=0 section")
+
+    outer = max(rings, key=lambda p: p.area)
+    inner = [p for p in rings if p is not outer and outer.contains(p)]
+    if not inner:
+        return warn("wall above hole",
+                    "no string hole found in Top at x=0 - if this charm has "
+                    "one, it is not on the centreline and needs checking by hand")
+
+    # The section polygons are (Y, Z): shapely's "x" is world Y and its "y" is
+    # world Z. The crown is a world-Y distance, so read index 2 (maxx), NOT
+    # index 3. Reading maxy measures the half's THICKNESS and silently reports
+    # a wrong crown that still looks plausible.
+    hole = max(inner, key=lambda p: p.area)
+    hy0, _, hy1, hz1 = hole.bounds
+    hole_w, hole_h = hy1 - hy0, hz1 - hole.bounds[1]
+    if not (0.5 * HOLE_D_NOMINAL <= hole_w <= 2.5 * HOLE_D_NOMINAL):
+        return warn("wall above hole",
+                    f"interior ring at x=0 is {hole_w:.2f}x{hole_h:.2f} mm, not a "
+                    f"~{HOLE_D_NOMINAL} mm cord hole - check by hand")
+    hole_y_top = hy1
+    sil_y_top  = outer.bounds[2]
+    wall = sil_y_top - hole_y_top
+    msg = (f"hole top y={hole_y_top:+.2f} silhouette top y={sil_y_top:+.2f} "
+           f"-> crown = {wall:.2f} mm  (measured in Top, hole-in-Top bead)")
+    if wall < SOFT_WALL_ABOVE_HOLE_MM:
+        return fail("wall above hole", msg + f"  (need >= {MIN_WALL_ABOVE_HOLE_MM} mm)")
+    if wall < MIN_WALL_ABOVE_HOLE_MM:
+        return warn("wall above hole", msg + "  (recipe wants >= 2.5 mm)")
+    return ok("wall above hole", msg)
+
+
 def check_wall_above_hole(bottom: trimesh.Trimesh, top: trimesh.Trimesh) -> int:
     """The silhouette must have >= MIN_WALL_ABOVE_HOLE_MM of solid material
     above the string hole. The hole is drilled at z_mid (cut plane); after
@@ -143,13 +207,17 @@ def check_wall_above_hole(bottom: trimesh.Trimesh, top: trimesh.Trimesh) -> int:
     notch = max(polys_notch, key=lambda p: p.area)
     diff = body.difference(notch)        # half-pipe carved away
     if diff.is_empty or diff.area < 0.5:
-        return ok("wall above hole",
-                  "no string-hole notch detected on inner face (charm may not have one)")
+        # No notch on Bottom does NOT mean no string hole. Recipe gotcha #23
+        # moves the hole entirely into Top, so on those beads Bottom is
+        # correctly featureless here. Measure Top instead of declaring victory.
+        return _wall_above_hole_in_top(top)
     # Sanity: a real string hole half-pipe is small (< ~5 mm^2). If the diff
-    # is huge, it's a Z-taper or boolean noise, not a hole. Skip.
+    # is huge, it's a Z-taper or boolean noise, not a hole.
     if diff.area > body.area * 0.10:
-        return warn("wall above hole",
-                    f"diff area {diff.area:.1f} mm^2 too large to be a hole notch; skipping")
+        # This is the NFC pocket, not a hole notch - on a 10.5mm pocket the
+        # diff is pi*5.25^2 = 86.5 mm^2. Skipping here is how the cord wall
+        # went unchecked on every hole-in-Top bead. Measure Top instead.
+        return _wall_above_hole_in_top(top)
 
     # Extract the notch's bbox — its width in X is the hole length-ish
     # (bounded by silhouette), height in Y is the hole radius.
