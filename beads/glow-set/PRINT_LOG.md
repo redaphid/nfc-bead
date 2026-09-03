@@ -6,6 +6,63 @@ propagating to the recipe.
 
 ---
 
+## two-colour variants — 2026-09-02 — built + verified, NOT sliced, NOT printed
+
+Glow-green body with a **black figure raised on the show face**. Adds a third
+part, `Decoration.stl`, to the existing `Bottom`/`Top` pair. Built by
+`build_talisman.py` with `BEAD_GLYPH="<theme>:<name>"` (themes from
+`glyphs.py`: `star`, `groove`, `sigil`); leaving `BEAD_GLYPH` unset still
+produces the single-filament bead exactly as before. The decoration itself is
+built by the new `deco.py`.
+
+**Raised, not inlaid, and the reason is print economics.** Filling a carved
+groove with black means every layer from the recess floor to the show face
+contains both colours — two filament swaps per layer for ~6 layers, which on
+this machine is a large wipe tower and minutes of purge per bead. Standing the
+figure on the show face instead makes every layer below it pure glow and every
+layer above it pure black: **exactly one filament change for the whole bead**.
+It looks the same — an opaque black figure on a glowing green field.
+
+Built and verified on the 24 mm quatrefoil, all three themes: non-manifold 0 on
+all three parts, string hole open, all three peg sockets correct blind floors,
+`Decoration.stl` at **z 3.010–3.510** (show face 3.0 + 0.01 lift + 0.5 relief),
+confirmed by reading the exported STL rather than trusting the build log.
+
+`groove` is the best of the three by a distance — concentric rings, centred,
+fills the face. `sigil` and `star` needed `deco.fit_glyph` to centre and grow
+them; they were written for a 22 mm round medallion carved as a recess, and a
+small off-centre mark that reads fine as a self-shadowing groove reads as a
+speck when raised.
+
+**Lessons captured** (now recipe gotchas #33 and #34):
+
+- **Blender 5.0 headless needs `--gpu-backend opengl`.** Without it `-b` hangs
+  forever on Vulkan context creation — ~0.03 s CPU, ~18 MB, zero output, never
+  reaching the script. `blender --version` still works and proves nothing.
+- **Never UNION decoration primitives that share a face or a tangent.** Bars
+  and caps all spanning the same z are coplanar; a cap of radius exactly `w/2`
+  is tangent to its bar; a connected stroke path emits duplicate caps at shared
+  endpoints. All three together gave 1020 non-manifold edges. Union oversized
+  in Z with jitter and let the crop cut the exact slab.
+- The pipeline's usual `remove_doubles` at 0.005 **tears 0.8 mm strokes apart**.
+  Use 1e-5 on decorations.
+
+**Open — do not read this entry as "done":**
+
+- **Never sliced, never printed.** Same wall as every other bead here: the
+  printer only runs `.gcode` and no slicer is installed on this box.
+- **There is no glow filament in the profile.** The saved template describes
+  four Elegoo PLA slots as black / red / white / blue. The 3MF is built with
+  the body on **slot 2** and the decoration on **slot 1 (black)**, and
+  `build_3mf.py --body-colour "#7CFC00"` rewrites slot 2's colour so the
+  slicer preview shows green. That makes a wrong slot **visible** rather than
+  silent — but glow filament still has to be physically loaded into slot 2, or
+  the bead prints red.
+- Snap-fit and NFC seating remain unproven on this shape, as for the
+  single-colour quatrefoil.
+
+---
+
 ## quatrefoil 32mm — 2026-09-02 — printed, brim confirmed as the adhesion fix
 
 Printed from `ECC2_0.4_quatrefoil_Elegoo PLA _0.2_8m9s.gcode` (already on the

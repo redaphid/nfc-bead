@@ -4,9 +4,16 @@ Takes a polygon from talismans.py, extrudes it, and runs the standard bead
 pipeline - but with the pocket, pegs and string hole placed by shapes.py's
 solver rather than hardcoded, because every talisman has a different outline.
 
-Single filament (strontium-aluminate glow PLA), so there is no Decoration
-object: output is exactly Bottom.stl + Top.stl. That sidesteps recipe gotchas
-#9, #11, #25, #26, #27 and #28, which are all multi-colour decoration bugs.
+Single filament by default (strontium-aluminate glow PLA): output is exactly
+Bottom.stl + Top.stl, which sidesteps recipe gotchas #9, #11, #25, #26, #27
+and #28 - all multi-colour decoration bugs.
+
+Set BEAD_GLYPH="<theme>:<name>" to build the TWO-COLOUR variant instead: a
+glowing green body with a black figure raised on the show face. That adds
+Decoration.stl and re-enters those gotchas deliberately - see deco.py, which
+documents how each one is handled. Themes come from glyphs.py: star, groove,
+sigil. The figure is raised rather than inlaid so the whole bead needs exactly
+ONE filament change (all glow, then all black); deco.py has the reasoning.
 
 Pipeline order matters (gotcha #1: peg holes AFTER the split):
     polygon -> extrude -> string hole -> split -> NFC pocket -> peg sockets
@@ -33,6 +40,8 @@ if HERE not in sys.path:
 import shapes as S          # noqa: E402
 import talismans as T       # noqa: E402
 import foils as FO          # noqa: E402
+import glyphs as GL         # noqa: E402
+import deco as D            # noqa: E402
 
 
 def _resample(pts, step_mm=0.35):
@@ -72,6 +81,12 @@ PEG_HEIGHT   = 1.2
 PEG_CLEAR    = 0.05      # radial
 PEG_CHAMFER  = 0.35      # gotcha #30 - cone tip must OVERLAP the shaft
 HOLE_D       = 1.2       # medallion gauge
+
+# TWO-COLOUR: "<theme>:<name>" from glyphs.py (star / groove / sigil).
+# Empty -> single-filament bead with no Decoration.stl, the default.
+GLYPH_SPEC  = os.environ.get("BEAD_GLYPH", "")
+RELIEF      = float(os.environ.get("BEAD_RELIEF", "0.5"))
+GLYPH_R_MAX = 6.2        # must match glyphs.R_MAX - clears pegs AND string hole
 
 PRINT_DIR = os.path.join(HERE, "print", NAME)
 
@@ -232,6 +247,23 @@ def main():
         boolean_op(bottom, bpy.context.active_object, 'UNION', "Tip%d" % i)
     clean_mesh(bottom)
 
+    # TWO-COLOUR: black figure raised on the glow show face (z_max).
+    decoration = None
+    if GLYPH_SPEC:
+        theme, _, who = GLYPH_SPEC.partition(":")
+        who = who or SEED
+        glyph = GL.build(theme, who)
+        raw = D.glyph_extent(glyph)
+        glyph = D.fit_glyph(glyph, GLYPH_R_MAX * 0.92)
+        ext = D.glyph_extent(glyph)
+        print("  glyph     : %s/%s, %d primitives, extent r=%.2f -> %.2f "
+              "(max %.1f)" % (theme, who, len(glyph), raw, ext, GLYPH_R_MAX))
+        if ext > GLYPH_R_MAX:
+            raise RuntimeError(
+                "glyph extent %.2fmm exceeds GLYPH_R_MAX %.2fmm - it would sit "
+                "over the peg sockets or the string hole" % (ext, GLYPH_R_MAX))
+        decoration = D.build_decoration(glyph, pts, z_max, relief=RELIEF)
+
     # verify (gotcha #8)
     nb, nt = nonmanifold(bottom), nonmanifold(top)
     print("  non-manifold: Bottom=%d Top=%d" % (nb, nt))
@@ -249,11 +281,21 @@ def main():
 
     # print orientation: this pipeline is already print-ready (gotcha #16)
     bottom.location.z -= min(v.co.z for v in bottom.data.vertices)
-    top.location.z    -= min(v.co.z for v in top.data.vertices)
+    top_dz = min(v.co.z for v in top.data.vertices)
+    top.location.z -= top_dz
+    if decoration is not None:
+        # The SAME shift as Top, never its own. Zeroing the decoration
+        # independently would drop it onto the plate as a loose scab of black
+        # instead of leaving it welded to the show face.
+        decoration.location.z -= top_dz
     bpy.context.view_layer.update()
 
+    exports = [(bottom, "Bottom.stl"), (top, "Top.stl")]
+    if decoration is not None:
+        exports.append((decoration, "Decoration.stl"))
+
     os.makedirs(PRINT_DIR, exist_ok=True)
-    for obj, fn in ((bottom, "Bottom.stl"), (top, "Top.stl")):
+    for obj, fn in exports:
         bpy.ops.object.select_all(action='DESELECT')
         obj.select_set(True); bpy.context.view_layer.objects.active = obj
         bpy.ops.wm.stl_export(filepath=os.path.join(PRINT_DIR, fn),
