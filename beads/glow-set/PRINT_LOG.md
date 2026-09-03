@@ -28,6 +28,16 @@ What printed: the quatrefoil at **20 mm** (`BEAD_R=10`), single filament, on
 **slot 2 (#FF0000 red)**. 20 mm is the floor — at 19 mm `place_pegs` fails, so
 there is no smaller version of this shape. 15 layers, 5m57s, 1.64 g.
 
+Outcome confirmed the documented way, not by eye: job
+`17e2cd47-ef34-476a-babf-98d436df70e7` returned **`task_status: 1`** in
+`print_history`, reached layer 15/15 with `CurrentTicks == TotalTicks` and an
+empty `exception_status`. 591 s wall clock including preamble.
+
+**The chamber camera cannot see the parts.** It looks across the front lip of
+the plate, so a bead at the plate centre (110-146, 128) is out of frame and the
+plate reads as *empty* both before and after a successful print. Do not use a
+snapshot to decide whether something printed — it looks identical either way.
+
 This is the **first print carrying the three fixes**, all confirmed present in
 the gcode itself rather than assumed: `brim_type=auto_brim` / `brim_width=5`,
 `seam_position=random`, and `close_fan_the_first_x_layers=3` with
