@@ -6,6 +6,47 @@ propagating to the recipe.
 
 ---
 
+## tray3-byobject — 2026-09-04 — IN FLIGHT. First structurally-different tray file.
+
+Job `56b63725`, `beads/glow-set/print/tray3-byobject.gcode` (committed at `4426e88`),
+15m27s / 922 ticks. Canvas checked BEFORE sending: `active_tray_id: 0`, tray 0
+`status: 2`, black. **Outcome not yet known - it was still levelling when this was
+written. Do not read a result into this entry.**
+
+### What makes it different from the five that failed
+
+Six objects printed **sequentially**, instead of two merged blocks printed
+layer-by-layer. Each bead completes before the next begins, so the nozzle never
+travels over a finished part at printing height - the mechanism behind 0/5.
+
+Verified structurally in the gcode, not from the settings panel:
+
+    print_sequence     = by object
+    downward Z resets  = 5   -> 6 objects printed one at a time
+                         (3.8 -> 0.2) x3 bottoms, (4.0 -> 0.2) x2 tops
+    estimated time     = 15m 27s
+
+Reached by splitting the two merged meshes in the Elegoo Slicer GUI
+(right-click -> Split -> to objects). Without that split the same setting produced
+one reset and a 2-second difference.
+
+### [!] THE RISK PROFILE INVERTS - watch WHERE it fails, not just whether
+
+Sequential printing removes mid-layer crossings but introduces a new exposure: between
+beads the nozzle drops to Z=0.2 and moves past neighbours already ~4mm tall. The slicer
+computed clearance and did not object, and 4mm is far below any gantry limit.
+
+**So if this file fails, it should fail AT A TRANSITION, not mid-bead.** That
+distinction is the next piece of evidence either way - a mid-bead failure would mean
+the collision theory is incomplete.
+
+### Two prior runs tonight, for the record
+
+    8a2d0dee  14m54s  aborted at layer 0 on purpose - carried the collision settings
+    5a9e908e  14m56s  stopped - by-object was SET but the meshes were still merged
+
+---
+
 ## tray3-lowaccel — 2026-09-03 — the diagnosis: NOZZLE COLLISION ON INTER-OBJECT TRAVEL
 
 Job `8a2d0dee`. Canvas verified BEFORE the run for the first time: `active_tray_id: 0`,

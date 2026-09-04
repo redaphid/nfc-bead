@@ -98,8 +98,29 @@ def signed_distance_to_polygon(pts, X, Y):
     return np.where(inside, -dist, dist)
 
 
+def area_centroid(pts):
+    """Centroid of the polygon's AREA, not of its bounding box.
+
+    The lattice folds each cell about its centre and samples the motif there, so the
+    motif must be centred on the point it actually rotates about. Centring on the
+    bounding box instead puts six of the eleven mon off by 25-50 px in 1024 -- worth
+    27% of the frame on ume -- which shows up as a lopsided cell that reads as a
+    different shape. (Measured by lab/nfold, 2026-09-03.)
+    """
+    x, y = pts[:, 0], pts[:, 1]
+    x1, y1 = np.roll(x, -1), np.roll(y, -1)
+    cross = x * y1 - x1 * y
+    a = cross.sum() / 2.0
+    if abs(a) < 1e-12:
+        return pts.mean(axis=0)                      # degenerate: fall back to vertex mean
+    return np.array([((x + x1) * cross).sum() / (6.0 * a),
+                     ((y + y1) * cross).sum() / (6.0 * a)])
+
+
 def bake(name, pts, out_dir):
     pts = np.asarray(pts, dtype=np.float64)
+    c = area_centroid(pts)
+    pts = pts - c                                    # centre on the rotational centre
     half = float(np.abs(pts).max()) * MARGIN
 
     ax = np.linspace(-half, half, RES)
@@ -127,7 +148,7 @@ def bake(name, pts, out_dir):
     rgba = (np.stack([R, G, B, A], axis=2) * 255.0).round().astype(np.uint8)
     path = os.path.join(out_dir, f"mon-{name}.png")
     Image.fromarray(rgba, mode="RGBA").save(path)
-    return path, half, float(d.min()), float(d.max())
+    return path, half, c
 
 
 def main():
@@ -150,9 +171,9 @@ def main():
             continue
         try:
             pts = fn(args.size) if name != "tomoe" else fn()
-            path, half, dmin, dmax = bake(name, pts, args.out)
+            path, half, shift = bake(name, pts, args.out)
             print(f"  {name:10s} verts={len(pts):4d} half={half:6.2f}mm "
-                  f"d=[{dmin:7.2f},{dmax:6.2f}] -> {os.path.basename(path)}")
+                  f"shift=({shift[0]:+.2f},{shift[1]:+.2f})mm -> {os.path.basename(path)}")
         except Exception as e:  # a motif that fails should not kill the batch
             print(f"  !! {name}: {type(e).__name__}: {e}")
 
