@@ -11,6 +11,10 @@ propagating to the recipe.
 Job `8a2d0dee`. Canvas verified BEFORE the run for the first time: `active_tray_id: 0`,
 tray 0 `status: 2`, black. The pre-flight check finally happened.
 
+**ABORTED ON PURPOSE AT LAYER 0** (298s, all preheat + levelling, nothing extruded) once
+the gcode inspection below showed it carried the collision settings. No material wasted.
+This job is the diagnosis, not a test result.
+
 ### [!!] THE ANSWER TO THE QUESTION THAT OUTLIVED EVERY OTHER EXPLANATION
 
 **Singles 7/7, trays 0/5.** The mechanism is that **the nozzle clips a printed part while
