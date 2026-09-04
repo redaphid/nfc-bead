@@ -6,9 +6,28 @@ minutes of actual printing on a 25mm charm.
 
 This merges N bead directories into the two grouped STLs that `build_3mf.py`
 already understands: every Bottom becomes one `Bottom.stl`, every Top becomes
-one `Top.stl`. They stay separate objects to the slicer only in the sense that
-matters here - a single-colour batch shares one extruder, so nothing is lost by
-welding them into one mesh each, and the whole plate slices as two parts.
+one `Top.stl`.
+
+*** WARNING: THE WELD IS NOT FREE. See gotcha #43 in prompts/nfc-bead/prompt.md. ***
+
+This file used to claim "a single-colour batch shares one extruder, so nothing is
+lost by welding them into one mesh each". That is FALSE, and it cost five ruined
+plates to find out.
+
+Ganged plates fail where single beads succeed - 0/5 against 7/7 - because the
+nozzle CLIPS an already-printed bead while travelling to the next one and winds
+it onto itself. The cure is `print_sequence = by object`, which finishes each
+bead before starting the next. But by-object sequences OBJECTS, and after this
+weld the slicer sees 2 objects instead of 2N, so it prints "all bottoms, then all
+tops" and the damaging travel stays inside a single object where sequential
+printing cannot reach it. Setting it changed a plate from 14m54s to 14m56s and
+fixed nothing.
+
+Until this grows a no-merge mode (and `build_3mf.py` learns to emit one parent
+object per bead - it is currently built around exactly two parents), the slicer
+GUI step **right-click -> Split -> to objects** is MANDATORY for a ganged plate.
+Verify it landed by counting downward Z resets in the gcode: N beads printed
+sequentially give N-1 drops back to layer 1. Do not trust the settings panel.
 
 Each group is packed into a GRID (--cols) and `build_3mf.py` places the two
 blocks via --bottom-xy / --top-xy. Bottoms share a block because they all print

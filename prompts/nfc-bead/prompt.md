@@ -469,6 +469,65 @@ holes drilled down from a smooth surface — which also removes the reason
 `SOCKET_LEADIN` exists. This changes print orientation for every bead in a set,
 so prove it on one part before adopting it.
 
+### 43. Ganged plates fail where singles succeed — the nozzle clips parts in transit
+
+**Status: mechanism identified from a 0/5 vs 7/7 split plus owner reports; the
+corrective print was still on the bed when this was written.**
+
+Single beads printed **7/7**. Every multi-bead tray failed — **0/5** — and the
+failures looked like contamination: smeared tops, a wad of curled filament cooked
+onto the nozzle, eventually a blob that levered the magnetic toolhead cover off
+and tripped `ErrorCode 707`.
+
+**None of that is the cause. The nozzle is physically clipping an already-printed
+part while travelling to the next one**, tearing it off the plate and winding it
+on. Inter-object travel *only exists on a multi-part plate*, which is the entire
+singles-vs-trays split stated as a mechanism instead of a correlation.
+
+Everything else is downstream, and chasing it wastes evenings:
+
+    ??? the collision  ->  print fails  ->  nozzle extrudes into open air
+                       ->  blob forms on the toolhead
+                       ->  blob props the magnetic cover  ->  ErrorCode 707
+
+The tell in the debris is a **strand arcing from one part to its neighbour** and
+**curled** (not blobby) filament — that is peeled part-top, not ooze. An isolated
+part on a crowded plate surviving while its neighbours die is the same evidence.
+Beware: Elegoo's own docs describe *"waste piles up, props the toolhead, knocks
+the cover off"* — that is the same downstream chain from the machine's point of
+view, not a diagnosis.
+
+**The fix is `print_sequence = by object`**, which finishes each bead before
+starting the next so nothing is ever travelled over. Beads are only ~4 mm tall,
+far below any gantry-clearance limit, so sequential printing is always available
+to us.
+
+**But `tools/make_plate.py` CONCATENATES the beads** (`trimesh.util.concatenate`)
+into one `Bottom` mesh and one `Top` mesh. The slicer then sees **2 objects, not
+2N**, and by-object faithfully prints "all bottoms, then all tops" — the travel
+we care about is *inside* one object, where sequential printing cannot reach it.
+The estimate moved 14m54s -> 14m56s and nothing changed.
+
+**So a ganged plate needs the meshes split into real objects.** In the slicer:
+select each -> right-click -> **Split -> to objects**. Until `make_plate.py`
+grows a no-merge mode (and `build_3mf.py` learns to emit one parent object per
+bead — it is currently built around exactly two parents), **this GUI step is
+mandatory for any ganged plate.**
+
+**Verify it structurally in the GCODE, never from the settings panel.** Count
+downward Z resets: sequential printing drops back to layer 1 once per object, so
+N beads give N-1 big drops.
+
+    grep -oE '^G[01] Z[0-9.]+' out.gcode      # then look for Z falling by >1mm
+
+Merged: 1 reset. Split into six: 5 resets, `(3.8 -> 0.2) x3` then `(4.0 -> 0.2) x2`.
+
+**The panel lies often enough that this is a rule, not a precaution.** In one
+evening `reduce_crossing_wall` was set and read back `0` in the gcode (it needs a
+string `"1"`, not an int), and `z_hop_types = Auto Lift` — which *sounds* like
+Z-hop is on — produced **2 standalone `G1 Z` moves in 33,000**. Use `Normal Lift`
+if you want lift, and confirm by counting.
+
 ---
 
 ## What the user supplies per charm
