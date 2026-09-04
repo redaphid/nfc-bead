@@ -6,6 +6,49 @@ propagating to the recipe.
 
 ---
 
+## sm-* motif batch — 2026-09-04 — FOUR CONSECUTIVE GOOD BEADS. The run that worked.
+
+First unbroken run of the night. Every one of these came off usable:
+
+| # | bead      | job        | ticks     | result                    |
+|---|-----------|------------|-----------|---------------------------|
+| 1 | kikko     | `e5a68f52` | 344/344   | halves force together, hold |
+| 2 | kikko     | `7bba680f` | 344/344   | same                      |
+| 3 | akoma     | `3dc0433b` | 674/674   | "passable" - first with hole compensation |
+| 4 | changming | `39d80737` | 645/645   | clean                     |
+
+### What changed, in the order it mattered
+
+1. **A real brim.** `brim_type: auto_brim` reads like a brim is on; auto DECLINES
+   to brim a compact 20mm slab, so every earlier plate ran with none.
+   `--force-brim` (`outer_only`) fixed the Top lifting. This is the single change
+   that turned failures into beads.
+2. **`xy_hole_compensation 0.05`** for the deformed bores that remained once the
+   part stopped lifting. Verdict on akoma: passable. Kept for the rest.
+3. **Peg 1.8mm** was already right in the sm-* sets - see the entry below. The
+   fit was never the problem here.
+
+### Do not confuse the two Top failures
+
+They look alike and are not. **Lifting** is the whole half curling off the plate
+so it will not mate at all - cured by the brim. **Deformed bores** is the part
+sitting flat with squished-oval sockets - that is first-layer squeeze-in, and the
+lever is hole compensation, not adhesion. Fixing the first revealed the second.
+
+### The pipeline that made it repeatable
+
+3MF -> `elegoo-slicer.exe --slice 0 --outputdir` -> `docker cp` into
+centauri-mcp:/tmp -> `upload_file` -> `start_print`. No GUI anywhere. The two
+traps are that the CLI is a GUI-subsystem binary printing nothing to a console,
+and that centauri-mcp declares no volumes so the file has to be put INSIDE the
+container first. Uploads are refused mid-job (HTTP 400), so stage between prints.
+
+Unfixed: CLI slices run 11-13m against the GUI's ~6m because the CLI uses its own
+stored presets, not the 3MF's. Patching the template did nothing. Costs ~6 min a
+bead and is not worth chasing mid-batch.
+
+---
+
 ## test20c02 rerun — 2026-09-04 — THE TOP WARPS. Telemetry called it a success.
 
 Job `7b6450e6`, `test20c02.gcode`, 347/347 ticks, layer 16 of 16, zero
