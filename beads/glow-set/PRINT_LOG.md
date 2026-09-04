@@ -6,6 +6,85 @@ propagating to the recipe.
 
 ---
 
+## tray3-lowaccel — 2026-09-03 — the diagnosis: NOZZLE COLLISION ON INTER-OBJECT TRAVEL
+
+Job `8a2d0dee`. Canvas verified BEFORE the run for the first time: `active_tray_id: 0`,
+tray 0 `status: 2`, black. The pre-flight check finally happened.
+
+### [!!] THE ANSWER TO THE QUESTION THAT OUTLIVED EVERY OTHER EXPLANATION
+
+**Singles 7/7, trays 0/5.** The mechanism is that **the nozzle clips a printed part while
+travelling between objects**, tears it off the plate, and winds it onto itself. Multiple
+CC2 owners report this exact fingerprint:
+
+    "Something about the traveling between them. It always seems to clip the top
+     of one and pull it off the bed. The more objects the earlier it happens too."
+    "I physically watched one get ripped off by the extrusion nozzle."
+    "When I try to print only 1 at a time it works great."
+
+**Inter-object travel only exists on a multi-part plate.** That IS the split, as a
+mechanism rather than a correlation.
+
+| observation | accounted for |
+|---|---|
+| isolated part survived, crowded ones died | nothing travels past the isolated one |
+| ooze strand arcing between two parts | the nozzle went there, at part height |
+| rebuilt in ~2 layers after a thorough clean | clipping begins once parts are tall enough - nothing accumulates |
+| dense nest of CURLED filament | extrusion peeled off a part top and wound on |
+| scorched amber-brown core | older peeled material cooking across several prints |
+| cold pull did nothing | correct, the bore was never involved |
+| blob levers the cover -> 707 | downstream, as he said |
+
+20mm beads, 16 layers, small bed-contact area is the worst-case geometry for it.
+
+### [x] AND THE FILE PRINTING RIGHT NOW HAD THE COLLISION SETTINGS
+
+The printer reported `14m54s` / 888 ticks; the file built here says `29m 59s` with
+`M204 S1000`. **Re-slicing in Elegoo Slicer 1.5.3.5 regenerated it with the new slicer's
+own accelerations** - the low-acceleration experiment did not actually run. Little lost,
+because acceleration was never the lever. What the gcode did carry:
+
+    z_hop_types          = Auto Lift    <- conditional; only 2 Z-lift moves in 33k moves
+    travel_speed         = 500 mm/s
+    reduce_crossing_wall = 0            <- reverted for the accel test
+
+No effective Z-hop, 500mm/s travel, crossing walls freely. Precisely the configuration
+owners name. **Lesson: `Auto Lift` is not Z-hop.** Verify lift by counting standalone
+`G1 Z` moves in the gcode, not by reading the setting name.
+
+### The fixes, strongest first
+
+1. **Print sequence -> By Object**, not By Layer. Beads are 5.5mm tall so gantry
+   clearance is a non-issue, and it removes inter-object travel entirely. **It turns a
+   tray into a sequence of singles, and singles are 7/7.**
+2. **Z-hop type -> Normal Lift** (not Auto), and **travel speed -> 100-150 mm/s**.
+3. Fewer parts, more spacing, add a brim. An owner: 9-up failed three times, 4-up in the
+   corners prints every time.
+4. Re-check flow ratio and Z-offset. Over-extrusion raises ridges the nozzle then catches;
+   Z-offset is set separately from auto-levelling on this machine.
+5. **Inspect the hotend for a bend or a crept-out bronze section** before trusting a run -
+   a collision can bend it, and "just knocking into a print is enough to bend it badly."
+
+### [!] OPERATIONAL RULE, LEARNED FROM OTHER OWNERS THE EXPENSIVE WAY
+
+**If a blob forms mid-print, CUT POWER. Do not press Cancel.** Cancel triggers a homing
+move that drags the blob into the chute and snaps nozzles off.
+
+### Retracted by the research, not just demoted
+
+The first research pass led with the purge/wiper system. **The tray gcode is single-colour**
+(`T0` twice, one toolchange line), so there is one purge at job start and the wiper cannot
+be the engine. The wiper findings remain true about the machine - real CC2 weak point,
+no-warranty consumable, 150-500h life, one spare in the tool kit, not sold retail - and
+they matter again when we return to two-colour beads. They are not this failure.
+
+Bed-region was also alive and is now the weaker of the two: the tray does span X 89-167
+where a single only occupies X 118-138, so parts DO stand where a single never prints.
+The collision mechanism explains the strand and the curl; bed region does not. Still
+separable by printing ONE bead deliberately off-centre if the collision fixes disappoint.
+
+---
+
 ## tray3blk again — 2026-09-03 — HALTED AT LAYER 2. ErrorCode 707, toolhead cover detached.
 
 Job `a6916306`. Run after a full nozzle clean at 240C and a bed clean. Panel:
