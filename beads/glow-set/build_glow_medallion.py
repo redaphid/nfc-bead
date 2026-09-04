@@ -28,9 +28,12 @@ Consequences, all good:
     in beads/eye-medallion/PRINT_LOG.md.
 
 Geometry envelope (derived, do not exceed without re-checking):
-  * Peg sockets are PEG_HEIGHT+0.3 = 1.5mm deep at r=7.8, leaving 1.5mm of Top
-    above them. A 1.2mm groove there would leave 0.3mm, so GLYPH_R_MAX keeps the
-    glyph entirely inboard of the sockets - and of the string hole at y=8.0.
+  * Peg sockets are PEG_HEIGHT+0.3 = 2.1mm deep at r=7.8, leaving 0.9mm of Top
+    above them (roof takes compression from the peg tip, not tension - 4-5
+    layers is enough). A 1.2mm groove there would punch straight through, so
+    GLYPH_R_MAX keeps the glyph entirely inboard of the sockets - and of the
+    string hole at y=8.0. Do NOT raise PEG_HEIGHT further without thickening
+    TOP_THICK to match.
   * Strokes 0.8-2.2mm. Under 0.8 will not print in 2 perimeters; over 2.2 stops
     self-shadowing and vanishes at night.
 
@@ -61,8 +64,13 @@ NFC_DEPTH    = 0.8
 NFC_POS      = (0.0, 0.0)
 
 PEG_DIAMETER  = 2.6      # gotcha #29 - 2.0mm does NOT grip
-PEG_HEIGHT    = 1.2
-PEG_CLEARANCE = 0.05     # radial
+PEG_HEIGHT    = 1.8      # gotcha #40 - the funnel and the tip chamfer each eat
+                         # into the engagement, so 1.2 left barely 0.5mm of real
+                         # grip and the halves pulled apart in the hand. 1.8
+                         # ships ~1.0mm of engagement and is hardware-confirmed.
+PEG_CLEARANCE = 0.01     # radial. 0.05 snapped but SLID APART under load; 0.02
+                         # still read slightly loose; 0.01 is what shipped.
+SOCKET_LEADIN = 0.4      # 45-deg funnel at the socket MOUTH, 2 x 0.20 layers
 PEG_CHAMFER   = 0.35     # gotcha #30 - tip taper, cone OVERLAPS shaft
 PEGS = [(-7.8, 0.0), (7.8, 0.0), (0.0, -7.8)]
 
@@ -332,8 +340,24 @@ def build_bead(name, glyph, verbose=True):
     hole_r = (PEG_DIAMETER + PEG_CLEARANCE * 2) / 2.0
     for i, (px, py) in enumerate(PEGS):
         cb, ct = t_z_min - 1.0, t_z_min + PEG_HEIGHT + 0.3
-        cut = add_cylinder(hole_r, ct - cb, (px, py, (cb + ct) / 2.0), verts=32)
+        cut = add_cylinder(hole_r, ct - cb, (px, py, (cb + ct) / 2.0), verts=64)
         boolean_op(top, cut, 'DIFFERENCE', "PH%d" % i)
+        # FUNNEL THE MOUTH. t_z_min is the mating face, which goes against the
+        # PLATE, so the socket opening is drawn in the first few layers - the
+        # squished ones. First-layer squish pushes material into a 2.6mm bore
+        # and the printed sockets came out ovalised with a curled rim standing
+        # proud. A 45-degree lead-in makes the first layers trace a LARGER
+        # circle so the squeeze-out has somewhere to go, and it doubles as the
+        # entry taper matching the chamfered peg tip (gotcha #30). The cutter
+        # starts BELOW t_z_min so its wide end is fully outside the solid.
+        fd = SOCKET_LEADIN + 0.2
+        bpy.ops.mesh.primitive_cone_add(
+            vertices=64,
+            radius1=hole_r + SOCKET_LEADIN + 0.2,   # wide end, below the face
+            radius2=hole_r,                          # meets the bore
+            depth=fd,
+            location=(px, py, t_z_min - 0.2 + fd / 2.0))
+        boolean_op(top, bpy.context.active_object, 'DIFFERENCE', "PF%d" % i)
     clean_mesh(top)
 
     # pegs on Bottom (gotcha #14), shaft + OVERLAPPING chamfer cone (gotcha #30)
