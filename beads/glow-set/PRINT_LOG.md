@@ -6,6 +6,50 @@ propagating to the recipe.
 
 ---
 
+## test20c02 rerun — 2026-09-04 — THE TOP WARPS. Telemetry called it a success.
+
+Job `7b6450e6`, `test20c02.gcode`, 347/347 ticks, layer 16 of 16, zero
+`exception_status`, filament detected throughout. Every number said clean. The
+part says otherwise: **the Top came off the plate WARPED and would not snap
+into the Bottom.** The Bottom was fine.
+
+This is the third time a run reported `task_status: 1` / full tick count while
+the physical result was unusable (see `56b63725` and `b96babb5` below). The rule
+stands and should never be relaxed: **no telemetry proves a part exists, and no
+telemetry proves a part is FLAT. Only hands on the plate.**
+
+### Why the Top and not the Bottom
+
+The Top prints mating-face-down, and that face is perforated by three 2.6mm
+socket mouths plus their 45-degree funnels. Its first layer therefore has
+markedly less bed contact than the solid Bottom's, and less continuous
+perimeter to anchor the corners. It is the half that lifts.
+
+### The setting that was lying
+
+The profile read `brim_type: auto_brim`, `brim_width: 5`, which looks like a
+5mm brim is on. **`auto_brim` lets the slicer decide per object, and for a
+compact 20mm slab it routinely decides NO brim.** So the plate ran with none
+while the profile advertised one. `tools/build_3mf.py` gained `--force-brim`
+(`brim_type: outer_only`) and the six `sm-*` 3MFs were rebuilt with it.
+Cooling was already gentled - fan off 3 layers, full by 5.
+
+### Why this may be the tray failure too
+
+A warped part stands proud at the edge. A proud edge is exactly what the nozzle
+catches on. That gives a causal chain the collision theory was missing an
+initiator for: warp -> lifted corner -> nozzle clips it -> part breaks loose ->
+extrudate balls onto the hotend -> blob levers the cover off -> 707. It also
+explains why singles survived and trays did not without needing a separate
+mechanism: a single has ~6 minutes and two objects for a lift to matter in; a
+tray has 15 minutes, six objects and long inter-object travels.
+
+NOT yet demonstrated - no print has been run with the forced brim. If the next
+Top comes out flat, this entry is the explanation. If it warps anyway, the next
+lever is bed temp 60 -> 65, changed ALONE.
+
+---
+
 ## tray3-byobject — 2026-09-04 — IN FLIGHT. First structurally-different tray file.
 
 Job `56b63725`, `beads/glow-set/print/tray3-byobject.gcode` (committed at `4426e88`),

@@ -302,6 +302,7 @@ def _template_nozzle(template_dir):
 
 
 def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
+          force_brim=False,
           body_extruder=2, keep_cooling=False, decoration_extruder=1,
           body_colour=None, bottom_xy=None, top_xy=None,
           nozzle_diameter=None):
@@ -613,6 +614,19 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
         if no_brim:
             patches["brim_type"] = "no_brim"
             patches["brim_width"] = "0"
+        elif force_brim:
+            # AUTO IS NOT ON. auto_brim lets the slicer decide per object, and
+            # for a compact 20mm slab it routinely decides NO brim - so the
+            # profile reads "brim 5mm" while the part prints with none. On
+            # 2026-09-04 a Top came off the plate WARPED and would not snap;
+            # the Top is the half whose first layer is perforated by three
+            # 2.6mm socket mouths plus their funnels, so it has markedly less
+            # bed contact than the solid Bottom and lifts first. A lifted edge
+            # is also what the nozzle catches on, which is how a warp becomes a
+            # knocked-off part and then a blob on the hotend. outer_only puts a
+            # brim on every object unconditionally.
+            patches["brim_type"] = "outer_only"
+            patches["brim_width"] = "5"
         for key, value in patches.items():
             project_settings, n = re.subn(
                 rf'"{key}"\s*:\s*"[^"]*"',
@@ -738,6 +752,11 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("-o", "--out", default=str(DEFAULT_OUT))
     p.add_argument("-t", "--template-dir", default=str(TEMPLATE_DIR))
+    p.add_argument("--force-brim", action="store_true",
+                   help="force an unconditional brim on every object "
+                        "(brim_type=outer_only). Use this rather than trusting "
+                        "the template's auto_brim, which declines to brim a "
+                        "small slab and lets the Top warp.")
     p.add_argument("--no-brim", action="store_true",
                    help="force brim off (default: keep the template's brim - "
                         "a missing brim caused a dragged/smeared print)")
@@ -785,7 +804,8 @@ def main():
 
     build(bottom_xy=_xy(args.bottom_xy), top_xy=_xy(args.top_xy),
           out_path=Path(args.out), template_dir=Path(args.template_dir),
-          no_brim=args.no_brim, body_extruder=args.body_extruder,
+          no_brim=args.no_brim, force_brim=args.force_brim,
+          body_extruder=args.body_extruder,
           keep_cooling=args.keep_cooling,
           decoration_extruder=args.decoration_extruder,
           body_colour=args.body_colour,
