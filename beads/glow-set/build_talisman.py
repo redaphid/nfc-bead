@@ -104,9 +104,16 @@ R_OUT  = float(os.environ.get("BEAD_R", "12.0"))   # circumscribed radius; 12 ->
 
 # Nozzle-INDEPENDENT. Both are exact multiples of 0.20 and of 0.30, so they
 # quantise cleanly at either nozzle and there is nothing to swap.
-BOTTOM_THICK = 1.5       # NFC pocket + peg bases
+BOTTOM_THICK = 1.8       # NFC pocket + peg bases. WAS 1.5, which left only
+                         # 0.7mm of floor under the 0.8mm NFC pocket - a thin
+                         # slab with a big flat-bottomed hole in it, which is
+                         # the shape that warps. 1.8 leaves 1.0mm.
+                         # 1.5 was ALSO not a whole number of layers at 0.2
+                         # (7.5), despite the claim below that both thicknesses
+                         # quantise at either nozzle. 1.8 is 9 x 0.20 and
+                         # 6 x 0.30, so it genuinely is nozzle-independent.
 TOP_THICK    = 3.0       # sockets + string hole; thicker = brighter glow
-BODY         = BOTTOM_THICK + TOP_THICK          # 4.5mm
+BODY         = BOTTOM_THICK + TOP_THICK          # 4.8mm
 
 NFC_DIAMETER = 10.5      # the tag's own diameter, not a printed feature
 PEG_HEIGHT   = 1.8       # gotcha #40 - funnel + tip chamfer eat into it. 6 x
