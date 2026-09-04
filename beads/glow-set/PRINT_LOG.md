@@ -6,6 +6,62 @@ propagating to the recipe.
 
 ---
 
+## tray3blk @ 50% — 2026-09-03 — SPEED IS RULED OUT. One isolated part survived; the crowded ones did not.
+
+Job `38f16300`, `tray3blk.gcode` unchanged, `set_print_speed("silent")` = 50%.
+Photo: `beads/glow-set/photos/2026-09-03-tray3blk-silent-38f16300.jpg`.
+
+**His hypothesis, tested properly and cheaply.** No re-slice, no upload - the printer
+takes the speed change live and `PrintSpeedPct` in `get_status` confirmed 50 for the
+whole run.
+
+### [x] SPEED DID NOT CHANGE THE OUTCOME — AND BARELY CHANGED THE SPEED
+
+    original run   879 ticks
+    "silent" run   874 ticks
+
+`PrintSpeedPct` read 50 the entire time and ticks still advanced at ~1/second of wall
+clock. **"Silent" mode does not halve a print of this shape** - it throttles some move
+classes and the short perimeter moves on a 20mm part are evidently not among them. So
+this is a weak test of "slower" AND a strong result: the plate failed the same way.
+
+The arithmetic said the same thing beforehand and is worth keeping: per-layer time is
+**23 s on the single that works** (366/16) versus **55 s on the tray that fails**
+(882/16). The tray already gives each part MORE cooling, not less.
+
+### [!] THE PATTERN IN THE PHOTO: THE ISOLATED PART SURVIVED
+
+- **One clean, complete part** - a `Bottom`, three pegs and the NFC pocket crisp, good
+  surface. It is the one sitting **on its own**, away from the others.
+- **The wrecked parts are the ones with a NEIGHBOUR**, and two of them are **joined by a
+  thin filament arc** - an ooze strand strung directly from one part to the next.
+- A crumpled wad with its own trailing strand.
+- The hexagon is blobbed **along one edge only**, not uniformly.
+
+**Contamination is not needed to explain this and neither is speed.** A strand running
+between two parts is material carried on the nozzle during the travel between them.
+
+**[?] TWO READINGS STILL ALIVE, and they need different fixes:**
+
+1. **Proximity / travel ooze.** Fits best: crowded parts fail, the isolated one does not.
+   Addressed by `tray3w45` - pitch 29 -> 45mm, `reduce_crossing_wall` on, `z_hop_types`
+   Normal Lift, `retract_before_wipe` 70%.
+2. **Plate position / bed levelling.** The survivor is also in a different REGION of the
+   bed, and a single bead always prints dead centre - which would explain the whole
+   singles-vs-trays split on its own. **Not yet excluded.**
+
+**THE TEST THAT SEPARATES THEM: print ONE bead deliberately OFF-CENTRE**, where the tray
+parts died. Singles are 7/7 at centre. If a lone bead fails out there it is the bed, and
+no amount of spacing or retraction will fix it.
+
+**Blocked on the same thing both times: no way to get new gcode onto the printer.**
+`upload_file` rejects every path tried - `D:\...`, `D:/...`, `/mnt/d/...`, `/projects/...`
+and the `claude-code` container's `/tmp`. `centauri` and `claude-code` do not share a
+filesystem. Live controls (`set_print_speed`, `set_fan_speed`, `set_temperatures`) still
+work on files already on the printer, which is how this run happened at all.
+
+---
+
 ## test20c02 (3rd run) — 2026-09-03 — **PRINTED. AND IT SNAPS.**
 
 Job `d8a997d1`, `test20c02.gcode`, one 20mm bead, both halves, black `T0`,
