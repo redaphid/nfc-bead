@@ -56,6 +56,29 @@ No effective Z-hop, 500mm/s travel, crossing walls freely. Precisely the configu
 owners name. **Lesson: `Auto Lift` is not Z-hop.** Verify lift by counting standalone
 `G1 Z` moves in the gcode, not by reading the setting name.
 
+### [!!] GOTCHA: `make_plate.py` MERGES THE BEADS, SO "BY OBJECT" DOES NOTHING
+
+First attempt at the fix: `print_sequence = by object` was set and **took** - the gcode
+header confirms it, and standalone `G1 Z` moves went from **2 to 1081**. The estimate
+moved from **14m54s to 14m56s.** Nothing gained.
+
+**Because the 3MF holds TWO objects, not six.** `tools/make_plate.py:114-115` does
+`trimesh.util.concatenate(...)`, fusing all N beads into one `Bottom` mesh and one `Top`
+mesh. The gcode shows exactly one downward Z reset (3.8 -> 0.2): print the whole Bottom
+object, then the whole Top object.
+
+**So the travel between beads is INSIDE a single object, and by-object cannot touch it.**
+Sequential printing sequences objects; it cannot sequence islands within one mesh.
+
+**Workaround in the GUI (what to do now):** select each object -> right-click ->
+**Split -> to objects**, then re-slice. Beads are 3.8mm tall so the sequential clearance
+rule does not block it.
+
+**Pipeline TODO (not done - deadline):** `make_plate.py` needs a no-merge mode and
+`build_3mf.py` needs to emit one parent object per bead. It is currently built around
+exactly two parents (a Top+Decoration assembly and a Bottom), so this is a real refactor,
+not a flag. Until then **the GUI split is a REQUIRED step for any ganged plate.**
+
 ### The fixes, strongest first
 
 1. **Print sequence -> By Object**, not By Layer. Beads are 5.5mm tall so gantry
