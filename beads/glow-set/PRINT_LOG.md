@@ -6,6 +6,51 @@ propagating to the recipe.
 
 ---
 
+## sm-* batch, final — 2026-09-04 — SOLVED. Seven good beads, settled recipe.
+
+Ended the night with **seven usable beads and a process that repeats**. One
+failure in the run (yaxing, warped) and its retry came out "very well".
+
+    kikko x2   akoma   changming   plum   yaxing(retry)   kikyo
+    akoma r2 was on the plate when the session ended - OUTCOME UNKNOWN.
+
+### The recipe
+
+    python tools/build_3mf.py -o <out>.3mf --body-extruder 1 \
+        --force-brim --brim-width 8 --bed-temp 65 --hole-compensation 0.05
+
+Validated at 20mm square and below. Warp scaled with footprint, so a LARGER
+bead should be assumed to need more again rather than inheriting these.
+
+### Three failures that looked like one
+
+The night was slow because these were conflated. They are distinct and have
+different cures:
+
+1. **Top LIFTS** - the half curls off the plate and will not mate at all.
+   Cause: `auto_brim` refuses to brim a compact 20mm slab, so the plate ran
+   bare while the profile advertised 5mm. Cure: `brim_type outer_only`.
+2. **Bores DEFORM** - part sits flat, sockets squeezed oval, halves force
+   together. Cause: first-layer squish pushing material into a 2.6mm hole.
+   Cure: `xy_hole_compensation`.
+3. **Large silhouettes warp anyway** - brim on, still unusable. Cause: more
+   corner contraction than a 5mm brim at 60C can hold. Cure: bed 65, brim 8.
+
+Each one only became visible after the previous was fixed.
+
+### Still open
+
+- **Ganged plates remain unsolved and unused.** Singles went 7/7 tonight;
+  trays went 0/6 and cost two nozzle cleanups. Do not retry a tray before the
+  fest.
+- CLI slices run 11-13m vs the GUI's ~6m - elegoo-slicer's CLI uses its own
+  presets. Bed temp and brim DO carry from the 3MF; acceleration does NOT.
+  Read any setting you depend on back out of the sliced gcode.
+- The plate still has to be cleared by hand between prints. That is the only
+  manual step left in the loop.
+
+---
+
 ## sm-* motif batch — 2026-09-04 — FOUR CONSECUTIVE GOOD BEADS. The run that worked.
 
 First unbroken run of the night. Every one of these came off usable:
