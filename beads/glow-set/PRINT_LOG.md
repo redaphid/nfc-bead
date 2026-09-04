@@ -6,6 +6,93 @@ propagating to the recipe.
 
 ---
 
+## test20c02 (3rd run) — 2026-09-03 — **PRINTED. AND IT SNAPS.**
+
+Job `d8a997d1`, `test20c02.gcode`, one 20mm bead, both halves, black `T0`,
+16 layers, 266s, 1.64g. 20:57:58 -> 21:08:17.
+
+**He confirmed it with his hands: the halves snapped together well.**
+
+### THIS RETIRES THE OPEN GEOMETRY QUESTION
+
+`PEG_CLEAR 0.01` had been built but never printed. It is now hardware-proven,
+and the snap-fit ladder is closed:
+
+| step | PEG_HEIGHT | PEG_CLEAR | engagement | hardware result |
+|---|---|---|---|---|
+| start | 1.2 | 0.05 | 0.50mm | plainly loose |
+| depth | 1.8 | 0.05 | 1.00mm | snaps, won't hold |
+| clearance | 1.8 | 0.02 | 1.00mm | "perfect", later slightly loose |
+| clearance | 1.8 | **0.01** | 1.00mm | **snaps and holds. SHIP THIS.** |
+
+Depth is maxed out - Top is 3.00mm, the socket eats 2.05mm, leaving a 0.95mm
+ceiling. Gotcha #40 holds: **fix depth first, clearance second.**
+
+---
+
+## test20c02 (2nd run) — 2026-09-03 — bare plate. **NO FILAMENT WAS LOADED.**
+
+Job `b96babb5`, 15:09:11 -> 15:18:48. Same file, same machine, same nozzle.
+
+**Root cause: mine.** The cold pull immediately before it UNLOADS the filament by
+design, and I started the print without re-loading. `get_canvas_status` would have
+shown `active_tray_id: -1` and tray 0 at `status: 1` instead of `status: 2`. I had
+written that exact check into the log an hour earlier and did not run it.
+
+### THE TWO RUNS ARE A CONTROLLED PAIR, AND THEY PROVE THE TELEMETRY IS BLIND
+
+`b96babb5` and `d8a997d1` are **the same gcode file**. Compare what SDCP said:
+
+| | `b96babb5` (bare plate) | `d8a997d1` (real bead) |
+|---|---|---|
+| `task_status` | 1 (success) | 1 (success) |
+| `CurrentLayer` | climbed to 16 | climbed to 16 |
+| `CurrentTicks / TotalTicks` | complete | complete |
+| `filament_detected` mid-print | **1** | 1 |
+| `exception_status` | empty | empty |
+| **what was on the plate** | **nothing** | **a bead that snaps** |
+
+Every field agrees. The outcomes are opposite. There is no remote check that
+separates these two runs - only a human looking at the plate. See
+`printer_filament_detected_gate` in memory; the sensor reports filament PRESENT,
+not filament FLOWING.
+
+Corollary worth keeping: at idle after this successful run `filament_detected`
+read **0**. Idle 0 means nothing is parked at the sensor between jobs. It is not
+a fault and it is not a reason to refuse to print.
+
+---
+
+## What the print history actually supports about red
+
+He suspects the red filament. The history is consistent with that but does not
+isolate it, and the log should say so rather than bank a win:
+
+    test20red      17e2cd47  ok        single bead
+    test20blk      5e5a8e33  ok        single bead
+    test20red      c0aa169a  ok        single bead
+    test20peg18    86fbb0e6  ok        single bead
+    test20peg18blk 21da0e21  ok        single bead
+    test20c02      f9878112  ok        single bead
+    plate3         1f327292  STOPPED   multi
+    tray6red       66b3d718  STOPPED   multi
+    tray3          9b064b8f  STOPPED   multi   red
+    tray3blk       af01d730  STOPPED   multi   black - parts DID adhere
+    test20c02      b96babb5  ok*       single  (*bare plate, no filament)
+    test20c02      d8a997d1  ok        single bead - SNAPS
+
+**Two variables are still braided together: colour and parts-per-plate.** Every
+single-bead run has produced a part. Every multi-bead run has been stopped. Red
+runs that failed were also multi-bead; the one multi-bead BLACK run adhered
+properly but smeared, which is a different failure mode.
+
+So the honest statement is: **red is implicated in the adhesion failure and black
+is not, but plate population is an unseparated confound.** The test that would
+settle it is a 3-bead RED tray against the 3-bead BLACK tray already run - and
+with the fest on 09-06 that test is not worth the filament. Print black singles.
+
+---
+
 ## tray3blk — 2026-09-03 — ADHESION DID NOT REPRODUCE IN BLACK. Stopped for a different mess.
 
 Job `af01d730`, `tray3blk.gcode`, 3 beads, black `T0`, 16 layers, 882s, 3.9g.
