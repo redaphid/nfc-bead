@@ -34,10 +34,13 @@ ceiling. Gotcha #40 holds: **fix depth first, clearance second.**
 
 Job `b96babb5`, 15:09:11 -> 15:18:48. Same file, same machine, same nozzle.
 
-**Root cause: mine.** The cold pull immediately before it UNLOADS the filament by
-design, and I started the print without re-loading. `get_canvas_status` would have
-shown `active_tray_id: -1` and tray 0 at `status: 1` instead of `status: 2`. I had
-written that exact check into the log an hour earlier and did not run it.
+**[?] CAUSE NOT ESTABLISHED - and my first answer was wrong.** I said this was mine:
+the cold pull before it unloads by design and I started without re-loading. But I
+only checked `get_canvas_status` AFTER the run, and the machine reads
+`active_tray_id: -1` / tray `status: 1` after ANY job finishes - **including the bead
+that printed perfectly at 21:08.** That reading is what SUCCESS leaves behind, so it
+cannot separate the two runs. The cold pull genuinely does unload and re-loading is
+still right, but **why this plate came out bare is still open.**
 
 ### THE TWO RUNS ARE A CONTROLLED PAIR, AND THEY PROVE THE TELEMETRY IS BLIND
 
