@@ -302,7 +302,7 @@ def _template_nozzle(template_dir):
 
 
 def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
-          force_brim=False,
+          force_brim=False, hole_compensation=None,
           body_extruder=2, keep_cooling=False, decoration_extruder=1,
           body_colour=None, bottom_xy=None, top_xy=None,
           nozzle_diameter=None):
@@ -611,6 +611,20 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
             array_patches["close_fan_the_first_x_layers"] = "3"
             array_patches["full_fan_speed_layer"] = "5"
 
+        # HOLE COMPENSATION. The template ships xy_hole_compensation=0. On
+        # 2026-09-04 a Top printed with the forced brim seated - the halves no
+        # longer refused to mate - but its three socket bores came out DEFORMED
+        # and the fit had to be forced. That is a different failure from the
+        # earlier corner lift: it is first-layer squish pushing material inward
+        # into a 2.6mm bore drawn in the squished layers. A positive value grows
+        # holes in XY to offset it.
+        # KEEP THIS SMALL. It widens the peg sockets too, and PEG_CLEAR is only
+        # 0.01mm radial - the snap that finally works is not worth trading for a
+        # rounder hole. 0.05 offsets squish without approaching the 0.05 DESIGN
+        # clearance that historically "snapped but slid apart".
+        if hole_compensation is not None:
+            patches["xy_hole_compensation"] = str(hole_compensation)
+
         if no_brim:
             patches["brim_type"] = "no_brim"
             patches["brim_width"] = "0"
@@ -752,6 +766,10 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("-o", "--out", default=str(DEFAULT_OUT))
     p.add_argument("-t", "--template-dir", default=str(TEMPLATE_DIR))
+    p.add_argument("--hole-compensation", type=float, default=None,
+                   help="mm to grow every hole in XY (xy_hole_compensation), "
+                        "offsetting first-layer squish that deforms the peg "
+                        "sockets. Keep it small - it loosens the snap fit too.")
     p.add_argument("--force-brim", action="store_true",
                    help="force an unconditional brim on every object "
                         "(brim_type=outer_only). Use this rather than trusting "
@@ -805,6 +823,7 @@ def main():
     build(bottom_xy=_xy(args.bottom_xy), top_xy=_xy(args.top_xy),
           out_path=Path(args.out), template_dir=Path(args.template_dir),
           no_brim=args.no_brim, force_brim=args.force_brim,
+          hole_compensation=args.hole_compensation,
           body_extruder=args.body_extruder,
           keep_cooling=args.keep_cooling,
           decoration_extruder=args.decoration_extruder,
