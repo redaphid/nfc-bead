@@ -303,6 +303,7 @@ def _template_nozzle(template_dir):
 
 def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
           force_brim=False, hole_compensation=None,
+          brim_width=5, bed_temp=None,
           body_extruder=2, keep_cooling=False, decoration_extruder=1,
           body_colour=None, bottom_xy=None, top_xy=None,
           nozzle_diameter=None):
@@ -640,7 +641,20 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
             # knocked-off part and then a blob on the hotend. outer_only puts a
             # brim on every object unconditionally.
             patches["brim_type"] = "outer_only"
-            patches["brim_width"] = "5"
+            patches["brim_width"] = str(brim_width)
+
+        # BED TEMPERATURE. Warp on these Tops tracks FOOTPRINT: kikko at
+        # 17.7x20 printed twice cleanly, and yaxing at 20.0x20.0 - the largest
+        # of the six - came out unusable with the same brim and hole
+        # compensation. A bigger flat slab has more contraction force at the
+        # corners, and the Top's first layer is already the weak one because
+        # three 2.6mm sockets sit 2.2mm in from its edge. More bed heat is the
+        # standard answer and the template ships 60, the low end for PLA.
+        if bed_temp is not None:
+            for k in ("hot_plate_temp", "textured_plate_temp",
+                      "hot_plate_temp_initial_layer",
+                      "textured_plate_temp_initial_layer"):
+                array_patches[k] = str(bed_temp)
         for key, value in patches.items():
             project_settings, n = re.subn(
                 rf'"{key}"\s*:\s*"[^"]*"',
@@ -766,6 +780,13 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("-o", "--out", default=str(DEFAULT_OUT))
     p.add_argument("-t", "--template-dir", default=str(TEMPLATE_DIR))
+    p.add_argument("--brim-width", type=float, default=5,
+                   help="brim width in mm when --force-brim is set (default 5). "
+                        "Widen it for the larger silhouettes, which warp first.")
+    p.add_argument("--bed-temp", type=int, default=None,
+                   help="bed temperature for every plate type, all layers. The "
+                        "template ships 60, the low end for PLA; 65 is the next "
+                        "lever when a Top still warps with a brim on.")
     p.add_argument("--hole-compensation", type=float, default=None,
                    help="mm to grow every hole in XY (xy_hole_compensation), "
                         "offsetting first-layer squish that deforms the peg "
@@ -824,6 +845,7 @@ def main():
           out_path=Path(args.out), template_dir=Path(args.template_dir),
           no_brim=args.no_brim, force_brim=args.force_brim,
           hole_compensation=args.hole_compensation,
+          brim_width=args.brim_width, bed_temp=args.bed_temp,
           body_extruder=args.body_extruder,
           keep_cooling=args.keep_cooling,
           decoration_extruder=args.decoration_extruder,
