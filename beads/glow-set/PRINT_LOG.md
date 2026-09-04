@@ -6,6 +6,61 @@ propagating to the recipe.
 
 ---
 
+## tray3blk again — 2026-09-03 — HALTED AT LAYER 2. ErrorCode 707, toolhead cover detached.
+
+Job `a6916306`. Run after a full nozzle clean at 240C and a bed clean. Panel:
+
+    ErrorCode: 707
+    "Toolhead front cover detached. Please check if it is loose or abnormal"
+
+Photos: `photos/2026-09-03-error707-toolhead-cover.jpg`,
+`photos/2026-09-03-blob-on-toolhead.jpg`.
+
+### [!!] THE CAUSAL ORDER, after he corrected me TWICE
+
+I called the loose cover the root cause. **Wrong** - he reattaches it himself, so he knows
+it was ON for the earlier runs. Then I called the blob the root cause. **Also wrong**, and
+this is the important one, in his words: **"that blob is a RESULT of the failure."**
+
+    ??? THE REAL FAULT  ->  print fails  ->  nozzle extrudes into open air
+                        ->  blob forms on the toolhead
+                        ->  blob props/levers the magnetic cover  ->  ErrorCode 707
+
+**Every physical thing found tonight sits at the right-hand end of that chain** - the
+nozzle coating, the nest, the blob, the detached cover, 707. Cleaning the nozzle and
+reseating the cover are symptom treatment, which is exactly why each one appeared to work
+and then the failure returned.
+
+**The trap for research:** Elegoo's docs and owner reports describe *"waste piles up ->
+props the toolhead -> knocks the cover off -> 707"*. That reads like a root cause and is
+really the same downstream chain from the machine's point of view.
+
+### What the research did settle
+
+- The cover is held by **three magnets** and read by a **Hall sensor** - no clips, so
+  "vibrated loose" is the wrong model. A merely GAPPED cover trips 707. Elegoo's own
+  diagnostic: touch a paperclip to each marked magnet position.
+- **No owner or Elegoo report links speed or acceleration to 707.**
+- But the stock cowling is **>120 g** and rings the head at 20,000 mm/s2. Mass x accel is
+  a real force here; the community fix is a **lighter cover** (~65 g), not a slower machine.
+
+### Acceleration, since "slow it down" came up three times
+
+`set_print_speed("silent")` is nearly useless - 0.5%. Real control needs re-slicing:
+
+    the file that failed twice   M204 S5000    14m42s
+    tray3-lowaccel                M204 S1000    29m59s
+
+5x less acceleration, built and staged in `out/` with its 3MF. **Untested** - the evidence
+points at the waste path first, and this stays a cheap experiment, not a diagnosis.
+
+### Still open
+
+**Why do multi-part plates fail when single beads do not?** Singles 7/7, trays 0/5. That
+question has now outlived every explanation offered for it tonight.
+
+---
+
 ## tray3blk @ 50% — 2026-09-03 — SPEED IS RULED OUT. One isolated part survived; the crowded ones did not.
 
 Job `38f16300`, `tray3blk.gcode` unchanged, `set_print_speed("silent")` = 50%.
