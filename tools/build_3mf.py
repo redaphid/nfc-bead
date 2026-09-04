@@ -445,8 +445,39 @@ def build(out_path=DEFAULT_OUT, template_dir=TEMPLATE_DIR, no_brim=False,
     # Defaults park a single bead's two halves side by side. A ganged plate
     # from make_plate.py hands us two ROWS instead, which are far wider than
     # that 36mm gap, so those callers pass explicit centres.
+    def _xy_span(vlist):
+        xs = [v[0] for v in vlist]
+        ys = [v[1] for v in vlist]
+        return (max(xs) - min(xs)), (max(ys) - min(ys))
+
+    bw, bh = _xy_span(bottom["verts"])
+    _tv = [v for p in parts if p is not bottom for v in p["verts"]] or bottom["verts"]
+    tw, th = _xy_span(_tv)
+
     bxy = bottom_xy or PLATE_BOTTOM_XY
     txy = top_xy or PLATE_TOP_XY
+
+    # The defaults park a single bead's two halves 36mm apart in X. A ganged
+    # plate from make_plate.py is a whole ROW, far wider than that, so the two
+    # blocks land on top of each other. The slicer then refuses the file with
+    # only "Slic3r::CLI::run found error" to show for it - a silent unsliceable
+    # 3MF, which cost a long debugging detour. Auto-stack them in Y instead.
+    if bottom_xy is None and top_xy is None and (bw + tw) / 2.0 > abs(txy[0] - bxy[0]):
+        gap = 12.0
+        cx, cy = 128.0, 128.0
+        bxy = (cx, cy - (bh + gap) / 2.0)
+        txy = (cx, cy + (th + gap) / 2.0)
+        print(f"[3mf] blocks are {bw:.1f} and {tw:.1f}mm wide - the {abs(PLATE_TOP_XY[0]-PLATE_BOTTOM_XY[0]):.0f}mm "
+              f"default gap would overlap them; stacking in Y instead")
+
+    # Refuse rather than emit a 3MF the slicer will reject without saying why.
+    if abs(txy[0] - bxy[0]) < (bw + tw) / 2.0 and abs(txy[1] - bxy[1]) < (bh + th) / 2.0:
+        raise SystemExit(
+            f"[3mf] REFUSING: Bottom ({bw:.1f}x{bh:.1f}mm at {bxy}) and Top "
+            f"({tw:.1f}x{th:.1f}mm at {txy}) overlap on the plate. The slicer "
+            f"would reject this with no useful message. Pass --bottom-xy/--top-xy "
+            f"further apart.")
+
     print(f"[3mf] placing Bottom at {bxy}, Top assembly at {txy}")
     build_items = [
         (top["parent_id"],    identity_with_translation(txy[0], txy[1], 0), str(uuid.uuid4())),
