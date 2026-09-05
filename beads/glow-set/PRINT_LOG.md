@@ -6,6 +6,55 @@ propagating to the recipe.
 
 ---
 
+## PETG 0.6 — 2026-09-04 ~21:30 — clean-tip re-level did NOT fix it. Three live hypotheses.
+
+**Run:** `kikko-petg-brim8.gcode` (pipeline kikko, 0.3 first layer, 260/85, brim 8
+`outer_only`, 2 skirt loops). User had cleaned the tip hot, tightened the
+hotend, washed the plate, and re-run full auto-level. `start_print` with
+`auto_leveling=true` ran a second full level with the clean tip. Tray 0 = PETG.
+
+**What happened.** Skirt failed from the first millimetre. Plate stayed bare.
+The firmware looped the head to the wipe station every few seconds during
+layer 1 (`sub_status 2401` repeating, `print_status 5` = pausing between
+trips) and scraped a blob off each time - a white blob was visible next to the
+nozzle chute on camera. 49 ticks of "print time" elapsed with nothing on the
+plate. Stopped at 17%. `exception_status` stayed empty - it self-recovered
+rather than raising Extrusion Abnormality.
+
+**What that means.** Filament flows freely at the purge station and stops the
+moment the nozzle is near the plate. That is a **back-pressure** signature, not
+an adhesion one. It kills "nozzle too high" (the dirty-probe theory in the
+entry below is at most a contributor).
+
+### The three hypotheses, and the one-minute test for each
+
+| # | Hypothesis | Test at the machine | If true |
+|---|---|---|---|
+| A | **Nozzle too LOW** - probe zero sits below the true surface, tip seals against the plate | Look at the plate along the skirt path. Scratch marks, shiny scrape lines, or a translucent smear | Touchscreen Z offset **+0.10**, reprint `kikko-petg-brim8.gcode`, watch the skirt. Step +0.05 more if needed |
+| B | **Restricted 0.6 bore** - partial clog or swap debris passes a slow purge but not 8 mm³/s | From the screen, extrude 50 mm at 260 in the air. Thin strand or extruder clicking | Cold pull, or a different 0.6 nozzle |
+| C | **Extruder cannot push** - Canvas path friction or gear wear (Prusa warn this filler eats PTFE and gears) | Same thin strand / clicks as B, plus feed a short length by hand past the buffer and feel for drag | Inspect gears, re-thread, shorten/replace PTFE |
+
+Discriminator: **fat clean strand in the air + clean bare plate** puts it on A.
+**Thin strand or clicks** puts it on B or C.
+
+### Unresolved details worth checking
+
+- `ModelFan` read 200 (78%) during layer 1 while the gcode says `M106 S0` for
+  layers 1-3 and only `M106 P3 S200` (filament start gcode). Either telemetry
+  mislabels P3 or the part fan really is on. Not the root cause, but bad for PETG.
+- Mesh probe reported Z = -0.418 at (136, 158) while touching. Could be probe
+  overtravel or a stale zero. Unexplained.
+- The printer's own nozzle-diameter setting on the touchscreen was never
+  confirmed as 0.6.
+- Pipeline PETG profile has `filament_max_volumetric_speed = 21`; the manual
+  "PRUSA Strontium" profile had 5. Both failed, so it is not the cause, but 21
+  is optimistic for a hardened-steel 0.6 with filled PETG.
+
+**Fallback stands:** 17 PLA beads exist. 0.4 + PLA + the `sm-*` recipe printed
+17/17. If A/B/C are not resolved in one more attempt, revert for the fest.
+
+---
+
 ## PETG 0.6 — 2026-09-04 late — why nothing sticks, and the staged test
 
 Three manual GUI slices (`kiko-manual*.3mf`, profile "PRUSA Strontium", 260/85,

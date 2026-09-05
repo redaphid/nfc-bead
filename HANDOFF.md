@@ -5,6 +5,19 @@ Branch `glow-set`. Written 2026-09-04/05 for a fresh session. Deadline is
 
 ---
 
+## UPDATE 2026-09-04 ~21:30 — read `beads/glow-set/PRINT_LOG.md` top entry first
+
+The Z-offset-too-high theory below is **dead**. A clean tip + fresh full
+auto-level + a proper file (0.3 first layer, brim 8, skirt) still failed from
+the first millimetre, with the firmware looping the head to the wipe station
+during layer 1. That is a back-pressure signature: free-air flow is fine,
+flow stops when the nozzle is near the plate. Three live hypotheses with
+one-minute tests are in the print log: **A** nozzle too LOW (try Z offset
++0.10), **B** restricted 0.6 bore, **C** extruder cannot push.
+`kikko-petg-brim8.gcode` is on the printer for the retry. Tray 0 is PETG now.
+
+---
+
 ## The one thing to read first
 
 **A working system was broken by changing two variables at once.**
