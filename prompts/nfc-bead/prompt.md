@@ -469,6 +469,32 @@ holes drilled down from a smooth surface — which also removes the reason
 `SOCKET_LEADIN` exists. This changes print orientation for every bead in a set,
 so prove it on one part before adopting it.
 
+**A FOURTH consequence, found 2026-09-04 and worth more than the other three.**
+Holes-down means each socket is a hole rising from the plate that has to **close
+over** at `PEG_HEIGHT + 0.3`: the slicer bridges a 2.6mm circular ceiling across
+open air, three times per bead. A bridge that sags droops *into* the bore — so
+the same orientation that squeezes the mouth also deforms the roof. **Holes-up
+has no bridge anywhere**: the part starts solid on the plate and the sockets are
+simply pits opening at the top face. That is strictly easier to print, and it is
+the argument that finally moved this from "candidate" to "do it".
+
+**Also note what holes-down does to the FIRST LAYER, not just the bores.** Three
+2.6mm mouths plus their funnels sit ~2.2mm in from the edge, so the layer that
+must grip the plate is a thin interrupted ring. On 2026-09-04 that half lifted
+and warped repeatedly while the solid-faced Bottom never did once — same
+filament, same plate, same run. Holes-up makes the first layer a solid
+uninterrupted outline.
+
+**Acted on 2026-09-04, still unproven.** `beads/glow-set/print/GLOW/
+*_Top_HOLESUP.stl` are the flipped meshes (rotated 180° about X, re-seated on
+z=0, verified per shape against that shape's own peg coordinates). Flipping in
+post like this works on any exported Top and needs no rebuild; `EXPORT_FLIP_X_DEG`
+is the cleaner route once it is proven. **Predictions:** round bores with
+`xy_hole_compensation` at 0, halves that close flush, and possibly a fit that
+reads LOOSE for the first time — because the bores were previously undersized by
+squish, so an accurate bore exposes the true `PEG_CLEAR`. Loose is a one-number
+fix, not a reason to revert.
+
 ### 43. Ganged plates fail where singles succeed — the nozzle clips parts in transit
 
 **Status: mechanism identified from a 0/5 vs 7/7 split plus owner reports; the

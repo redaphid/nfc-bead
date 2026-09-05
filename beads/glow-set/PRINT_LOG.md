@@ -6,6 +6,87 @@ propagating to the recipe.
 
 ---
 
+## HOLES UP — 2026-09-04 — the orientation hypothesis, and the move to PETG at 0.6
+
+**Nothing in this entry has been printed.** It is the state at the point the
+material and nozzle both changed, written down so the next print can falsify it.
+
+### THE HYPOTHESIS: the Top has been printed upside down all along
+
+Every bead so far printed the Top **mating-face-DOWN** — sockets against the
+plate. That puts the single most dimensionally critical surface on the bead
+(the face that must sit flush against the Bottom, carrying three accurately
+sized bores) into the layer that gets squished, spread and textured.
+
+Three consequences, and all three were observed as separate "mystery" defects:
+
+1. **A perforated first layer.** Three 2.6mm socket mouths plus 3.4mm funnels,
+   2.2mm in from the edge, in the layer that is supposed to grip the plate.
+   That is the layer that lifted.
+2. **Squeeze-in at the bores.** A first-layer line wider than nominal
+   (0.5 vs 0.42 at 0.4mm) pushes material inward at exactly the socket
+   openings. That is the ovalising.
+3. **An internal bridge over every socket** - THIS WAS MISSED FOR MOST OF THE
+   NIGHT. Holes-down means each socket is a hole rising from the plate that
+   must CLOSE OVER at 2.1mm: the slicer bridges a 2.6mm circular ceiling
+   across open air, three times per bead. A sagging bridge droops INTO the
+   bore. Holes-up has no bridge at all - the part starts solid and the sockets
+   are simply pits opening at the top face.
+
+`*_Top_HOLESUP.stl` in `print/GLOW/` is the mesh rotated 180 deg about X and
+re-seated on z=0. Verified per shape against that shape's own peg coordinates.
+
+**Predictions, so this is falsifiable:**
+- bores come out round without `xy_hole_compensation`
+- the halves close flush (no elephant-foot ridge on the mating face)
+- the outer face takes the textured-PEI finish - a real cosmetic change
+- the fit may read LOOSE for the first time, because the bores were previously
+  undersized by squish. That is a one-number `PEG_CLEAR` fix, not a reversal.
+
+The Bottom is NOT flipped and must not be: it prints pegs-up, and pegs printed
+downward need support.
+
+### THE MATERIAL CHANGED - every temperature in this log is now wrong
+
+Prusament PETG Ultraglow, not PLA. Prusa's spec:
+
+    nozzle  260 +/- 10 C     hardened nozzle REQUIRED
+    bed      85 +/- 10 C     0.6mm nozzle RECOMMENDED
+
+against the PLA numbers that produced every good bead above: nozzle 210, bed 65,
+fan 100% by layer 5. Prusa recommend 0.6mm for this filament specifically, so
+the nozzle swap and the material change happen to agree.
+
+Cooling is the number nobody publishes - not on the product page and not in the
+TDS. 30/50 with the fan held off 3 layers is a judgement, not a spec. The
+direction is what matters: PETG loses layer adhesion when over-cooled, and the
+PLA curve here was 100% by layer 5. Over-cooled PETG delaminates; under-cooled
+PETG sags. On a flat slab with no overhangs, err low.
+
+**BLOCKER, not yet cleared:** every Canvas tray reports `filament_type: "PLA"`
+and `max_nozzle_temp: 230`. The sliced files ask for 260. Until tray 0 is set to
+PETG on the machine the printer will refuse or clamp - and it also breaks
+filament auto-mapping in the slicer ("unmapped filament detected"), because
+mapping matches by type.
+
+### 0.6mm IS A FOUR-SHAPE SET
+
+akoma and plum fail the solver at 0.6: two 0.63 perimeters back to back need
+1.26mm of wall, and their NFC pocket clearance (6.236 and 6.170) falls under the
+6.45 bar. Regenerating those two outlines at `--r 11.0` instead of 10.0 clears
+it - 22mm beads rather than 20mm. Mixed sizes in one batch, which for
+wear-and-trade is variety rather than defect.
+
+### BOTTOM_THICK 1.5 -> 1.8
+
+The Bottom is the thin half and has an 0.8mm NFC pocket cut into it, so 1.5 left
+0.7mm of floor - a thin slab with a big flat-bottomed hole, which is the shape
+that warps. 1.8 leaves 1.0mm. It also fixes a latent bug: 1.5 is 7.5 layers at
+0.2mm, despite the comment above it claiming both thicknesses quantise at either
+nozzle. 1.8 is 9 x 0.20 and 6 x 0.30.
+
+---
+
 ## sm-* batch, final — 2026-09-04 — SOLVED. Seven good beads, settled recipe.
 
 Ended the night with **seven usable beads and a process that repeats**. One
