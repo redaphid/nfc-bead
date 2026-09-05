@@ -6,6 +6,26 @@ propagating to the recipe.
 
 ---
 
+## PETG 0.6 — 2026-09-04 late — why nothing sticks, and the staged test
+
+Three manual GUI slices (`kiko-manual*.3mf`, profile "PRUSA Strontium", 260/85,
+`auto_brim` so no brim, no skirt, 0.3 then 0.2 first layer) all failed the same
+way: loose round strands that never bond, balling onto the nozzle.
+
+**Diagnosis.** The CC2 start gcode probes Z by nozzle-touch at **140 °C**
+(`M104 S140` → `BED_MESH_CALIBRATE` → `G28`) *before* the wipe. A PETG blob on
+the tip is solid at 140, triggers the probe early, and the print runs too high
+by the blob's thickness. One bad first layer makes the blob that ruins the next
+probe; a manual re-level with a dirty tip is just as wrong. Tray 0 is now PETG
+(240–270) - that blocker is cleared. `z_offset` = 0 is not the problem.
+
+**Staged:** `kikko-petg-brim8.gcode` is on the printer - the pipeline kikko at
+0.3 first layer, 260/85, brim 8 `outer_only`, 2 skirt loops so squish is visible
+before the part. Do not start it until the tip is cleaned hot, the plate washed,
+and full auto-level re-run with a clean tip.
+
+---
+
 ## HOLES UP — 2026-09-04 — the orientation hypothesis, and the move to PETG at 0.6
 
 **Nothing in this entry has been printed.** It is the state at the point the
